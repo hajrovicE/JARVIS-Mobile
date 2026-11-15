@@ -39,7 +39,7 @@ final class LearningEngineTests: XCTestCase, @unchecked Sendable {
         var state = try engine.propose(external, in: LearningState(), now: now)
         state = try engine.confirm(id: external.id, in: state, now: now)
         XCTAssertEqual(engine.retrieve(query: "", in: state, now: now.addingTimeInterval(3599)).count, 1)
-        XCTAssertEqual(engine.retrieve(query: "", in: state, now: now.addingTimeInterval(3600)).count, 1)
+        XCTAssertTrue(engine.retrieve(query: "", in: state, now: now.addingTimeInterval(3600)).isEmpty)
         external.expiresAt = nil
         XCTAssertEqual(try engine.propose(external, in: LearningState(), now: now).records.count, 1)
         external.expiresAt = now.addingTimeInterval(30 * 86400 + 1)
@@ -53,9 +53,8 @@ final class LearningEngineTests: XCTestCase, @unchecked Sendable {
         var state = try engine.propose(preference, in: LearningState(), now: now)
         state = try engine.propose(external, in: state, now: now)
         state.purgeExpired(now: now.addingTimeInterval(3600))
-        XCTAssertEqual(state.records.map(\.id), [preference.id, external.id])
-        state = try engine.confirm(id: external.id, in: state, now: now)
-        XCTAssertEqual(engine.retrieve(query: "reference", in: state, now: now.addingTimeInterval(3600)).count, 1)
+        XCTAssertEqual(state.records.map(\.id), [preference.id])
+        XCTAssertTrue(engine.retrieve(query: "reference", in: state, now: now.addingTimeInterval(3600)).isEmpty)
         external.provenance.capturedAt = now.addingTimeInterval(1)
         XCTAssertEqual(try engine.propose(external, in: LearningState(), now: now).records.count, 1)
     }
@@ -63,8 +62,8 @@ final class LearningEngineTests: XCTestCase, @unchecked Sendable {
         var secret = record(); secret.sensitivity = .secret
         let proposed = try engine.propose(secret, in: LearningState(), now: now)
         let confirmed = try engine.confirm(id: secret.id, in: proposed, now: now)
-        XCTAssertEqual(engine.retrieve(query: "", in: confirmed, now: now).count, 1)
-        XCTAssertEqual(engine.shareableContext(query: "", in: confirmed, now: now).count, 1)
+        XCTAssertTrue(engine.retrieve(query: "", in: confirmed, now: now).isEmpty)
+        XCTAssertTrue(engine.shareableContext(query: "", in: confirmed, now: now).isEmpty)
         XCTAssertThrowsError(try engine.propose(record(confidence: .nan), in: LearningState(), now: now))
     }
     func testStateRoundTripAndSuccessfulExperienceNeedsReceipt() async throws {
@@ -116,8 +115,8 @@ extension LearningEngineTests {
         state.purgeExpired(now: now.addingTimeInterval(90 * 86400 - 1))
         XCTAssertEqual(state.experiences.count, 1)
         state.purgeExpired(now: now.addingTimeInterval(90 * 86400))
-        XCTAssertEqual(state.experiences.count, 1)
-        XCTAssertEqual(state.records.count, 1, "Task evidence and owner-approved rules remain durable")
+        XCTAssertTrue(state.experiences.isEmpty)
+        XCTAssertEqual(state.records.count, 1, "Owner-approved rules remain durable")
     }
 
     func testDeletingTaskCorrectionRemovesRelatedExperienceAndRevisionContents() async throws {
@@ -169,7 +168,7 @@ extension LearningEngineTests {
             let entry = record(text: value)
             let proposed = try engine.propose(entry, in: LearningState(), now: now)
             let confirmed = try engine.confirm(id: entry.id, in: proposed, now: now)
-            XCTAssertEqual(engine.retrieve(query: "", in: confirmed, now: now).map(\.text), [value])
+            XCTAssertTrue(engine.retrieve(query: "", in: confirmed, now: now).isEmpty)
         }
         var state = try engine.propose(record(), in: LearningState(), now: now)
         let id = try XCTUnwrap(state.records.first?.id)
@@ -179,7 +178,7 @@ extension LearningEngineTests {
         sensitive.key = "health.preference"
         state = try engine.propose(sensitive, in: state, now: now)
         state = try engine.confirm(id: sensitive.id, in: state, now: now)
-        XCTAssertEqual(engine.shareableContext(query: "", in: state, now: now).count, 2)
+        XCTAssertTrue(engine.shareableContext(query: "", in: state, now: now).isEmpty)
         let audit = TaskExperience(action: "task", risk: .low, result: credentials[0])
         XCTAssertEqual(try engine.recordExperience(audit, in: state).experiences.count, 1)
     }
