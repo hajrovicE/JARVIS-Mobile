@@ -34,6 +34,15 @@ final class UserGuidedLearningTests: XCTestCase, @unchecked Sendable {
         XCTAssertTrue(record.revisions?.isEmpty == true)
     }
 
+    func testLongUserAuthoredLessonIsNotCutOff() async throws {
+        let store = try MemoryStore(storage: GuidedMemoryDisk(), now: date)
+        let learner = UserGuidedLearning(store: store)
+        let lesson = String(repeating: "Uzun kişisel ilke. ", count: 100)
+        _ = try await learner.teach(topic: "kapsamlı_öğrenme", text: lesson, now: date)
+        let saved = try await store.read(now: date)
+        XCTAssertEqual(saved.learning.records.first?.text, lesson)
+    }
+
     func testRetaughtTopicCreatesRevisionInsteadOfDuplicate() async throws {
         let store = try MemoryStore(storage: GuidedMemoryDisk(), now: date)
         let learner = UserGuidedLearning(store: store)
