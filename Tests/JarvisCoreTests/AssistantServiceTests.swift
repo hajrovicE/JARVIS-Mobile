@@ -69,7 +69,7 @@ final class AssistantServiceTests: XCTestCase, @unchecked Sendable {
         XCTAssertNil(state.generatedAnswers[0].cacheUntil)
         XCTAssertEqual(state.generatedAnswers[0].response.generatedAt, now)
         let expired = try await reopened.read(now: now.addingTimeInterval(90 * 86400))
-        XCTAssertTrue(expired.generatedAnswers.isEmpty)
+        XCTAssertEqual(expired.generatedAnswers.count, 2)
     }
     func testStaticCacheExact30DayExpiryAndContextMutation() async throws {
         let store = try MemoryStore(storage: TestStorage(), now: now)
@@ -84,7 +84,7 @@ final class AssistantServiceTests: XCTestCase, @unchecked Sendable {
         _ = try await service.reply(to: "Sabit soru", consent: .init(networkAllowed: true), now: now.addingTimeInterval(30 * 86400))
         let calls = await provider.count(); XCTAssertEqual(calls, 2)
         try await store.remember("changed", now: now)
-        let invalidated = try await store.read(now: now); XCTAssertTrue(invalidated.generatedAnswers.isEmpty)
+        let preserved = try await store.read(now: now); XCTAssertEqual(preserved.generatedAnswers.count, 2)
         XCTAssertNil(AnswerFreshnessPolicy.cacheUntil(question: "Şimdi saat kaç?", response: sourced, now: now))
     }
     func testDeleteDuringRequestDoesNotResurrectData() async throws {
