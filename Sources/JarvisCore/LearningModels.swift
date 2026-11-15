@@ -94,10 +94,9 @@ public struct LearningState: Codable, Equatable, Sendable {
     public var records: [LearnedMemory] = []
     public var experiences: [TaskExperience] = []
     public init() {}
-    /// Persist the resulting state on read; expired source-backed claims cannot be reused.
+    /// Retain learning and task evidence until an owner erase; expired facts are
+    /// excluded from active retrieval by LocalLearningEngine, not deleted.
     public mutating func purgeExpired(now: Date) {
-        records.removeAll { $0.expiresAt.map { $0 <= now } ?? false }
-        // Task history follows conversation retention; confirmed personal rules do not expire.
-        experiences.removeAll { now.timeIntervalSince($0.createdAt) >= 90 * 86400 }
+        // No automatic deletion of observations, experiences or historical claims.
     }
 }
