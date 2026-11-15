@@ -44,6 +44,9 @@ struct RootView: View {
   @State private var activeReply: StoredAIAnswer?
   @State private var experiences: [TaskExperience] = []
   @State private var correctionText = ""
+  @AppStorage("localModelEnabled") private var localModelEnabled = true
+  @State private var importingLocalModel = false
+  @State private var localModelStatus = "Qwen3 modeli henüz doğrulanmadı."
   @AppStorage("aiAllowed") private var aiAllowed = false
   @AppStorage("aiSharePersonal") private var aiSharePersonal = false
   @AppStorage("aiShareLearning") private var aiShareLearning = false
@@ -124,6 +127,26 @@ struct RootView: View {
     ) {
       Button("JSON dışa aktar") {
         prepareAction(.exportMemory)
+      }
+    }
+    .fileImporter(isPresented: $importingLocalModel, allowedContentTypes: [.data]) { result in
+      switch result {
+      case .success(let url):
+        perform {
+          let scoped = url.startAccessingSecurityScopedResource()
+          defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+          guard url.pathExtension.lowercased() == "gguf",
+                let bytes = try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber,
+                (500_000_000...2_500_000_000).contains(bytes.int64Value)
+          else { throw LocalModelError.invalidFile }
+          let manifest = try localManifest(byteCount: bytes.int64Value)
+          let manager = try OnDeviceModelManager(directory: localModelDirectory())
+          _ = try await manager.importModel(from: url, manifest: manifest)
+          localModelEnabled = true
+          localModelStatus = "Qwen3 model dosyası doğrulandı ve cihaz içine kaydedildi."
+        }
+      case .failure:
+        errorText = "Model dosyası seçilemedi."
       }
     }
     .fileExporter(
@@ -316,6 +339,8 @@ struct RootView: View {
         Text("Türkçe ses: cihazın çevrimdışı desteğine ve izinlere bağlı.")
         Text("Konuşmacı kimlik doğrulaması: ETKİN DEĞİL.").accessibilityIdentifier(
           "status.speakerIdentity")
+        Text(localModelEnabled ? "Cihaz içi AI seçili. Model yüklenmişse internet gerekmez." : "Cihaz içi AI kapalı.")
+        Text(localModelStatus)
         Text(aiAllowed ? connectionStatus : "Bulut AI kapalı; yerel hafıza kullanılabilir.")
         Text("Web arama ve telefon kontrolü: bağlı değil.")
         Text("Hassas işlemler: açık onay + Face ID/Touch ID. Konuşmacı sesi yetki vermez.")
@@ -326,6 +351,15 @@ struct RootView: View {
   private var aiSettingsTab: some View {
     NavigationStack {
       Form {
+        Section("Bağımsız cihaz içi yapay zekâ") {
+          Toggle("Yerel modeli kullan (internetsiz)", isOn: $localModelEnabled)
+          Text("Qwen3 1.7B Q4_K_M · Apache-2.0. Model dosyası yaklaşık 1,28 GB; kurulum için internete yalnızca ilk indirmede ihtiyaç vardır.")
+          Link("Resmî Qwen3 GGUF model dosyasını aç",
+               destination: URL(string: "https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF/blob/main/Qwen3-1.7B-Q4_K_M.gguf")!)
+          Button("Dosyalardan GGUF modeli yükle") { importingLocalModel = true }
+          Text(localModelStatus)
+          Text("Model dosyası SHA-256 ile doğrulanır. Desteklenmeyen veya değişmiş dosyalar çalıştırılmaz.")
+        }
         Section("Gerçek model bağlantısı") {
           Text(
             "Sağlayıcı API anahtarı yalnızca sunucuda kalır. Buraya yöneticinizin verdiği süreli aracı servis erişim bilgisini girin."
@@ -453,6 +487,14 @@ struct RootView: View {
       } catch LearningError.conflictingRecord {
         errorText =
           "Aynı konuda farklı bir bilgi var. Tercihinizi değiştirmek için Düzelt ve onayla seçeneğini kullanın."
+      } catch let error as LocalModelError {
+        switch error {
+        case .mismatchedDigest, .mismatchedSize, .invalidFile:
+          errorText = "Model dosyası doğrulanamadı. Lütfen resmî Qwen3 GGUF dosyasını seçin."
+        case .notInstalled, .runtimeUnavailable:
+          errorText = "Yerel model kullanılamıyor veya kurulmamış."
+        default: errorText = "Model kurulumu gerçekleştirilemedi."
+        }
       } catch let error as AIProviderError {
         connectionStatus = error.userMessage
         errorText = error.userMessage
@@ -479,6 +521,21 @@ struct RootView: View {
       learningText = ""
     }
   }
+  private static let localModelID = "qwen3-1-7b-q4km"
+  private static let localModelSHA256 = "d2387ca2dbfee2ffabce7120d3770dadca0b293052bc2f0e138fdc940d9bc7b5"
+
+  private func localModelDirectory() throws -> URL {
+    try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
+                                appropriateFor: nil, create: true)
+      .appendingPathComponent("Jarvis/models", isDirectory: true)
+  }
+
+  private func localManifest(byteCount: Int64) throws -> LocalModelManifest {
+    try LocalModelManifest(identifier: Self.localModelID, revision: "daeb8e2",
+                           licenseIdentifier: "Apache-2.0", byteCount: byteCount,
+                           sha256: Self.localModelSHA256)
+  }
+
   private func submit() {
     guard let store else { return }
     let command = input
@@ -495,25 +552,42 @@ struct RootView: View {
         return
       }
       let provider: any AIProvider
-      if !CommandRouter.isLocalCommand(command), aiAllowed,
+      if !CommandRouter.isLocalCommand(command), localModelEnabled {
+        let manager = try OnDeviceModelManager(directory: localModelDirectory())
+        let modelFile = try localModelDirectory()
+          .appendingPathComponent(Self.localModelID + ".gguf")
+        let attributes = try? FileManager.default.attributesOfItem(atPath: modelFile.path)
+        let size = (attributes?[.size] as? NSNumber)?.int64Value ?? 1
+        provider = LocalAIProvider(
+          manager: manager, manifest: try localManifest(byteCount: size),
+          runtime: GGUFInferenceRuntime())
+      } else if !CommandRouter.isLocalCommand(command), aiAllowed,
         let endpoint = URL(string: relayEndpoint), let credential = try RelayCredentials.load()
       {
         provider = try HTTPRelayAIProvider(endpoint: endpoint, accessToken: credential)
       } else {
         provider = UnavailableAIProvider()
       }
+      let mode: AIProcessingMode = localModelEnabled ? .onDevice : .remote
       let result = try await AssistantService(
-        store: store, provider: provider, providerScope: relayEndpoint
+        store: store, provider: provider,
+        providerScope: localModelEnabled ? "local:qwen3-1.7b-q4km" : relayEndpoint,
+        processingMode: mode
       ).reply(
         to: command,
         consent: AISharingConsent(
-          networkAllowed: aiAllowed, personalMemory: aiSharePersonal,
-          confirmedLearning: aiShareLearning, recentHistory: aiShareHistory))
+          networkAllowed: aiAllowed,
+          personalMemory: localModelEnabled || aiSharePersonal,
+          confirmedLearning: localModelEnabled || aiShareLearning,
+          recentHistory: localModelEnabled || aiShareHistory))
       try Task.checkCancellation()
       reply = result.text
       activeReply = result.generated
       input = ""
-      if result.generated != nil { connectionStatus = "Son gerçek model yanıtı alındı." }
+      if result.generated != nil {
+        if localModelEnabled { localModelStatus = "Son yanıt cihaz içindeki modelden üretildi." }
+        else { connectionStatus = "Son gerçek model yanıtı alındı." }
+      }
       if result.historyWriteFailed {
         errorText = "Komut tamamlandı ancak konuşma geçmişi kaydedilemedi."
       }
