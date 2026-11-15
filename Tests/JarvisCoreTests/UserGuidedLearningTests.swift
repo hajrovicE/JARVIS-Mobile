@@ -117,6 +117,20 @@ final class UserGuidedLearningTests: XCTestCase, @unchecked Sendable {
         XCTAssertEqual(status.confirmed, 1)
     }
 
+    func testUserCanChangeResponseStyleWithoutCreatingToolAuthority() async throws {
+        let store = try MemoryStore(storage: GuidedMemoryDisk(), now: date)
+        let learner = UserGuidedLearning(store: store)
+        let original = try await learner.responsePreferences(now: date)
+        XCTAssertEqual(original.answerStyle, .direct)
+        _ = try await learner.teach(topic: "yanıt_tarzı", text: "analitik", now: date)
+        _ = try await learner.teach(topic: "yaratıcı_öneriler", text: "hayır", now: date)
+        let updated = try await learner.responsePreferences(now: date)
+        XCTAssertEqual(updated.answerStyle, .analytical)
+        XCTAssertFalse(updated.offerUnconventionalIdeas)
+        XCTAssertTrue(updated.questionAssumptions)
+        XCTAssertTrue(updated.localPresentationGuidance().contains("kanıt"))
+    }
+
     func testStyleDirectiveIsPresentationOnly() {
         let directive = PersonalAIPreferences(
             answerStyle: .analytical, questionAssumptions: true,
