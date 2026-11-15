@@ -52,7 +52,8 @@ final class LearningEngineTests: XCTestCase, @unchecked Sendable {
         var state = try engine.propose(preference, in: LearningState(), now: now)
         state = try engine.propose(external, in: state, now: now)
         state.purgeExpired(now: now.addingTimeInterval(3600))
-        XCTAssertEqual(state.records.map(\.id), [preference.id])
+        XCTAssertEqual(state.records.map(\.id), [preference.id, external.id])
+        XCTAssertTrue(engine.retrieve(query: "reference", in: state, now: now.addingTimeInterval(3600)).isEmpty)
         external.provenance.capturedAt = now.addingTimeInterval(1)
         XCTAssertThrowsError(try engine.propose(external, in: LearningState(), now: now))
     }
@@ -110,8 +111,8 @@ extension LearningEngineTests {
         state.purgeExpired(now: now.addingTimeInterval(90 * 86400 - 1))
         XCTAssertEqual(state.experiences.count, 1)
         state.purgeExpired(now: now.addingTimeInterval(90 * 86400))
-        XCTAssertTrue(state.experiences.isEmpty)
-        XCTAssertEqual(state.records.count, 1, "Approved rules remain durable after task history expires")
+        XCTAssertEqual(state.experiences.count, 1)
+        XCTAssertEqual(state.records.count, 1, "Task evidence and owner-approved rules remain durable")
     }
 
     func testDeletingTaskCorrectionRemovesRelatedExperienceAndRevisionContents() async throws {
