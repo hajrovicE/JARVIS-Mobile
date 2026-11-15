@@ -371,6 +371,13 @@ struct RootView: View {
         for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true
       ).appendingPathComponent("Jarvis/memory.aes")
       store = try MemoryStore(storage: EncryptedFileStorage(url: url, keychainAccount: "primary"))
+      if let manifest = try? selectedModelManifest(),
+         let modelURL = try? localModelDirectory().appendingPathComponent(manifest.identifier + ".gguf"),
+         FileManager.default.fileExists(atPath: modelURL.path) {
+        localModelStatus = "Kurulu model: " + manifest.identifier + ". İlk sorguda SHA-256 doğrulanacak."
+      } else {
+        localModelStatus = "Yerel model kurulmadı. GGUF dosyasını Dosyalar'dan yükleyin."
+      }
       try await refresh()
     } catch {
       errorText = "Şifreli hafıza açılamadı. Cihazın kilidini açıp uygulamayı yeniden başlatın."
