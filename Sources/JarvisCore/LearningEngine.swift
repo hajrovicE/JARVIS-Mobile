@@ -106,7 +106,9 @@ public struct LocalLearningEngine: LearningEngine {
     /// The owner decides whether learned context is shared with a remote provider.
     /// Sensitivity labels are metadata, not a prohibition on learning or retrieving.
     public func shareableContext(query: String, in state: LearningState, now: Date = Date()) -> [LearnedMemory] {
-        retrieve(query: query, in: state, now: now).map {
+        retrieve(query: query, in: state, now: now)
+            .filter { $0.sensitivity == .ordinary }
+            .map {
             var selected = $0
             // Historic text is for the user's local audit/export, never implicit model context.
             selected.revisions = nil
