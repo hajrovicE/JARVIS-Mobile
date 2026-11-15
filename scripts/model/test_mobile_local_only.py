@@ -40,7 +40,7 @@ class LocalOnlyMobileTests(unittest.TestCase):
     def test_training_parameters_are_owner_selectable(self):
         script = (ROOT / "scripts" / "model" / "train_lora.py").read_text(encoding="utf-8")
         for flag in ("--thinking", "--lora-rank", "--lora-alpha", "--batch-size",
-                     "--accumulation", "--epochs"):
+                     "--accumulation", "--epochs", "--device"):
             self.assertIn(flag, script)
 
     def test_owner_prompt_is_not_overridden_by_fixed_local_policy(self):
