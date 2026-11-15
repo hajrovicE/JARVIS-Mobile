@@ -6,7 +6,7 @@
 ## Sınırlar
 - URL yalnızca HTTPS; kullanıcı adı/şifre, query veya fragment içermez. Tam `/v1/chat` adresi seçilir.
 - HTTP yönlendirmeleri reddedilir; seçilen uç nokta dışındaki cevap kabul edilmez. Cookie, HTTP disk önbelleği ve ortam kimlik bilgileri kullanılmaz.
-- Soru en fazla 8000 karakter, bağlam en fazla 20 kayıt, her kayıt en fazla 2000 karakter; JSON gövdesi en fazla 128 KiB. Sunucu aynı sınırları ayrıca uygular.
+- Soru ve bağlam kayıtlarında yapay karakter/sayı üst sınırı yoktur; HTTP isteği için 4 MiB, sağlayıcı yanıtı için 8 MiB taşıma sınırı kalır. Sağlayıcının ve modelin kendi bağlam sınırları geçerlidir.
 - Boş/bozuk/taşan JSON, 401/403/429/5xx, ağ kesintisi ve iptal ayrı hata verir. Sağlayıcı gövdesi, yetki başlığı, sırlar ve yerel içerik hata mesajına/loga yazılmaz.
 - `verifiedStatic` ancak kaynak metadata'sı ve en fazla 30 günlük açık süreyle kabul edilir. Bu alanın güveni operatörün gerçek kaynak doğrulamasına bağlıdır; rastgele model prose'u kanıt değildir. Referans relay bu statüyü hiç üretmez.
 
@@ -19,3 +19,9 @@ Model cevabı veri olarak görüntülenir; izin, onay, biyometri veya ActionExec
 Swift otomatik testleri ağ yerine açıkça test amaçlı transport kullanır: Türkçe soru/bağlam sözleşmesi, header güvenliği, yönlendirme kontrolü, HTTP/ağ hataları, bozuk/boş cevap, boyut sınırları ve kaynaksız tazelik iddiasının reddi. Python relay testleri gerçek localhost HTTP servisi ile sahte upstream kullanır; ücretli model çağrısı yapmaz.
 
 Bu geliştirmede canlı sunucu kurulmadı, sağlayıcı hesabı/anahtarı kullanılmadı ve gerçek modelden yanıt alındığı iddia edilmez. Operatörün HTTPS relay'i kurup sunucu Secret arayüzünden provider anahtarı/oturum sağlaması ve kullanıcının veri paylaşımını açması gerekir. Çok adımlı Türkçe semantik kalitenin gerçek model değerlendirmesi ayrıca yapılmalıdır.
+
+## Kapasite ayarları
+- Relay istek kotaları varsayılan kapalıdır: `RELAY_REQUESTS_PER_MINUTE=0` ve `RELAY_REQUESTS_PER_DAY=0`; maliyet yönetimi isteyen operatör pozitif limit belirleyebilir. Sağlayıcının ücret ve kullanım limitleri değişmez.
+- `max_output_tokens=1200` kaldırıldı; model sağlayıcısının doğal çıktı sınırı geçerlidir.
+- Kullanıcının paylaşmaya onay verdiği bağlam artık sabit 10/6/4 kayıtla kesilmez. Çok büyük bağlam isteği sağlayıcının penceresini aşarsa hata dönebilir.
+- Bağımsız eylem engeli, cihaz/biyometri izinleri, relay kimlik doğrulaması, şifreleme ve gizli bilgi koruması korunur.
