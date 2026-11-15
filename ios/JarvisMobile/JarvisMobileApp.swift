@@ -110,7 +110,7 @@ struct RootView: View {
     VStack(spacing: 20) {
       Text("JARVIS'e hoş geldiniz").font(.largeTitle)
       Text(
-        "Konuşmalar 90 gün, uygun cevap önbelleği en fazla 30 gün saklanır. Kişisel hafıza siz silene kadar kalır. Veriler cihazda şifrelenir."
+        "Konuşma geçmişi ve öğrenilen bilgiler siz silene kadar korunur. Güncelliği doğrulanmamış cevaplar otomatik güncel sayılmaz. Veriler cihazda şifrelenir."
       )
       Text(
         "Ses isteğe bağlıdır. İlk kullanımda mikrofon ve konuşma izni istenir. Yazarak da kullanabilirsiniz. Konuşmacı kimlik doğrulaması etkin değildir."
@@ -278,7 +278,7 @@ struct RootView: View {
     }.tabItem { Label("Hafıza", systemImage: "brain") }
   }
   private var historyTab: some View {
-    NavigationStack { List(history) { Text($0.text) }.navigationTitle("Son 90 gün") }
+    NavigationStack { List(history) { Text($0.text) }.navigationTitle("Konuşma geçmişi") }
       .tabItem { Label("Geçmiş", systemImage: "clock") }
   }
   private var statusTab: some View {
