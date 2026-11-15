@@ -260,15 +260,23 @@ struct RootView: View {
         }
         Section("Görev deneyimleri") {
           TextField("Görev için düzeltmeniz", text: $correctionText)
-          ForEach(experiences.suffix(10).reversed()) { experience in
+          ForEach(experiences.reversed()) { experience in
             VStack(alignment: .leading) {
               Text(experience.action)
               Text(experience.outcome == .succeeded ? "Gerçekleşti" : "Başarı kaydı yok")
-              Button("Düzeltmeyi onaya sun") {
+              Button("Düzeltmeyi öğret") {
                 perform {
-                  try await store?.proposeTaskCorrection(
-                    experienceID: experience.id,
-                    key: "task:\(experience.action)", text: correctionText)
+                  guard let store else { return }
+                  let topic = "task:\(experience.action)"
+                  let teaching = correctionText
+                  try await store.proposeTaskCorrection(
+                    experienceID: experience.id, key: topic, text: teaching)
+                  let state = try await store.read()
+                  if let record = state.learning.records.last(where: {
+                    $0.key == topic && !$0.userConfirmed && $0.text == teaching
+                  }) {
+                    try await store.confirmLearning(id: record.id, expectedText: teaching)
+                  }
                   correctionText = ""
                 }
               }.disabled(correctionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -280,10 +288,10 @@ struct RootView: View {
           .accessibilityIdentifier(
             "memory.deleteAll")
         Section("Öğrenme önerileri") {
-          Text("Öneriler onaylamadan kullanılmaz. Parola, API anahtarı veya başka sırlar girmeyin.")
+          Text("Kendi yazdığın bilgiler doğrudan kaydedilir. Model tarafından önerilen bilgiler sen onaylamadıkça etkinleşmez.")
           TextField("Konu (ör. içecek tercihi)", text: $learningKey)
           TextField("Tercih önerisi", text: $learningText)
-          Button("Onaya sun") { proposeLearning() }
+          Button("Öğret ve kaydet") { proposeLearning() }
             .disabled(
               learningKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 || learningText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -346,7 +354,7 @@ struct RootView: View {
           "status.speakerIdentity")
         Text(aiAllowed ? connectionStatus : "Bulut AI kapalı; yerel hafıza kullanılabilir.")
         Text("Web arama ve telefon kontrolü: bağlı değil.")
-        Text("Hassas işlemler: açık onay + Face ID/Touch ID. Konuşmacı sesi yetki vermez.")
+        Text("Eylemler: yalnızca doğrudan kullanıcı komutuyla yürütülür; ikinci onay gerekmez.")
         Text("Alpha 0.3 · TestFlight yüklemesi yapılmadı.")
       }.navigationTitle("Yetenek durumu")
     }.tabItem { Label("Durum", systemImage: "info.circle") }
@@ -456,7 +464,7 @@ struct RootView: View {
     guard let journal = activityJournal else { return }
     let snapshot = try await journal.read()
     activityEnabled = snapshot.enabled
-    recentActivity = Array(snapshot.observations.suffix(15).reversed())
+    recentActivity = Array(snapshot.observations.reversed())
     activityInsights = try await journal.insights()
   }
 
@@ -526,8 +534,10 @@ struct RootView: View {
       provenance: .init(
         sourceID: "kullanıcı-önerisi", explanation: "Kullanıcı tarafından yazılan tercih"))
     perform {
-      try await store?.proposeLearning(record)
-      observe(.learningProposed)
+      guard let store else { return }
+      try await store.proposeLearning(record)
+      try await store.confirmLearning(id: record.id, expectedText: record.text)
+      observe(.learningConfirmed)
       learningKey = ""
       learningText = ""
     }
