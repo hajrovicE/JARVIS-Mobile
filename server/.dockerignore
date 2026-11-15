@@ -1,0 +1,5 @@
+# An allowlist prevents local env files, secret files, tests and Git data entering the image.
+**
+!Dockerfile
+!relay.py
+!relay_runtime.py

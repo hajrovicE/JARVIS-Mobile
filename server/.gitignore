@@ -4,3 +4,9 @@ __pycache__/
 .env.*
 !.env.example
 .venv/
+# Operator Secret material must stay outside this repository.
+openai_api_key
+app_access_token
+*.key
+*.pem
+*.p12

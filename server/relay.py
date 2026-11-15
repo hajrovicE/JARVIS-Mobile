@@ -7,6 +7,8 @@ import json
 import math
 import os
 import re
+import signal
+import uuid
 import threading
 import time
 import urllib.error
@@ -15,6 +17,11 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Callable
+
+try:
+    from .relay_runtime import ConfigurationError, RequestBudget, SafeEventLogger, positive_limit, read_secret
+except ImportError:
+    from relay_runtime import ConfigurationError, RequestBudget, SafeEventLogger, positive_limit, read_secret
 
 UPSTREAM_URL = "https://api.openai.com/v1/responses"
 MAX_BODY_BYTES = 131_072
@@ -39,28 +46,46 @@ class Settings:
     model: str = "gpt-4.1-mini"
     access_token_expires_at: float = 0
 
+    requests_per_minute: int = 6
+    requests_per_day: int = 100
+    max_concurrent: int = 2
+    configuration_valid: bool = field(default=True, repr=False)
+
     @classmethod
     def from_environment(cls, now: float | None = None) -> "Settings":
         current = time.time() if now is None else now
         try:
+            strict = os.environ.get("RELAY_REQUIRE_EXPLICIT_EXPIRY", "false")
+            if strict not in {"true", "false"}:
+                raise ConfigurationError("invalid_configuration")
+            if strict == "true" and not os.environ.get("APP_ACCESS_TOKEN_EXPIRES_AT"):
+                raise ConfigurationError("explicit_expiry_required")
             expiry = float(os.environ.get("APP_ACCESS_TOKEN_EXPIRES_AT", str(current + 8 * 3600)))
-        except ValueError:
-            expiry = 0
-        return cls(
-            api_key=os.environ.get("OPENAI_API_KEY", ""),
-            access_token=os.environ.get("APP_ACCESS_TOKEN", ""),
-            model=os.environ.get("OPENAI_MODEL", "gpt-4.1-mini"),
-            access_token_expires_at=expiry,
-        )
+            return cls(
+                api_key=read_secret("OPENAI_API_KEY", os.environ),
+                access_token=read_secret("APP_ACCESS_TOKEN", os.environ),
+                model=os.environ.get("OPENAI_MODEL", "gpt-4.1-mini"),
+                access_token_expires_at=expiry,
+                requests_per_minute=positive_limit(os.environ, "RELAY_REQUESTS_PER_MINUTE", 6, 60),
+                requests_per_day=positive_limit(os.environ, "RELAY_REQUESTS_PER_DAY", 100, 10000),
+                max_concurrent=positive_limit(os.environ, "RELAY_MAX_CONCURRENT", 2, 4),
+            )
+        except (ConfigurationError, TypeError, ValueError):
+            return cls(configuration_valid=False)
 
     def configured(self) -> bool:
         return bool(
-            self.api_key
-            and len(self.access_token) >= 32
+            self.configuration_valid
+            and 1 <= len(self.api_key) <= 8192
+            and all(33 <= ord(c) <= 126 for c in self.api_key)
+            and 32 <= len(self.access_token) <= 8192
             and re.fullmatch(r"[A-Za-z0-9._~-]+", self.access_token)
             and re.fullmatch(r"[A-Za-z0-9._:-]{1,100}", self.model)
             and math.isfinite(self.access_token_expires_at)
             and self.access_token_expires_at > 0
+            and 1 <= self.requests_per_minute <= 60
+            and 1 <= self.requests_per_day <= 10000
+            and 1 <= self.max_concurrent <= 4
         )
 
 
@@ -147,10 +172,11 @@ def extract_text(result: dict) -> str:
 
 
 class RelayService:
-    def __init__(self, settings: Settings, upstream: Callable[[Settings, dict], dict] = call_openai):
+    def __init__(self, settings: Settings, upstream: Callable[[Settings, dict], dict] = call_openai, *, clock=time.monotonic):
         self.settings = settings
         self.upstream = upstream
-        self._slots = threading.BoundedSemaphore(4)
+        self._slots = threading.BoundedSemaphore(settings.max_concurrent if settings.configured() else 1)
+        self._budget = RequestBudget(settings.requests_per_minute, settings.requests_per_day, clock)
 
     def authorization_error(self, authorization: str | None, now: float | None = None) -> tuple[int, dict] | None:
         if not self.settings.configured():
@@ -175,6 +201,8 @@ class RelayService:
         if not self._slots.acquire(blocking=False):
             return 429, {"error": "busy"}
         try:
+            if not self._budget.admit():
+                return 429, {"error": "rate_limited"}
             result = self.upstream(self.settings, validated)
             text = extract_text(result)
             reported_model = result.get("model")
@@ -190,13 +218,45 @@ class RelayService:
                 "freshness": "unverified",
                 "expiresAt": None,
             }
-        except (UpstreamUnavailable, ValueError, TypeError, KeyError):
+        except Exception:
+            # Upstream/library exceptions may contain input or credentials. Never serialize them.
             return 502, {"error": "provider_unavailable"}
         finally:
             self._slots.release()
 
 
-def create_server(service: RelayService, address: tuple[str, int] = ("127.0.0.1", 8787)) -> ThreadingHTTPServer:
+class BoundedHTTPServer(ThreadingHTTPServer):
+    daemon_threads = True
+    request_queue_size = 32
+
+    def __init__(self, address, handler, logger=None):
+        self.logger = logger
+        self._connections = threading.BoundedSemaphore(32)
+        super().__init__(address, handler)
+
+    def process_request(self, request, client_address):
+        if not self._connections.acquire(blocking=False):
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            self._connections.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._connections.release()
+
+    def handle_error(self, request, client_address):
+        # Default http.server prints traceback and client IP; neither belongs in these logs.
+        if self.logger:
+            self.logger.record("request_error", code="internal_error", status=500)
+
+
+def create_server(service: RelayService, address: tuple[str, int] = ("127.0.0.1", 8787), *, logger=None) -> ThreadingHTTPServer:
     class Handler(BaseHTTPRequestHandler):
         server_version = "JarvisRelay"
         sys_version = ""
@@ -204,23 +264,42 @@ def create_server(service: RelayService, address: tuple[str, int] = ("127.0.0.1"
         def setup(self):
             super().setup()
             self.connection.settimeout(10)
+            self._request_id = uuid.uuid4().hex
+            self._started = time.monotonic()
 
         def log_message(self, format, *args):
             # Never print prompts, memory, raw upstream errors, request headers or bearer tokens.
             pass
 
+        def send_error(self, code, message=None, explain=None):
+            # Parser/unsupported-method errors must not reflect arbitrary request strings.
+            self.send_json(code, {"error": "invalid_request"})
+
         def send_json(self, status: int, value: dict):
+            if logger:
+                logger.record("http_response", code=value.get("error", "ok"), status=status,
+                              request_id=self._request_id,
+                              duration_ms=int((time.monotonic() - self._started) * 1000))
             data = json.dumps(value, ensure_ascii=False).encode("utf-8")
             self.send_response(status)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Content-Length", str(len(data)))
+            if status == 429:
+                self.send_header("Retry-After", "60")
             self.end_headers()
-            self.wfile.write(data)
+            try:
+                if self.command != "HEAD":
+                    self.wfile.write(data)
+            except (BrokenPipeError, ConnectionResetError, TimeoutError):
+                if logger:
+                    logger.record("request_error", code="client_disconnected", request_id=self._request_id)
 
         def do_GET(self):
-            if self.path != "/health":
+            if self.path == "/health/live":
+                return self.send_json(200, {"alive": True})
+            if self.path not in {"/health", "/health/ready"}:
                 return self.send_json(404, {"error": "not_found"})
             ready = service.settings.configured() and time.time() < service.settings.access_token_expires_at
             return self.send_json(200 if ready else 503, {"ready": ready})
@@ -228,6 +307,9 @@ def create_server(service: RelayService, address: tuple[str, int] = ("127.0.0.1"
         def do_POST(self):
             if self.path != "/v1/chat":
                 return self.send_json(404, {"error": "not_found"})
+            for name in ("Authorization", "Content-Length", "Content-Type", "Host"):
+                if len(self.headers.get_all(name, [])) > 1:
+                    return self.send_json(400, {"error": "ambiguous_headers"})
             authorization = self.headers.get("Authorization")
             error = service.authorization_error(authorization)
             if error:
@@ -236,10 +318,8 @@ def create_server(service: RelayService, address: tuple[str, int] = ("127.0.0.1"
                 return self.send_json(411, {"error": "content_length_required"})
             if self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json":
                 return self.send_json(415, {"error": "json_required"})
-            try:
-                length = int(self.headers.get("Content-Length", "-1"))
-            except ValueError:
-                length = -1
+            raw_length = self.headers.get("Content-Length", "")
+            length = int(raw_length) if re.fullmatch(r"[0-9]{1,6}", raw_length) else -1
             if length <= 0 or length > MAX_BODY_BYTES:
                 return self.send_json(413, {"error": "invalid_body_size"})
             try:
@@ -251,24 +331,37 @@ def create_server(service: RelayService, address: tuple[str, int] = ("127.0.0.1"
                 return self.send_json(400, {"error": "invalid_json"})
             return self.send_json(*service.reply(value, authorization))
 
-    return ThreadingHTTPServer(address, Handler)
+    return BoundedHTTPServer(address, Handler, logger)
 
 
 def main():
     parser = argparse.ArgumentParser(description="JARVIS single-owner alpha AI relay; use an HTTPS reverse proxy.")
     parser.add_argument("--port", type=int, default=8787)
+    parser.add_argument("--host", default="127.0.0.1", help="Use 0.0.0.0 only on the private container network behind TLS.")
     args = parser.parse_args()
-    service = RelayService(Settings.from_environment())
+    logger = SafeEventLogger()
+    settings = Settings.from_environment()
+    if os.environ.get("RELAY_REQUIRE_EXPLICIT_EXPIRY") == "true" and (
+        not settings.configured() or time.time() >= settings.access_token_expires_at
+    ):
+        logger.record("server_lifecycle", code="configuration_invalid")
+        return 2
+    service = RelayService(settings)
     # Localhost only. A TLS reverse proxy is mandatory for access from the iPhone.
-    server = create_server(service, ("127.0.0.1", args.port))
-    print("JARVIS relay listening on localhost; authenticated HTTPS proxy required for iPhone access.")
+    server = create_server(service, (args.host, args.port), logger=logger)
+    logger.record("server_lifecycle", code="started")
+    def stop(_signum, _frame):
+        threading.Thread(target=server.shutdown, daemon=True).start()
+    signal.signal(signal.SIGTERM, stop)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
         server.server_close()
+        logger.record("server_lifecycle", code="stopped")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

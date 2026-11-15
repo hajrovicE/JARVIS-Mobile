@@ -1,0 +1,39 @@
+name: AI relay deployment checks
+on:
+  push:
+    paths:
+      - 'server/**'
+      - '.github/workflows/relay.yml'
+  pull_request:
+    paths:
+      - 'server/**'
+      - '.github/workflows/relay.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: relay-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  deployment-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit and local HTTP security tests (synthetic upstream only)
+        run: |
+          set -o pipefail
+          python3 -m unittest discover -s server -p 'test_*.py' -v 2>&1 | tee relay-unit-tests.log
+      - name: Container, Secret mounts and isolated HTTPS integration
+        run: |
+          set -o pipefail
+          python3 server/deployment_smoke.py 2>&1 | tee relay-deployment-tests.log
+      - name: Store test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: relay-deployment-${{ github.sha }}
+          path: |
+            relay-unit-tests.log
+            relay-deployment-tests.log
+          retention-days: 14

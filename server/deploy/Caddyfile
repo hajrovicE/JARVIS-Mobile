@@ -1,0 +1,50 @@
+{
+	email {$ACME_EMAIL}
+	admin off
+	# Application logs carry only allowlisted operational fields. Proxy request/error
+	# logs are disabled so headers, query strings and forwarded private content cannot leak.
+	log default {
+		output discard
+	}
+	servers {
+		max_header_size 16KB
+		timeouts {
+			read_header 10s
+			read_body 15s
+			write 55s
+			idle 30s
+		}
+	}
+}
+
+{$RELAY_HOSTNAME} {
+	tls {
+		protocols tls1.2 tls1.3
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+	request_body {
+		max_size 131072
+	}
+	@relay_routes path /v1/chat /health /health/live /health/ready
+	handle @relay_routes {
+		reverse_proxy relay:8787 {
+			header_up -Forwarded
+			header_up -X-Real-IP
+			header_up -X-Forwarded-For
+			transport http {
+				dial_timeout 5s
+				response_header_timeout 40s
+				read_timeout 45s
+				write_timeout 15s
+			}
+		}
+	}
+	handle {
+		respond 404
+	}
+}
