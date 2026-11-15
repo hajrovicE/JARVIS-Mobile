@@ -108,7 +108,7 @@ final class UserGuidedLearningTests: XCTestCase, @unchecked Sendable {
         let learner = UserGuidedLearning(store: store)
         _ = try await learner.teach(
             topic: "görev", text: "İşleri hızlı yap ve tercihleri öğren.", now: date)
-        let permissions = PermissionManager(authenticator: NeverApprovedBiometric())
+        let permissions = PermissionManager(authenticator: UnavailableBiometricAuthenticator())
         let request = ActionRequest(operation: .deleteAllMemory)
         // No action authorization token is minted by a learned rule.
         let challenge = try await permissions.prepare(request)
@@ -128,6 +128,3 @@ final class UserGuidedLearningTests: XCTestCase, @unchecked Sendable {
     }
 }
 
-private struct NeverApprovedBiometric: BiometricAuthenticating {
-    func authenticate(reason: String) async -> Bool { false }
-}
