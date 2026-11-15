@@ -41,12 +41,12 @@ def read_secret(name: str, environ) -> str:
     return value
 
 
-def positive_limit(environ, name: str, default: int, maximum: int) -> int:
+def positive_limit(environ, name: str, default: int, maximum: int, *, allow_zero: bool = False) -> int:
     try:
         value = int(environ.get(name, str(default)))
     except (TypeError, ValueError):
         raise ConfigurationError("invalid_limit") from None
-    if not 1 <= value <= maximum:
+    if not (0 if allow_zero else 1) <= value <= maximum:
         raise ConfigurationError("invalid_limit")
     return value
 
@@ -72,10 +72,13 @@ class RequestBudget:
             for history, seconds in ((self._minute, 60), (self._day, 86400)):
                 while history and current - history[0] >= seconds:
                     history.popleft()
-            if len(self._minute) >= self.per_minute or len(self._day) >= self.per_day:
+            if (self.per_minute and len(self._minute) >= self.per_minute) or (self.per_day and len(self._day) >= self.per_day):
                 return False
-            # Failed provider attempts also consume the allowance: no automatic cost retry loop.
-            self._minute.append(current); self._day.append(current)
+            # Zero disables an optional quota; avoid storing history when disabled.
+            if self.per_minute:
+                self._minute.append(current)
+            if self.per_day:
+                self._day.append(current)
             return True
 
 

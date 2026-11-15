@@ -22,9 +22,9 @@ services:
       APP_ACCESS_TOKEN_EXPIRES_AT: ${APP_ACCESS_TOKEN_EXPIRES_AT:?Set an explicit Unix expiry; startup must not renew sessions}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
       RELAY_REQUIRE_EXPLICIT_EXPIRY: "true"
-      RELAY_REQUESTS_PER_MINUTE: ${RELAY_REQUESTS_PER_MINUTE:-6}
-      RELAY_REQUESTS_PER_DAY: ${RELAY_REQUESTS_PER_DAY:-100}
-      RELAY_MAX_CONCURRENT: ${RELAY_MAX_CONCURRENT:-2}
+      RELAY_REQUESTS_PER_MINUTE: ${RELAY_REQUESTS_PER_MINUTE:-0}
+      RELAY_REQUESTS_PER_DAY: ${RELAY_REQUESTS_PER_DAY:-0}
+      RELAY_MAX_CONCURRENT: ${RELAY_MAX_CONCURRENT:-8}
     secrets: [openai_api_key, app_access_token]
     networks: [relay_edge]
     # No ports:8787 mapping. Only the TLS proxy can reach the relay on this Docker network.

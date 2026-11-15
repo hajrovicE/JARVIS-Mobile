@@ -59,17 +59,14 @@ public actor MemoryStore {
         try storage.save(JSONEncoder().encode(loaded))
         self.snapshot = loaded
     }
+    /// Owner history is durable. Freshness for reuse is checked by AssistantService,
+    /// but stored records are removed only through an explicit owner erase.
     private static func purge(_ state: inout MemorySnapshot, now: Date) {
-        let previousLearning = state.learning
-        state.learning.purgeExpired(now: now)
-        if previousLearning != state.learning { state.generatedAnswers.removeAll() }
-        state.generatedAnswers.removeAll { now.timeIntervalSince($0.savedAt) >= 90 * 86400 }
-        state.conversations.removeAll { now.timeIntervalSince($0.createdAt) >= 90 * 86400 }
-        state.answers.removeAll { now.timeIntervalSince($0.createdAt) >= 30 * 86400 }
+        // Intentionally no automatic deletion.
     }
     private func commit(_ state: MemorySnapshot, changesContext: Bool = true) throws {
         var next = state
-        if changesContext { next.generatedAnswers.removeAll() }
+        // A context change invalidates in-flight responses by epoch, not stored history.
         try storage.save(JSONEncoder().encode(next)); snapshot = next
         if changesContext { contextEpoch = UUID() }
     }

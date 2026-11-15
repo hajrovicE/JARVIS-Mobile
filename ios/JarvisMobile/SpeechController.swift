@@ -169,14 +169,11 @@ final class SpeechController: ObservableObject {
         synthesizer = output
         outputDelegate = delegate
       }
-      let utterance = AVSpeechUtterance(string: String(value.prefix(4000)))
+      let utterance = AVSpeechUtterance(string: value)
       utterance.voice = voice
       activeUtteranceID = ObjectIdentifier(utterance)
       speaking = true
-      status =
-        value.count > 4000
-        ? "Uzun cevabın ilk bölümü seslendiriliyor; tam metni okuyabilirsiniz."
-        : "Cevap seslendiriliyor…"
+      status = "Cevap seslendiriliyor…"
       synthesizer?.speak(utterance)
     } catch {
       cancel()

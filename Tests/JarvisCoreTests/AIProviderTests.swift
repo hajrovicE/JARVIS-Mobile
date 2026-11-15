@@ -88,14 +88,17 @@ final class AIProviderTests: XCTestCase, @unchecked Sendable {
         do { _ = try await redirected.respond(to: .init(prompt: "Merhaba")); XCTFail("Cross-endpoint response must fail") }
         catch { XCTAssertEqual(error as? AIProviderError, .invalidResponse) }
     }
-    func testUnboundedRequestsAndUnsupportedFreshnessCannotPass() async throws {
+    func testExtendedRequestsAndUnsupportedFreshnessCannotPass() async throws {
         let transport = StubAITransport(payload: goodResponse)
         let provider = try HTTPRelayAIProvider(endpoint: endpoint, accessToken: relayToken, transport: transport)
-        for request in [AIRequest(prompt: "  "), AIRequest(prompt: String(repeating: "a", count: 8001)), AIRequest(prompt: "Soru", context: Array(repeating: .init(id: "id", text: "text"), count: 21))] {
-            do { _ = try await provider.respond(to: request); XCTFail("Request must be bounded") }
-            catch { XCTAssertEqual(error as? AIProviderError, .invalidRequest) }
-        }
-        let captured = await transport.requests(); XCTAssertTrue(captured.isEmpty)
+        do { _ = try await provider.respond(to: AIRequest(prompt: "  ")); XCTFail("Empty prompt must fail") }
+        catch { XCTAssertEqual(error as? AIProviderError, .invalidRequest) }
+        let extended = AIRequest(prompt: String(repeating: "a", count: 8001),
+            context: Array(repeating: .init(id: "id", text: String(repeating: "b", count: 2001)), count: 21))
+        _ = try await provider.respond(to: extended)
+        let captured = await transport.requests()
+        XCTAssertEqual(captured.count, 1)
+        XCTAssertEqual(try JSONDecoder().decode(AIRequest.self, from: XCTUnwrap(captured.first?.httpBody)), extended)
         let fabricatedFreshness = String(decoding: goodResponse, as: UTF8.self).replacingOccurrences(of: "unverified", with: "verifiedStatic")
         let evidenceFree = try HTTPRelayAIProvider(endpoint: endpoint, accessToken: relayToken,
             transport: StubAITransport(payload: Data(fabricatedFreshness.utf8)))

@@ -1,15 +1,11 @@
-# ActionExecutor ve PermissionManager — Alpha 0.3
+# JARVIS kullanıcı komutuyla eylem yürütme
 
-İzin verilen yerel eylemler sabittir: `memory.remember`, `memory.delete`, `memory.deleteAll`, `learning.delete`, `memory.export`. Her birinin tam bir capability kümesi ve uygulama tarafından seçilen risk seviyesi vardır. Keyfi araç adı, shell, URL veya model metni çalıştırılmaz. `.modelProposal` kaynaklı çağrılar reddedilir. Uygulama içindeki `.userInterface` kaynağı yalnızca güvenilir UI olay işleyicisinden üretilir; serileştirilmiş model verisi buna dönüştürülmez.
+**Birincil kural:** JARVIS, güvenilir kullanıcı arayüzünden doğrudan bir komut gelmedikçe telefon, dosya, hesap veya dış dünya üzerinde işlem başlatamaz. Bir model önerisi, model cevabı, alıntı ya da hafıza içeriği doğrudan komut sayılmaz.
 
-`PermissionManager.prepare(request)` 60 saniyelik, istek kimliği ve değişmez payload'a bağlı onay sorusu oluşturur. Kullanıcının açık onay düğmesi `approve(challenge)` çağırır. Üretilen `ActionAuthorization` opak, yalnızca bellekte, en fazla 30 saniyelik ve tek kullanımlıktır; Codable değildir ve açık yapıcı sunmaz. Tam istek/payload/capability eşleşmesi gerekir. Başarısız eşleşme de token'ı tüketir; yeniden oynatma reddedilir. Ret veya arka plan geçişi outstanding izinleri geçersizleştirir; biyometri ekranı beklenirken arka plana geçilmesi sonradan yeni yetki oluşturamaz.
+Kullanıcı, uygulama üzerindeki bir işlem butonuna bastığında veya desteklenen bir yerel komutu gönderdiğinde `PermissionManager.authorizeOwnerCommand(request)` tek kullanımlık, isteğin kimliğine ve payload'una bağlı yetki üretir. Ek onay penceresi ve biyometri bulunmaz. İşlem, `ActionExecutor` üzerinden gerçekten gerçekleştirilirse makbuz üretilir.
 
-Hassas tek kişisel/öğrenme kaydı silme, JSON dışa aktarma ve yüksek riskli tüm veri silme, AGENTS.md politikasına göre açık onaya ek olarak `LocalAuthentication.deviceOwnerAuthenticationWithBiometrics` kullanır. Face ID/Touch ID kayıtlı değilse, erişim kısıtlıysa, kullanıcı iptal ederse veya doğrulama başarısızsa işlem yapılmaz. Konuşma tanıma veya ileride eklenecek konuşmacı benzerliği bu koşulu karşılayamaz. Biyometri için PIN/passcode'a sessiz geçiş yoktur. Simulator/donanım biyometrisi ve kullanıcı etkileşimi gerçek cihazda ayrıca kabul edilmelidir.
+`ActionAuthorization` serileştirilemez, yeniden kullanılamaz ve arka plana geçişte geçersizleşir. `.modelProposal` kaynaklı eylemler reddedilir; istemciye açık model metni araç yetkisi değildir.
 
-`ActionExecutor` önce yetkiyi tüketir, sonra gerçek MemoryStore işlemini bekler; yalnızca başarılı yazma/silmeden sonra başarı makbuzu üretir. Etki başarısızsa sonuç ve denetim kaydı `failed` olur; ham hata içeriği yerine sabit hata kodu tutulur. Denetim alanları eylem kimliği, capability adları, risk, durum ve makbuz UUID'sidir; hafıza metni/payload kopyası kaydedilmez. Etki başarılı fakat denetim yazımı başarısızsa bu ayrı `auditWriteFailed` sonucu olarak gösterilir; işlem otomatik tekrar edilmez veya geri alınmış gibi raporlanmaz.
+Bu sürümde uygulanmış yerel işlemler kişisel hafıza, öğrenme kaydı, dışa aktarma ve toplu silmeyle sınırlıdır. Desteklenmeyen telefon araçları için yeni uygulama kodu ve iOS izinleri gereklidir; uygulama bunları zaten yapıyormuş gibi davranmaz.
 
-Başarılı `deleteAllMemory` sonrası şifreli depoya yeni denetim kaydı yazılmaz: silinmiş öğrenme/veri alanlarını yeniden yaratmamak için sonuç makbuzu yalnızca bellekte döner. Diğer eylemlerin denetimi mevcut şifreli görev deneyimi koleksiyonundadır ve export/delete akışına dahildir.
-
-Bu modül bir iOS izin yükseltme yolu değildir. Modelin bir aracı önermesi eylem yetkisi sağlamaz. İmza doğrulamalı yeni beceri yükleme, telefon sistem kontrolü ve uzak eylem yürütme Alpha 0.3 kapsamında etkin değildir.
-
-Dışa aktarma eylemi, biyometrik yetki tüketilmeden MemoryStore.export çağırmaz. Onaylı plaintext JSON yalnızca ActionExecutionResult.exportedData içinde döner; makbuza/denetim kaydına kopyalanmaz. Paylaşım arayüzü kapandığında uygulama bu geçici veriyi temizler.
+Veri şifreleme, Keychain, ağ kimlik doğrulaması ve gerçek/başarılı işlem raporlama korunur. Bunlar gerçek kullanıcı komutunu modelin kendi metninden ayırmak için gereklidir. Önceki `prepare/approve` API'si geriye dönük test uyumluluğunda bulunur; iOS kullanıcı akışında çağrılmaz.

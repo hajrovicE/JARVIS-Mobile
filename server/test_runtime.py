@@ -58,15 +58,24 @@ class RuntimeTests(unittest.TestCase):
         for extra in [{"RELAY_REQUIRE_EXPLICIT_EXPIRY": "true"},
                       {"RELAY_REQUIRE_EXPLICIT_EXPIRY": "unknown"},
                       {"APP_ACCESS_TOKEN_EXPIRES_AT": "NaN"},
-                      {"RELAY_REQUESTS_PER_MINUTE": "0"},
-                      {"RELAY_REQUESTS_PER_DAY": "10001"},
-                      {"RELAY_MAX_CONCURRENT": "5"},
+                      {"RELAY_REQUESTS_PER_MINUTE": "-1"},
+                      {"RELAY_REQUESTS_PER_DAY": "10000001"},
+                      {"RELAY_MAX_CONCURRENT": "65"},
                       {"RELAY_REQUESTS_PER_MINUTE": "not-an-integer"}]:
             with patch.dict(os.environ, {**base, **extra}, clear=True):
                 self.assertFalse(Settings.from_environment(now=1).configured())
         # Local development compatibility is retained; production disables this default.
         with patch.dict(os.environ, base, clear=True):
             self.assertEqual(Settings.from_environment(now=1).access_token_expires_at, 28801)
+
+    def test_disabled_quotas_by_default_and_no_unbounded_history(self):
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "synthetic-key", "APP_ACCESS_TOKEN": TOKEN}, clear=True):
+            settings = Settings.from_environment(now=1)
+        self.assertEqual((settings.requests_per_minute, settings.requests_per_day), (0, 0))
+        budget = RequestBudget(0, 0, lambda: 1)
+        self.assertTrue(all(budget.admit() for _ in range(1000)))
+        self.assertEqual((len(budget._minute), len(budget._day)), (0, 0))
+        self.assertFalse(RequestBudget(0, 0, lambda: float("nan")).admit())
 
     def test_minute_and_day_windows_exact_boundaries(self):
         clock = [0.0]
@@ -171,7 +180,7 @@ class RuntimeTests(unittest.TestCase):
                 with socket.create_connection(server.server_address, timeout=3) as connection:
                     connection.sendall(raw); response = connection.recv(4096)
                 self.assertIn(b"400", response.split(b"\r\n", 1)[0])
-            for length in ["+2", "2  ", "-1", "1000000"]:
+            for length in ["+2", "2  ", "-1", "10000000"]:
                 raw = ("POST /v1/chat HTTP/1.1\r\nHost: localhost\r\nAuthorization: " + AUTH + "\r\nContent-Type: application/json\r\nContent-Length: " + length + "\r\n\r\n{}").encode()
                 with socket.create_connection(server.server_address, timeout=3) as connection:
                     connection.sendall(raw); response = connection.recv(4096)

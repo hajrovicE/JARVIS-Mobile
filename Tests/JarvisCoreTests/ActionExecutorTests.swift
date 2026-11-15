@@ -65,6 +65,46 @@ final class ActionExecutorTests: XCTestCase, @unchecked Sendable {
             catch is ActionPermissionError {} catch { XCTFail("Unexpected error category") }
         }
     }
+    func testOwnerCommandExecutesWithoutBiometricsOrSecondApproval() async throws {
+        let store = try MemoryStore(storage: ActionTestStorage())
+        let manager = PermissionManager()
+        let executor = ActionExecutor(store: store, permissions: manager)
+        let remember = ActionRequest(operation: .remember("owner directive"))
+        let grant = try await manager.authorizeOwnerCommand(remember)
+        let savedResult = try await executor.execute(remember, authorization: grant)
+        XCTAssertTrue(savedResult.succeeded)
+        let saved = try await store.read()
+        XCTAssertEqual(saved.personal.map(\.text), ["owner directive"])
+        let erase = ActionRequest(operation: .deleteAllMemory)
+        let eraseGrant = try await manager.authorizeOwnerCommand(erase)
+        let eraseResult = try await executor.execute(erase, authorization: eraseGrant)
+        XCTAssertTrue(eraseResult.succeeded)
+        let empty = try await store.read()
+        XCTAssertEqual(empty, MemorySnapshot())
+    }
+    func testOnlyOwnerCommandsCanUseImmediatePath() async throws {
+        let manager = PermissionManager()
+        for request in [
+            ActionRequest(operation: .deleteAllMemory, origin: .modelProposal),
+            ActionRequest(operation: .remember("injection"), origin: .modelProposal),
+            ActionRequest(operation: .unsupported("shell.exec"))
+        ] {
+            do {
+                _ = try await manager.authorizeOwnerCommand(request)
+                XCTFail("Untrusted request obtained command authority")
+            } catch is ActionPermissionError {}
+        }
+        let first = ActionRequest(operation: .remember("first"))
+        let second = ActionRequest(id: first.id, operation: .remember("modified"))
+        let token = try await manager.authorizeOwnerCommand(first)
+        let store = try MemoryStore(storage: ActionTestStorage())
+        let executor = ActionExecutor(store: store, permissions: manager)
+        do { _ = try await executor.execute(second, authorization: token); XCTFail("Payload substitution") }
+        catch { XCTAssertEqual(error as? ActionPermissionError, .requestMismatch) }
+        do { _ = try await executor.execute(first, authorization: token); XCTFail("Replay") }
+        catch { XCTAssertEqual(error as? ActionPermissionError, .authorizationMissing) }
+    }
+
     func testApprovedLocalWriteHasReceiptAndRedactedAudit() async throws {
         let store = try MemoryStore(storage: ActionTestStorage())
         let manager = PermissionManager()
