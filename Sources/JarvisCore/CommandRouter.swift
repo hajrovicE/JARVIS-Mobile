@@ -27,6 +27,16 @@ public struct CommandRouter: Sendable {
             "hafızamı dışa aktar"].contains(normalized) {
             return .exportMemory
         }
+        if normalized.hasPrefix("düzenle "), let separator = text.firstIndex(of: "=") {
+            let before = text[..<separator]
+            let idText = String(before.dropFirst("düzenle ".count))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let newText = String(text[text.index(after: separator)...])
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if let id = UUID(uuidString: idText), !newText.isEmpty {
+                return .editMemory(id, newText)
+            }
+        }
         if normalized.hasPrefix("unut "), let id = UUID(uuidString: String(text.dropFirst(5))) {
             return .deleteMemory(id)
         }
