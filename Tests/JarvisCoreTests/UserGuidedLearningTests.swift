@@ -34,13 +34,14 @@ final class UserGuidedLearningTests: XCTestCase, @unchecked Sendable {
         XCTAssertTrue(record.revisions?.isEmpty == true)
     }
 
-    func testLongUserAuthoredLessonIsNotCutOff() async throws {
+    func testOversizedLessonIsRejected() async throws {
         let store = try MemoryStore(storage: GuidedMemoryDisk(), now: date)
         let learner = UserGuidedLearning(store: store)
         let lesson = String(repeating: "Uzun kişisel ilke. ", count: 100)
-        _ = try await learner.teach(topic: "kapsamlı_öğrenme", text: lesson, now: date)
+        do { _ = try await learner.teach(topic: "kapsamlı_öğrenme", text: lesson, now: date); XCTFail("Oversized lesson should be rejected") }
+        catch { XCTAssertEqual(error as? GuidedLearningError, .invalidTeaching) }
         let saved = try await store.read(now: date)
-        XCTAssertEqual(saved.learning.records.first?.text, lesson)
+        XCTAssertTrue(saved.learning.records.isEmpty)
     }
 
     func testRetaughtTopicCreatesRevisionInsteadOfDuplicate() async throws {
@@ -59,14 +60,15 @@ final class UserGuidedLearningTests: XCTestCase, @unchecked Sendable {
         XCTAssertEqual(matched[0].text, "Örneklerle açıklama yap.")
     }
 
-    func testOwnerCanTeachAnyNonemptyTopicOrContent() async throws {
+    func testInvalidTopicAndCredentialLessonAreRejected() async throws {
         let store = try MemoryStore(storage: GuidedMemoryDisk(), now: date)
         let learner = UserGuidedLearning(store: store)
-        _ = try await learner.teach(topic: "../escape", text: "Bir ilke", now: date)
-        _ = try await learner.teach(topic: "normal", text: "API key: sk-12345678901234567890", now: date)
+        do { _ = try await learner.teach(topic: "../escape", text: "Bir ilke", now: date); XCTFail("Invalid topic") }
+        catch { XCTAssertEqual(error as? GuidedLearningError, .invalidTopic) }
+        do { _ = try await learner.teach(topic: "normal", text: "API key: sk-12345678901234567890", now: date); XCTFail("Credential") }
+        catch { XCTAssertEqual(error as? GuidedLearningError, .secretDetected) }
         let records = try await store.read(now: date)
-        XCTAssertEqual(records.learning.records.count, 2)
-        XCTAssertTrue(records.learning.records.allSatisfy(\.userConfirmed))
+        XCTAssertTrue(records.learning.records.isEmpty)
     }
 
     func testTeachingCommandDoesNotDuplicateFactInHistory() async throws {
