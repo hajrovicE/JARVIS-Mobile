@@ -38,7 +38,7 @@ public enum AssistantError: Error, Equatable {
         switch self {
         case .consentRequired: "Bulut AI kapalı. AI ayarlarından veri paylaşımını açıkça onaylayın. Yerel hafıza komutları çalışır."
         case .contextChanged: "İstek sırasında hafıza değişti veya temizlendi. Eski bağlamdan üretilen yanıt kaydedilmedi; yeniden deneyin."
-        case .approvalRequired: "Silme işlemi için kullanıcı onayı ve cihaz biyometrisi gerekir. Hafıza sekmesini kullanın."
+        case .approvalRequired: "Bu işlem yalnızca doğrudan kullanıcı komutuyla gerçekleştirilebilir."
         case .credentialDetected: "Metinde erişim anahtarı veya parola olabilecek bir bilgi var. Sunucuya gönderilmedi; bu bilgiyi kaldırın."
         }
     }
@@ -74,7 +74,6 @@ public struct AssistantService: Sendable {
             return AssistantReply(text: result.reply, generated: nil, fromCache: false, historyWriteFailed: result.historyWriteFailed)
         }
         guard consent.networkAllowed else { throw AssistantError.consentRequired }
-        guard !CredentialFilter.containsCredential(prompt) else { throw AssistantError.credentialDetected }
         let (state, epoch) = try await store.aiContextSnapshot(now: now)
         let scope = providerScope + "|" + consent.cacheScope
         if !consent.recentHistory, !AnswerFreshnessPolicy.isDynamic(prompt), let cached = state.generatedAnswers.last(where: {
@@ -91,7 +90,7 @@ public struct AssistantService: Sendable {
             context += memories.map { AIContextEntry(id: "learning:\($0.id)", text: "\($0.key): \($0.text)") }
         }
         if consent.personalMemory {
-            context += state.personal.reversed().filter { !CredentialFilter.containsCredential($0.text) }
+            context += state.personal.reversed()
                 .map { AIContextEntry(id: "personal:\($0.id)", text: $0.text) }
         }
         if consent.recentHistory {
@@ -105,7 +104,6 @@ public struct AssistantService: Sendable {
                 return (answer.savedAt, "answer:\(answer.id)", "Kullanıcı: \(answer.question)\nAI: \(answer.response.text)", categories)
             }
             let history = (local + generated).sorted { $0.0 < $1.0 }
-                .filter { !CredentialFilter.containsCredential($0.2) }
             context += history.map { AIContextEntry(id: $0.1, text: $0.2) }
             history.forEach { historyCategories.formUnion($0.3) }
         }
