@@ -17,3 +17,11 @@ Her CI koşusu `ios-validation-<SHA>` artifact'ında xcresult, derleme/test logl
 Simulator test host imzalanmalıdır: ad-hoc `CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES`. Simulator için `Simulator.entitlements` yalnızca uygulama kimliği ve varsayılan Keychain grubunu tanımlar; gerçek cihazda bu dosya seçilmez. İmzasız simulator build derlenebilir, ancak Keychain erişimi `-34018` ile reddedilebilir.
 
 Data Protection özelliği simulatorun host dosya sisteminde `NSFileProtectionKey` olarak raporlanmaz. Yalnızca bu donanım testi simulator üzerinde açıklamalı XCTSkip üretir; fiziksel iPhone üzerinde `.complete` kontrolü zorunlu kalır. Keychain erişim sınıfı, AES-GCM, şifreli yeniden açma/silme ve diğer iOS testleri simulator üzerinde atlanmaz.
+
+
+## Alpha 0.3 ek doğrulama
+AIProvider HTTP sözleşmesi testleri gerçek ağ/LLM yerine açık test doubles kullanır; HTTPS/auth/hata/cancellation/redirect, credential/context sınırları ve sahte kaynak üretmeme doğrulanır. AssistantService testleri opt-in, yerel offline komutlar, çok turlu açık geçmiş paylaşımı, kapatılan kategorinin türev yanıtlarının tekrar paylaşılmaması, model metninin çalıştırılmaması, tam 30 gün yeniden doğrulama, kaynak/zaman kalıcılığı ve silme sırasında yanıtın geri yazılmamasını kapsar.
+
+ActionExecutor testleri exact allowlist/scope/payload, explicit approval, gerçek adapter yerine yalnızca test-target biometric doubles ile ret/iptal/eksik biyometri, expiry/replay, export veri sınırı ve etki/audit hatası ayrımını doğrular. Üretim uygulamasında test auth bypass'ı yoktur. UI smoke testi kayıt/yeniden açma ve hassas silme onayının iptal edildiğinde veriyi korumasını sınar; fiziksel başarı biyometrisi simulator üzerinden iddia edilmez. Şifreli store testleri başarılı silmeyi gerçek iOS Keychain/dosya API'leri üzerinde doğrulamaya devam eder.
+
+CI ayrıca `python3 -m unittest discover -s server -p 'test_*.py' -v` ve release policy testlerini çalıştırır. Release workflow yalnızca `distribution=build-only` ile bu görevde başlatılır; sign/upload path sentetik profil/guard testleriyle sınanır, gerçek sertifika/P8 denenmez. Çalıştırılmış testler ile kurulmamış dış bağlantılar son raporda ayrı listelenir.

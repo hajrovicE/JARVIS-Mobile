@@ -1,50 +1,58 @@
-# İkinci aşama doğrulama — 15 Kasım 2026
+# Alpha 0.3 doğrulama — 15 Kasım 2026
 
-## Kapsam
-GitHub görevi #1 incelendi. Bu iterasyon kararlı yerel MVP ve öğrenme motorunun temel şema/onay/kalıcılık akışını kapsar. Görev #1 açık kalır: gerçek araç yürütücüsü, beceri imzalama/kataloğu, web kaynak sağlayıcısı, otomatik öneriler ve konuşmacı güvenliği tamamlanmış değildir.
+Doğrulanan kaynak: `8afab2a78d2ea0306616f8bae2ab13257fe2d96b`.
 
-## Doğrulanan yerel kontroller
-Swift 6.0.3/Linux: 19 XCTest, 0 hata. Tam 90/30 gün sınırları, zaman duyarlı önbellek dışlama, kalıcı hafıza, yazma hatasında geri alma, yeniden açma/export/silme, v1→v2 geçişi, onay bekleyen öğrenme kayıtları, çelişki/düzeltme/arama, eski taslak onayı reddi ve geçmiş sorgusunun içeriği yeniden kaydetmemesi test edildi. Apple testleri bu sayıya dahil değildir.
+- [macOS ve iOS CI — başarılı](https://github.com/hajrovicE/JARVIS-Mobile/actions/runs/43696051313)
+- [iPhone Release build-only — başarılı](https://github.com/hajrovicE/JARVIS-Mobile/actions/runs/43696133368)
+- [Önceki Alpha 0.2 doğrulaması](VALIDATION_ALPHA_0_2.md)
 
-## CI kaydı
-Son kaynak revizyonu: `b42a4b68544f548480c14da65b4b48c15b893d69`.
-Koşu: https://github.com/hajrovicE/JARVIS-Mobile/actions/runs/43676038209
-
-**Sonuç: başarı.** macOS-15, Xcode 16.4 (16F6), Swift 6.1.2; iPhone 16 Pro simulator, iOS 18.5.
+## Gerçek sonuçlar
 
 | Kontrol | Sonuç |
 | --- | --- |
-| Swift 6 macOS testleri | 25 başarılı, 0 hata |
-| Simulator uygulama derlemesi | BUILD SUCCEEDED; ad-hoc imzalı host |
-| iPhone SDK derlemesi | BUILD SUCCEEDED; imzasız cihaz hedefi |
-| iOS hosted birim/entegrasyon testleri | 26 başarılı, 1 açıklamalı donanım testi atlandı, 0 hata |
-| iOS arayüz kabul testi | 1 başarılı, 0 hata; 59.566 saniye |
-| Toplam iOS | 27 başarılı, 1 atlanan, 0 hata |
-| Kaynak biçim kontrolü | git diff --check başarılı |
+| Linux Swift 6.0.3 | 53 test başarılı, 0 hata |
+| macOS Swift 6 / Xcode 16.4 | 59 test başarılı, 0 hata |
+| Python relay | 8 test başarılı, 0 hata |
+| Python release policy | 9 test başarılı, 0 hata |
+| iOS simulator ve iPhone SDK Debug | BUILD SUCCEEDED |
+| iOS hosted birim/entegrasyon | 60 başarılı, 1 donanım testi atlandı, 0 hata |
+| iOS UI smoke | 1 başarılı, 0 hata; 74.166 saniye |
+| iOS toplam | 61 başarılı, 1 atlanan, 0 hata; TEST SUCCEEDED |
+| iPhone SDK Release (imzasız) | BUILD SUCCEEDED |
+| Apple signing / TestFlight upload | Çalıştırılmadı; sign-and-distribute işi skipped |
+| Kaynak ve shell kontrolü | git diff --check ve bash -n başarılı |
 
-Xcode test sonucu `TEST SUCCEEDED`. Keychain erişim sınıfı/senkronizasyonu, AES-GCM nonce ve kurcalama, eksik/bozuk anahtar, şifreli kişisel/öğrenme hafızasını yeniden açma ve silme testleri simulator üzerinde geçti. Onboarding, yazılı komutla kaydetme, uygulamayı sonlandırıp tekrar okuyabilme, silme sonrası tekrar açmada kaydın bulunmaması ve konuşmacı doğrulamasının etkin değil gösterilmesi arayüzde doğrulandı. İzin politikası ve uygulamanın gerçek Türkçe Info.plist açıklamaları test edildi.
+Son belgeleme commit'i yalnızca docs değiştirir; uygulama/test/workflow kaynağı yukarıdaki tam SHA'dır. Testler tekrar başarılı görünmesi için değiştirilmiş veya gerçek modelle konuşulmuş gibi sunulmamıştır. HTTP/model ve biyometri doubles açıkça test hedeflerinde bulunur.
 
-**Atlanan test:** `testIOSFileProtectionSurvivesReplacement`. Simulator, host Mac dosya sisteminde NSFileProtectionKey alanını döndürmez. Test fiziksel iOS hedefinde kesin `.complete` kontrolünü korur; bu donanım koruması ve kilitli cihaz davranışı henüz doğrulanmış sayılmaz. Hiçbir Keychain veya şifreli kalıcılık testi atlanmadı.
+**Atlanan tek test:** `testIOSFileProtectionSurvivesReplacement`. Simulator, host dosya sisteminde `NSFileProtectionKey` döndürmez. Fiziksel iOS'ta `.complete` kontrolü zorunlu kalır. Keychain erişim sınıfı, AES-GCM ve yeniden açma/silme testleri atlanmadı.
 
-[Uygulama ve test artifact'ı](https://github.com/hajrovicE/JARVIS-Mobile/actions/runs/43676038209/artifacts/14146721895):
-- `JarvisMobile-simulator.zip`: simulator için uygulama.
-- `JarvisMobile-iphone-unsigned.zip`: iPhone SDK ile derlenmiş, imzasız uygulama.
-- `TestResults.xcresult`: test sonuçları ve yalnızca sentetik test verisi içeren kalıcı screenshot ekleri; Xcode ile açılır.
-- Swift, simulator, iPhone ve iOS test logları.
+## Doğrulanan davranışlar
 
-Artifact GitHub politikasıyla 14 gün saklanır. Bu rapor commit'i yalnızca belgelerdir; doğrulanan uygulama/test/workflow kaynağı yukarıdaki tam SHA'dır.
+- Önceki 90 günlük konuşma, 30 günlük cevap önbelleği ve kalıcı hafıza sınırları korundu. v0/v1/v2 verileri v3'e geçebilir; şifreli kişisel ve öğrenme hafızası yeniden açılır ve silinir.
+- AI onayı yokken ağ çağrısı yapılmaz; yerel hafıza komutları çevrimdışı çalışır. Sağlayıcı yoksa açık hata döner, sahte yanıt arşivlenmez. HTTPS/auth/HTTP hata/redirect/boş veya bozuk yanıt testleri geçti.
+- Açık geçmiş onayıyla önceki model yanıtları sınırlı bağlama girer. Onaylanmamış veya hassas öğrenme, sır desenleri ve paylaşımı kapatılmış kategorilerden türetilmiş geçmiş yanıtlar gönderilmez. Filtre kapsamlı PII tespiti değildir.
+- Model metni bir eylemi çalıştırmaz veya öğrenme kaydını onaylamaz. Kaynak/model/zaman/tazelik metadata'sı kaydedilir. Doğrulanmamış ve dinamik cevaplar yeniden kullanılmaz; güvenilir statik metadata için tam 30 gün sınırı test edildi.
+- Hafıza silme/düzeltme sırasında bekleyen AI yanıtı eski contextEpoch ile geri yazılamaz. İptal, cache dönüşü ve görüntüleme/TTS sınırlarında kontrol edilir.
+- Öğrenme düzeltmeleri revizyon/provenance/güven arşivi tutar. Görev düzeltmesi onay öncesi kullanılmaz; onay sonrası retrieval'a girer. Silme bağlı eski iddiaları, revizyonları ve deneyimleri kaldırır. Deneyim geçmişi 90 gün, onaylı tercihler/kurallar kalıcıdır.
+- Yetki kapsamı/payload eşleşmesi, tek kullanım, expiry/replay, model-origin ret, biyometri yokluğu/ret, background iptali, başarısız etki ve başarısız audit ayrımı core testlerinde doğrulandı.
+- UI smoke: Türkçe onboarding → komutla kayıt → sonlandırma/yeniden açma → okuma → hassas silme onayını iptal → yeniden açmada kaydın korunması → konuşmacı doğrulamasının etkin değil gösterilmesi. Başarılı fiziksel Face ID taklidi veya üretim bypass'ı kullanılmadı. Gerçek başarılı silme ayrıca encrypted store/core testlerindedir.
 
-## Bulunan ve düzeltilen sorunlar
-- Swift 6 XCTest keşfinde Sendable gereksinimi ve senkron test fonksiyonu cast sorunu; izole, paylaşılan değişken durumu olmayan test sınıfları ve async test girişleriyle düzeltildi.
-- macOS login Keychain iOS erişim sınıfını döndürmüyor. Kesin `WhenUnlockedThisDeviceOnly` kontrolü iOS testinde korundu; macOS'ta diğer şifreleme/Keychain kontrolleri sürer.
-- `CODE_SIGNING_ALLOWED=NO` ile simulator uygulamasının Keychain çağrıları `-34018` verdi; yalnızca derlenmiş olması çalıştığını kanıtlamadı. Simulator host için ad-hoc imza ve açık simulator uygulama kimliği eklendi. Cihaz hedefi bu simulator entitlement dosyasını kullanmaz; gerçek cihaz yetkileri provisioning profile'dan gelir.
-- Şifreli dosya değişiminden sonraki metadata hatası yanlış başarısızlık bildirebiliyordu; metadata yeni geçici dosyada hazırlanıp atomik değişim son işlem yapıldı.
-- Simulatorun fiziksel Data Protection alanı için açıklamalı atlama eklendi; gerçek cihaz testi zorunlu kaldı.
-- Hafıza satırlarında birden çok SwiftUI List düğmesi için bağımsız button style eklendi.
-- Düzenlenmiş önerinin eski metnini onaylama, beklenen metin kontrolüyle engellendi.
-- `geçmiş` cevabının yeniden kaydedilmesi içeriği çoğaltıp TTL'yi uzatıyordu; listelemeler yeniden kaydedilmez. Hafıza komutları yalnızca içeriksiz işlem işareti bırakır.
+## İndirilebilir kanıtlar
 
-## Fiziksel iPhone için kalan kabul
-Gerçek cihazda canlı Türkçe ses transkripsiyonu, izin kabul/ret/kısıt, desteklenmeyen cihaz, arka plan/kesinti, kilitli cihazın dosya/Keychain koruması, VoiceOver, dışa aktarma ve imzalı kurulum manuel doğrulanmalıdır. İzin politikası/Info.plist testleri gerçek mikrofon sesi testi değildir. Simulator testleri fiziksel cihazın donanım korumasını kanıtlamaz.
+- [Simulator ve Debug cihaz uygulamaları + log/xcresult/screenshot ekleri](https://github.com/hajrovicE/JARVIS-Mobile/actions/runs/43696051313/artifacts/14154486443)
+- [İmzasız iPhone Release uygulaması + Release logu](https://github.com/hajrovicE/JARVIS-Mobile/actions/runs/43696133368/artifacts/14154621047)
 
-Simulator `.app` ve imzasız iPhone SDK `.app` dosyaları TestFlight/IPA dağıtımı değildir. Gerçek cihaza kurulum için Xcode'da geliştirici takımı seçilip imzalanmalıdır.
+Artifact'lar 14 gün saklanır. xcresult Xcode ile açılır; screenshot'lar yalnızca sentetik test verisi içerir. İmzasız `.app` iPhone'a doğrudan kurulamaz; bu paketler IPA/TestFlight dağıtımı değildir.
+
+## Tamamlanan kod ve açık işler
+
+**Uygulandı:** AIProvider/HTTPS istemci ve gerçek OpenAI Responses API relay kodu; ayrı ve varsayılan kapalı veri paylaşımı; zaman/kaynak/tazelik metadata'sı; çok turlu onaylı bağlam; öğrenme revizyonları ve görev düzeltmeleri; güvenli ActionExecutor/PermissionManager; lazy cihaz içi Speech/opt-in TTS; ayrı fail-closed SpeakerSecurity; AppIcon/privacy manifest; Release build-only ve korumalı signing/upload hazırlığı.
+
+**Henüz doğrulanmadı veya geliştirilmedi:** Canlı LLM yanıtı, üretim sunucusu, çok kullanıcılı auth, web arama/doğrulanmış güncel kaynak sağlayıcısı, gerçek konuşmacı embedding/enrollment/spoof savunması, fiziksel Speech/TTS/FaceID/DataProtection, gerçek Apple sertifikasıyla imzalama ve TestFlight. Issue #1'in imzalı beceri kataloğu ve otomatik öneri katmanları açık kalır. Model ağırlıkları yeniden eğitilmez.
+
+**Kullanıcı/hesap sahibi adımları:**
+1. [AI relay kurulumu](AI_RELAY_SERVER.md): sahibi olduğunuz HTTPS sunucusunda sağlayıcı anahtarını secret olarak tanımlayın, süreli relay erişimi verin; uygulamada açık onay ve tercihen hassas olmayan küçük bir test sorusuyla canlı bağlantıyı doğrulayın. Sağlayıcı API anahtarını mobil uygulamaya veya sohbete koymayın. Bu görevde canlı anahtar/endpoint sağlanmadı, dış model çağrısı yapılmadı.
+2. [iPhone dağıtım kurulumu](IPHONE_DISTRIBUTION.md): ücretli Apple Developer üyeliği, App ID/App Store Connect kaydı, hesap sözleşmeleri, privacy metadata, korumalı GitHub environment ve sertifika/profil/API Secrets. Üyelik etkinleşmeden bayrağı açmayın. Yalnızca iPhone ile CI derlenebilir; özel anahtar/P12 hazırlığı için güvenilir Mac/cloud Mac/yetkili yönetici gerekebilir.
+3. İmzalı erişim hazır olunca fiziksel cihazda Türkçe mikrofon/izin ret-kısıt/arka plan, opt-in TTS, gerçek Face ID/Touch ID, kilitli cihaz koruması ve erişilebilirlik testlerini tamamlayın. Konuşmacı tanımayı tamamlandı saymayın.
+
+**TestFlight'a yükleme yapılmadı.** Üyelik/Secrets olmadan gerçek dağıtım denenmedi. Yeni kaynak commit'leri: [8194fe8](https://github.com/hajrovicE/JARVIS-Mobile/commit/8194fe828e8a73f24ab5a0ab44e2abe4b6569151), [8afab2a](https://github.com/hajrovicE/JARVIS-Mobile/commit/8afab2a78d2ea0306616f8bae2ab13257fe2d96b).

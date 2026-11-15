@@ -14,3 +14,17 @@
 - [ ] SpeakerSecurity bağımsız inceleme ve saldırı testleri.
 
 Kanıt: docs/VALIDATION.md, Actions koşusu 43676038209. İzin politikası ve Info.plist testleri canlı ses testi yerine geçmez.
+
+## Alpha 0.3
+- [x] API sağlayıcı anahtarı mobil binary'de yok; relay oturumu ayrı Keychain kaydında.
+- [x] AI kullanımı varsayılan kapalı; bağlam kategorileri ayrı opt-in, türetilmiş geçmiş paylaşımı da kategori onayına uyar.
+- [x] Model metni yürütülmez; allowlist/scope/tek kullanımlı yetki ve hata/başarı makbuzu ayrımı test edildi.
+- [x] Hassas silme ve export için gerçek LocalAuthentication adapter'ı; biyometri yokluğunda fail-closed.
+- [x] SpeakerSecurity açıkça unavailable/notImplemented; konuşma tanıma kimlik yetkisi sağlamaz.
+- [x] Release build-only başarılı; signing/upload gerçek üyelik + Secrets + manual protected environment gerektirir ve bu görevde çalıştırılmadı.
+- [ ] Canlı sahipli AI sunucusu/LLM ve sağlayıcı saklama/gizlilik politikası kabulü.
+- [ ] Fiziksel Face ID/Touch ID, Speech/TTS, locked-device DataProtection ve erişilebilirlik.
+- [ ] Gerçek Apple signing/TestFlight ve hesap metadata'sı.
+- [ ] İmzalı beceri kataloğu, çok kullanıcılı sunucu auth ve bağımsız güvenlik incelemesi.
+
+Son kanıt: docs/VALIDATION.md, CI 43696051313 ve Release 43696133368. 90/30 günlük kurallar, kalıcı hafıza ve eski sürüm migration testleri korunur.
