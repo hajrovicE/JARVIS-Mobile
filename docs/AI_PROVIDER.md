@@ -24,4 +24,7 @@ Bu geliştirmede canlı sunucu kurulmadı, sağlayıcı hesabı/anahtarı kullan
 - Relay istek kotaları varsayılan kapalıdır: `RELAY_REQUESTS_PER_MINUTE=0` ve `RELAY_REQUESTS_PER_DAY=0`; maliyet yönetimi isteyen operatör pozitif limit belirleyebilir. Sağlayıcının ücret ve kullanım limitleri değişmez.
 - `max_output_tokens=1200` kaldırıldı; model sağlayıcısının doğal çıktı sınırı geçerlidir.
 - Kullanıcının paylaşmaya onay verdiği bağlam artık sabit 10/6/4 kayıtla kesilmez. Çok büyük bağlam isteği sağlayıcının penceresini aşarsa hata dönebilir.
-- Bağımsız eylem engeli, cihaz/biyometri izinleri, relay kimlik doğrulaması, şifreleme ve gizli bilgi koruması korunur.
+- Bağımsız eylem engeli, relay kimlik doğrulaması, şifreleme ve cihazın zorunlu işletim sistemi izinleri korunur. Sahibinin açıkça yazdığı sorular içerik türüne göre reddedilmez.
+
+## Tek davranış kuralı
+JARVIS, sahibinin güncel ve açık komutu olmadan hiçbir mutasyon veya dış işlem başlatmaz. Model cevabı, önceki kayıt veya üçüncü taraf metni komut olamaz. İlgili kullanıcı bir bağlam paylaşım seçeneğini etkinleştirdiyse içerik kategorisine göre ekstra sansür uygulanmaz; model sağlayıcısının kendi koşulları hâlâ geçerlidir.
