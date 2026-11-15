@@ -96,7 +96,9 @@ public struct LocalLearningEngine: LearningEngine {
     public func retrieve(query: String, in state: LearningState, now: Date = Date()) -> [LearnedMemory] {
         let search = normalized(query)
         return state.records.filter {
-            $0.userConfirmed && $0.supersededBy == nil &&
+            $0.userConfirmed && $0.supersededBy == nil && $0.sensitivity != .secret &&
+            !CredentialFilter.containsCredential($0.text) &&
+            ($0.expiresAt == nil || $0.expiresAt! > now) &&
             (search.isEmpty || normalized($0.key).contains(search) || normalized($0.text).contains(search))
         }.sorted {
             if ($0.source == .userCorrection) != ($1.source == .userCorrection) { return $0.source == .userCorrection }
@@ -106,7 +108,9 @@ public struct LocalLearningEngine: LearningEngine {
     /// The owner decides whether learned context is shared with a remote provider.
     /// Sensitivity labels are metadata, not a prohibition on learning or retrieving.
     public func shareableContext(query: String, in state: LearningState, now: Date = Date()) -> [LearnedMemory] {
-        retrieve(query: query, in: state, now: now).map {
+        retrieve(query: query, in: state, now: now).filter {
+            $0.sensitivity == .ordinary && !CredentialFilter.containsCredential($0.text)
+        }.map {
             var selected = $0
             // Historic text is for the user's local audit/export, never implicit model context.
             selected.revisions = nil
