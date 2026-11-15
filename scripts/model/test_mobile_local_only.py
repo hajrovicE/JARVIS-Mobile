@@ -16,15 +16,38 @@ class LocalOnlyMobileTests(unittest.TestCase):
         self.assertIn("processingMode: .onDevice", text)
         self.assertIn("networkAllowed: false", text)
         self.assertIn("selectedModelManifest", text)
+        self.assertIn("ownerInstructions: ownerInstructions", text)
+        self.assertIn("maxNewTokens: modelMaxNewTokens", text)
+        self.assertIn("contextLength: Int32(clamping: modelContextTokens)", text)
+        self.assertIn("temperature: Float(modelTemperature)", text)
 
     def test_llama_inference_is_local_and_owner_command_gate_remains(self):
         text = RUNTIME.read_text(encoding="utf-8")
         self.assertIn("llama_model_load_from_file", text)
         self.assertIn("generationBudget", text)
-        self.assertIn("Sahibinin komutu olmadan eylem başlatma", text)
+        self.assertIn("ownerInstructions.isEmpty", text)
+        self.assertIn("ActionExecutor", text)
+        self.assertNotIn("Sen JARVIS isimli, cihaz üzerinde çalışan Türkçe yapay zekâsın", text)
+        self.assertIn("ownerInstructions", text)
+        self.assertIn("llama_sampler_chain_init", text)
+        self.assertIn("llama_sampler_init_top_p", text)
+        self.assertIn("llama_sampler_init_temp", text)
+        self.assertIn("llama_sampler_init_dist", text)
         self.assertNotIn("URLSession", text)
         self.assertNotIn("urllib", text)
 
+
+    def test_training_parameters_are_owner_selectable(self):
+        script = (ROOT / "scripts" / "model" / "train_lora.py").read_text(encoding="utf-8")
+        for flag in ("--thinking", "--lora-rank", "--lora-alpha", "--batch-size",
+                     "--accumulation", "--epochs", "--device"):
+            self.assertIn(flag, script)
+
+    def test_owner_prompt_is_not_overridden_by_fixed_local_policy(self):
+        runtime = RUNTIME.read_text(encoding="utf-8")
+        provider = (ROOT / "Sources" / "JarvisCore" / "LocalAIProvider.swift").read_text(encoding="utf-8")
+        self.assertIn("let systemTurn = ownerInstructions.isEmpty", runtime)
+        self.assertNotIn("Gereksiz ikinci onay isteme", provider)
 
 if __name__ == "__main__":
     unittest.main()

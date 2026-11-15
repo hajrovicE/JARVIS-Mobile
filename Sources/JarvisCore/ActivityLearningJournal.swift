@@ -51,14 +51,14 @@ public enum ActivityInsights {
         let recent = observations.filter { $0.recordedAt <= now }
         let voice = recent.filter { $0.kind == .voiceInputFinished }.count
         let typed = recent.filter { $0.kind == .typedCommand }.count
-        if voice >= 5, voice >= 2 * max(1, typed) {
+        if voice > typed {
             return [.init(id: "input.voice", title: "Sesli giriş daha sık kullanılıyor",
-                          explanation: "Sesli komutları tercih edebileceğin gözlemlendi; yalnızca sen onaylarsan hafızaya önerilir.",
+                          explanation: "Kayıtlı etkinliklerde sesli komutlar daha fazla görülüyor; bu bir davranış gözlemidir.",
                           evidenceCount: voice)]
         }
-        if typed >= 5, typed >= 2 * max(1, voice) {
+        if typed > voice {
             return [.init(id: "input.typed", title: "Yazılı giriş daha sık kullanılıyor",
-                          explanation: "Yazılı komutları tercih edebileceğin gözlemlendi; yalnızca sen onaylarsan hafızaya önerilir.",
+                          explanation: "Kayıtlı etkinliklerde yazılı komutlar daha fazla görülüyor; bu bir davranış gözlemidir.",
                           evidenceCount: typed)]
         }
         return []

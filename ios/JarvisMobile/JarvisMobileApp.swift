@@ -44,6 +44,12 @@ struct RootView: View {
   @State private var importingLocalModel = false
   @State private var localModelStatus = "Yerel JARVIS modeli henüz kurulmadı."
   @AppStorage("activeLocalModelManifest") private var activeLocalModelManifest = ""
+  @AppStorage("jarvis.ownerInstructions") private var ownerInstructions = ""
+  @AppStorage("jarvis.model.maxNewTokens") private var modelMaxNewTokens = 2048
+  @AppStorage("jarvis.model.contextTokens") private var modelContextTokens = 8192
+  @AppStorage("jarvis.model.temperature") private var modelTemperature = 0.8
+  @AppStorage("jarvis.model.topP") private var modelTopP = 1.0
+  @AppStorage("jarvis.model.cpuThreads") private var modelCPUThreads = 0
   @State private var busy = false
   @Environment(\.scenePhase) private var scenePhase
   var body: some View {
@@ -334,6 +340,32 @@ struct RootView: View {
           Text("Kendi eğitilmiş modelinizi de yükleyebilirsiniz: Qwen3 tokenizer ve sohbet şablonuyla uyumlu GGUF olmalı. Her dosyanın SHA-256 özeti saklanır ve yeniden doğrulanır.")
           Text("Hazır başlangıç modeli yaklaşık 1,28 GB; telefonda çalışma belleği ayrıca gerekir.")
         }
+        Section("Sahibin davranış kuralları") {
+          Text("Modelin cevap tarzını ve çalışma talimatlarını yalnızca siz belirliyorsunuz. Boş bırakırsanız ek davranış talimatı uygulanmaz.")
+          TextEditor(text: $ownerInstructions)
+            .frame(minHeight: 160)
+            .accessibilityIdentifier("model.ownerInstructions")
+          Text("Bu metin modele her istekte yerel olarak gönderilir; buluta aktarılmaz.")
+          Text("Telefon üzerinde eylem başlatma yetkisi yalnızca o anki doğrudan komutunuzdan gelir.")
+        }
+        Section("Modelin üretim ayarları") {
+          TextField("Yanıt için token bütçesi", value: $modelMaxNewTokens, format: .number)
+            .keyboardType(.numberPad)
+            .accessibilityIdentifier("model.maxNewTokens")
+          TextField("Bağlam penceresi (token)", value: $modelContextTokens, format: .number)
+            .keyboardType(.numberPad)
+            .accessibilityIdentifier("model.contextTokens")
+          TextField("Sıcaklık (0 = deterministik)", value: $modelTemperature, format: .number)
+            .keyboardType(.decimalPad)
+            .accessibilityIdentifier("model.temperature")
+          TextField("Top-p (0–1)", value: $modelTopP, format: .number)
+            .keyboardType(.decimalPad)
+            .accessibilityIdentifier("model.topP")
+          TextField("CPU iş parçacıkları (0 = otomatik)", value: $modelCPUThreads, format: .number)
+            .keyboardType(.numberPad)
+            .accessibilityIdentifier("model.cpuThreads")
+          Text("Uygulama yapay karakter/token üst limiti koymaz. Modelin bağlam kapasitesi ve iPhone belleği aşılırsa çıkarım hata verebilir.")
+        }
         Section("Çalışma biçimi") {
           Text("İnternetsiz varsayılan: JARVIS yalnızca kurulu modeli kullanır. Model yoksa hata verir, uzaktaki sağlayıcıya geçmez.")
           Text("Sahibinin açık komutu olmadan işlem başlatılmaz. Model yanıtı telefon eylemi değildir.")
@@ -491,7 +523,13 @@ struct RootView: View {
         let manifest = try selectedModelManifest()
         let manager = try OnDeviceModelManager(directory: localModelDirectory())
         provider = LocalAIProvider(manager: manager, manifest: manifest,
-            runtime: GGUFInferenceRuntime())
+            runtime: GGUFInferenceRuntime(
+                maxNewTokens: modelMaxNewTokens,
+                contextLength: Int32(clamping: modelContextTokens),
+                ownerInstructions: ownerInstructions,
+                temperature: Float(modelTemperature),
+                topP: Float(modelTopP),
+                cpuThreads: modelCPUThreads))
         scope = "local:" + manifest.identifier + ":" + manifest.sha256
       }
       let result = try await AssistantService(

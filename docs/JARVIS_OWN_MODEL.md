@@ -17,7 +17,7 @@ Eğitilmiş ve **Qwen3 tokenizer/chat-template uyumlu GGUF** bir dosya seçilirs
 ## Öğrenme ile ağırlık eğitimi farkı
 - `MemoryStore` / `LearningEngine`: kullanıcının öğrettiği bilgileri cihaz içinde anında kaydeder, fakat ağırlıkları **değiştirmez**.
 - `scripts/model/prepare_dataset.py`: yalnızca kullanıcının hazırladığı instruction/response örneklerini yerel `train.jsonl` ve `eval.jsonl` dosyalarına ayırır. Hafızayı kendiliğinden çekmez veya göndermez.
-- `scripts/model/train_lora.py`: lokal başlangıç modelini ve açıkça hazırlanmış verileri kullanarak, uygun harici GPU üzerinde JARVIS adaptörü/merge ağırlıkları oluşturabilir. Çalıştırılmadı; bu kodun varlığı eğitimin tamamlandığı anlamına gelmez.
+- `scripts/model/train_lora.py`: lokal başlangıç modelini ve açıkça hazırlanmış verileri kullanarak, uygun CPU, Apple MPS veya CUDA donanımı üzerinde JARVIS adaptörü/merge ağırlıkları oluşturabilir; büyük modellerin CPU ile eğitimi çok yavaş ve bellek yoğun olabilir. Çalıştırılmadı; bu kodun varlığı eğitimin tamamlandığı anlamına gelmez.
 - Birleştirilmiş checkpoint, llama.cpp GGUF dönüştürme / quantization zinciri ile Qwen3-uyumlu GGUF haline getirildikten sonra iPhone'a kullanıcı tarafından yüklenir. Sürüm, lisans ve modelin davranışları gerçek cihazda test edilir.
 
 ## Örnek eğitim biçimi
@@ -37,3 +37,11 @@ JARVIS modelinin yanıtı kendi başına telefon komutu değildir. Yalnızca o a
 
 ## Henüz doğrulanmamış olanlar
 Tam iPhone gerçek cihaz GGUF inference hızı/RAM/ısınma, iOS derlemesi ve TestFlight dağıtımı; eğitim/LoRA ve modelin Türkçe çıktı kalitesi. Model yüklü değilse yapay başarı uydurulmaz.
+
+## Sahibin kontrol ettiği model kuralları ve işlem parametreleri
+- iPhone uygulamasındaki **Yerel yapay zekâ → Sahibin davranış kuralları** alanı, modelin tek davranış yönergesini belirler; boşsa model için uygulamadan sabit sistem yönergesi eklenmez.
+- **Yanıt token bütçesi, bağlam penceresi, sıcaklık, top-p, CPU iş parçacığı** ayarları telefon içinden değiştirilir. Bunlar ürün tarafından keyfî sabit maksimumlarla sınırlandırılmaz; llama.cpp arayüzünün sayısal kapasitesi, yüklenen modelin gerçek bağlam penceresi, kullanılabilir RAM ve iOS işlemleri sınırlamaya devam eder.
+- Sıcaklık 0 deterministik seçim, 0'dan büyük değerler olasılıksal örnekleme sağlar. Top-p matematiksel olarak 0–1 aralığındadır, kullanıcı istediği değeri seçebilir.
+- **Kullanıcıdan bağımsız eylem yapılmaz.** Model metni, talimat belleği veya üçüncü taraf içerik uygulamanın işlem yürütücüsünden izin üretemez. Yalnızca kullanıcının o andaki doğrudan komutu uygulama eylemini tetikleyebilir.
+- Eğitimin `--thinking`, `--lora-rank`, `--lora-alpha`, `--batch-size`, `--accumulation`, `--device` ve `--epochs` değerleri kullanıcı tarafından verilebilir. Model eğitimi ayrıca gerçekleştirilmedikçe ağırlıklar değişmiş sayılmaz.
+- Açık kaynak modeli, Metal/iOS çalışma izinlerini, veri dosyası bütünlük doğrulamasını ve cihaz donanım gereksinimlerini ortadan kaldırmak mümkün değildir.

@@ -16,6 +16,14 @@ def main() -> int:
     parser.add_argument("--train", type=Path, required=True, help="Curated train.jsonl")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--epochs", type=float, default=1.0)
+    parser.add_argument("--lora-rank", type=int, default=16)
+    parser.add_argument("--lora-alpha", type=int, default=32)
+    parser.add_argument("--thinking", action="store_true",
+                        help="Use Qwen's thinking-mode training template if desired")
+    parser.add_argument("--batch-size", type=int, default=1)
+    parser.add_argument("--accumulation", type=int, default=4)
+    parser.add_argument("--device", choices=["auto", "cuda", "mps", "cpu"], default="auto",
+                        help="Select your own training hardware; no CUDA-only requirement")
     args = parser.parse_args()
 
     import torch
@@ -26,8 +34,13 @@ def main() -> int:
         Trainer, TrainingArguments
     )
 
-    if not torch.cuda.is_available():
-        raise SystemExit("Training requires a CUDA-capable GPU; iPhone inference is a separate step.")
+    supported = {"cpu": True, "cuda": torch.cuda.is_available(),
+                 "mps": bool(getattr(torch.backends, "mps", None)) and torch.backends.mps.is_available()}
+    selected = args.device
+    if selected == "auto":
+        selected = "cuda" if supported["cuda"] else ("mps" if supported["mps"] else "cpu")
+    if not supported[selected]:
+        raise SystemExit(f"Selected hardware unavailable: {selected}")
     base = Path(args.base)
     if not base.is_dir():
         raise SystemExit("Provide a local base model directory. No remote model download is attempted.")
@@ -37,11 +50,15 @@ def main() -> int:
         tokenizer.pad_token = tokenizer.eos_token
     model = AutoModelForCausalLM.from_pretrained(
         str(base), local_files_only=True, trust_remote_code=False,
-        torch_dtype=torch.float16, device_map="auto"
+        torch_dtype=torch.float16 if selected != "cpu" else torch.float32,
+        device_map="auto" if selected == "cuda" else None
     )
+    if selected in ("mps", "cpu"):
+        model = model.to(selected)
     model.config.use_cache = False
     model = get_peft_model(model, LoraConfig(
-        r=16, lora_alpha=32, lora_dropout=0.05, bias="none",
+        r=max(1, args.lora_rank), lora_alpha=max(1, args.lora_alpha),
+        lora_dropout=0.05, bias="none",
         task_type="CAUSAL_LM", target_modules=[
             "q_proj", "k_proj", "v_proj", "o_proj",
             "gate_proj", "up_proj", "down_proj"
@@ -55,7 +72,7 @@ def main() -> int:
         data = json.loads(line)
         prompt = tokenizer.apply_chat_template(
             [{"role": "user", "content": data["instruction"]}],
-            tokenize=False, add_generation_prompt=True, enable_thinking=False
+            tokenize=False, add_generation_prompt=True, enable_thinking=args.thinking
         )
         full = prompt + data["response"] + tokenizer.eos_token
         prompt_ids = tokenizer(prompt, add_special_tokens=False)["input_ids"]
@@ -72,14 +89,14 @@ def main() -> int:
         model=model,
         args=TrainingArguments(
             output_dir=str(args.output / "checkpoints"),
-            per_device_train_batch_size=1,
-            gradient_accumulation_steps=4,
+            per_device_train_batch_size=max(1, args.batch_size),
+            gradient_accumulation_steps=max(1, args.accumulation),
             num_train_epochs=args.epochs,
             save_strategy="epoch",
             logging_steps=10,
             report_to="none",
             remove_unused_columns=False,
-            fp16=True
+            fp16=selected == "cuda"
         ),
         train_dataset=Dataset.from_list(examples),
         data_collator=DataCollatorForSeq2Seq(
