@@ -59,8 +59,6 @@ public actor MemoryStore {
         try storage.save(JSONEncoder().encode(loaded))
         self.snapshot = loaded
     }
-    /// Owner history is durable. Freshness for reuse is checked by AssistantService,
-    /// but stored records are removed only through an explicit owner erase.
     private static func purge(_ state: inout MemorySnapshot, now: Date) {
         // Intentionally no automatic deletion.
     }
