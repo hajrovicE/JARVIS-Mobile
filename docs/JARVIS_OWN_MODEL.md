@@ -52,3 +52,11 @@ Tam iPhone gerçek cihaz GGUF inference hızı/RAM/ısınma, iOS derlemesi ve Te
 - Model uzantısı `.gguf` olmak zorunda değildir; içerikte GGUF dosya imzası doğrulanır. Modelin SHA-256 bütünlük denetimi dosyanın kullanıcının seçtiği sürümle aynı olmasını sağlar; bu bir davranış filtresi değildir.
 - Yerel veriler AES-GCM ile şifreli saklanmaya devam eder. Şifreleme kaldırılmadı çünkü sahibinin komut verme veya öğrenme özgürlüğünü kısıtlamaz.
 - Model önerileri bağımsız eylem yetkisi kazanmaz. Yalnızca güvenilir kullanıcı komutuyla yürütücü harekete geçer.
+
+## Sahibin 15 Kasım 2026 uygulama yapılandırması
+- İlave uygulama biyometrisi, yetki kapsamı eşleştirmesi ve 30/60 saniyelik işlem onayı süreleri aktif yürütme yolundan çıkarıldı. Doğrudan kullanıcının gönderdiği talimat ile çalışan işlem eşleşmek zorundadır.
+- Aktif hafıza depolaması **şifrelenmemiş JSON** formatındadır. Eski `memory.aes` kaydı varsa ilk açılışta tek sefer okunarak `memory.json` biçimine kopyalanır; eski dosyanın kriptografik anahtarı migrasyon için gerekebilir.
+- Yerel GGUF dosyasında SHA-256 eşleşmesi, boyut sabitlemesi ve imzalanmış kaynak kısıtları yoktur. Dosyanın GGUF biçiminde okunabilmesi gerekir. Bu bir çalıştırma biçimi şartıdır, ikinci izin değildir.
+- Harici model sağlayıcısı / bulut yolu iPhone uygulamasında bulunmaz; kullanıcı hesabı açılması ve AI servis aboneliği gerekmez.
+- Daha önceki belgelerde yer alan `şifreli depolama`, `biyometrik ikinci onay` ve `SHA-256 mecburi` açıklamaları bu yeni uygulama sürümünde geçerli değildir.
+- Çalıştırılmamış veya desteklenmeyen eylemler tamamlanmış gibi raporlanmaz. Sahibi adına yetkisiz işlem başlatma yasağı sürer.

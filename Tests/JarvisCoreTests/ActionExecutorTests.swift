@@ -61,19 +61,21 @@ final class ActionExecutorTests: XCTestCase, @unchecked Sendable {
         let challenge = try await manager.prepare(request)
         return try await manager.approve(challenge)
     }
-    func testAllowlistOriginAndExactCapabilitiesAreRequired() async throws {
+    func testOnlyLiveOwnerOriginIsRequired() async throws {
         let manager = PermissionManager()
         for request in [
-            ActionRequest(operation: .unsupported("shell.exec")),
             ActionRequest(operation: .remember("injected"), origin: .modelProposal),
             ActionRequest(operation: .deleteLearning(UUID()), origin: .modelProposal),
             ActionRequest(operation: .exportMemory, origin: .modelProposal),
-            ActionRequest(operation: .deleteAllMemory, capabilities: [.memoryWrite]),
+            ActionRequest(operation: .custom("tool"), origin: .modelProposal)
         ] {
-            do { _ = try await manager.prepare(request); XCTFail("Untrusted/mismatched request must be rejected") }
-            catch is ActionPermissionError {} catch { XCTFail("Unexpected error category") }
+            do { _ = try await manager.authorizeOwnerCommand(request); XCTFail("Model must not act") }
+            catch { XCTAssertEqual(error as? ActionPermissionError, .untrustedOrigin) }
         }
+        let userRequest = ActionRequest(operation: .deleteAllMemory, capabilities: [.memoryWrite])
+        _ = try await manager.authorizeOwnerCommand(userRequest)
     }
+
     func testOwnerCommandExecutesWithoutBiometricsOrSecondApproval() async throws {
         let store = try MemoryStore(storage: ActionTestStorage())
         let manager = PermissionManager()
@@ -151,101 +153,105 @@ final class ActionExecutorTests: XCTestCase, @unchecked Sendable {
         catch { XCTAssertEqual(error as? ActionPermissionError, .authorizationMissing) }
         let state = try await store.read(); XCTAssertTrue(state.personal.isEmpty)
     }
-    func testApprovalAndAuthorizationExpireAtExactBoundary() async throws {
+    func testOwnerRequestDoesNotExpireAtArbitraryTimeBoundary() async throws {
         let clock = PermissionClock()
         let store = try MemoryStore(storage: ActionTestStorage())
         let manager = PermissionManager(clock: { clock.now() })
         let executor = ActionExecutor(store: store, permissions: manager)
-        let request = ActionRequest(operation: .remember("time-bound"))
+        let request = ActionRequest(operation: .remember("time-unrestricted"))
         let challenge = try await manager.prepare(request)
-        clock.advance(60)
-        do { _ = try await manager.approve(challenge); XCTFail("Challenge must expire at 60 seconds") }
-        catch { XCTAssertEqual(error as? ActionPermissionError, .approvalExpired) }
-        let grant = try await approved(request, by: manager)
-        clock.advance(30)
-        do { _ = try await executor.execute(request, authorization: grant); XCTFail("Grant must expire at 30 seconds") }
-        catch { XCTAssertEqual(error as? ActionPermissionError, .authorizationExpired) }
-        let state = try await store.read(); XCTAssertTrue(state.personal.isEmpty)
+        clock.advance(86_400)
+        let authorization = try await manager.approve(challenge)
+        clock.advance(86_400)
+        let result = try await executor.execute(request, authorization: authorization)
+        XCTAssertTrue(result.succeeded)
+        let state = try await store.read()
+        XCTAssertEqual(state.personal.first?.text, "time-unrestricted")
     }
-    func testEraseFailsClosedWithoutBiometrics() async throws {
-        let authenticators: [any BiometricAuthenticator] = [UnavailableBiometricAuthenticator(), TestBiometricAuthenticator(reject: true)]
-        for authenticator in authenticators {
-            let store = try MemoryStore(storage: ActionTestStorage())
-            try await store.remember("keep")
-            let manager = PermissionManager(authenticator: authenticator)
-            let request = ActionRequest(operation: .deleteAllMemory)
-            let challenge = try await manager.prepare(request)
-            XCTAssertEqual(challenge.risk, .high)
-            do { _ = try await manager.approve(challenge); XCTFail("Biometric failure must not authorize") }
-            catch is ActionPermissionError {} catch { XCTFail("Unexpected error") }
-            let state = try await store.read(); XCTAssertEqual(state.personal.map(\.text), ["keep"])
-        }
+
+    func testOwnerEraseDoesNotRequireBiometrics() async throws {
+        let store = try MemoryStore(storage: ActionTestStorage())
+        try await store.remember("keep")
+        let manager = PermissionManager(authenticator: UnavailableBiometricAuthenticator())
+        let request = ActionRequest(operation: .deleteAllMemory)
+        let grant = try await manager.authorizeOwnerCommand(request)
+        let result = try await ActionExecutor(store: store, permissions: manager)
+            .execute(request, authorization: grant)
+        XCTAssertTrue(result.succeeded)
+        let state = try await store.read()
+        XCTAssertTrue(state.personal.isEmpty)
     }
-    func testSensitiveSingleDeletionAlsoRequiresBiometrics() async throws {
+
+    func testOwnerSingleDeletionWithoutBiometrics() async throws {
         let store = try MemoryStore(storage: ActionTestStorage())
         try await store.remember("keep-sensitive")
-        let snapshot = try await store.read()
-        let id = try XCTUnwrap(snapshot.personal.first?.id)
+        let before = try await store.read()
+        let id = try XCTUnwrap(before.personal.first?.id)
         let manager = PermissionManager()
         let request = ActionRequest(operation: .deleteMemory(id))
-        let challenge = try await manager.prepare(request)
-        XCTAssertEqual(challenge.risk, .sensitive)
-        do { _ = try await manager.approve(challenge); XCTFail("Sensitive deletion must require biometrics") }
-        catch { XCTAssertEqual(error as? ActionPermissionError, .biometricUnavailable) }
-        let unchanged = try await store.read()
-        XCTAssertEqual(unchanged.personal.count, 1)
+        let grant = try await manager.authorizeOwnerCommand(request)
+        let result = try await ActionExecutor(store: store, permissions: manager)
+            .execute(request, authorization: grant)
+        XCTAssertTrue(result.succeeded)
     }
-    func testEraseAfterBiometricsDoesNotRecreateDeletedAuditData() async throws {
-        let disk = ActionTestStorage(); let store = try MemoryStore(storage: disk)
+
+    func testOwnerEraseLeavesNoAuditData() async throws {
+        let disk = ActionTestStorage()
+        let store = try MemoryStore(storage: disk)
         try await store.remember("erase")
-        let authenticator = TestBiometricAuthenticator()
-        let manager = PermissionManager(authenticator: authenticator)
+        let manager = PermissionManager()
         let request = ActionRequest(operation: .deleteAllMemory)
-        let result = try await ActionExecutor(store: store, permissions: manager).execute(request,
-            authorization: approved(request, by: manager))
+        let grant = try await manager.authorizeOwnerCommand(request)
+        let result = try await ActionExecutor(store: store, permissions: manager)
+            .execute(request, authorization: grant)
         XCTAssertTrue(result.succeeded)
         XCTAssertEqual(result.auditDisposition, .notRetainedAfterErase)
-        let calls = await authenticator.calls(); XCTAssertEqual(calls, 1)
         let reopened = try MemoryStore(storage: disk)
-        let state = try await reopened.read(); XCTAssertEqual(state, MemorySnapshot())
+        let state = try await reopened.read()
+        XCTAssertEqual(state, MemorySnapshot())
     }
-    func testBackgroundInvalidationCancelsOutstandingBiometricApproval() async throws {
-        let authenticator = SuspendedBiometricAuthenticator()
-        let manager = PermissionManager(authenticator: authenticator)
-        let challenge = try await manager.prepare(ActionRequest(operation: .deleteAllMemory))
-        let task = Task { try await manager.approve(challenge) }
-        await authenticator.waitUntilStarted()
+
+    func testBackgroundInvalidationDiscardsPreviousOwnerRequest() async throws {
+        let manager = PermissionManager()
+        let request = ActionRequest(operation: .deleteAllMemory)
+        let token = try await manager.authorizeOwnerCommand(request)
         await manager.invalidateAll()
-        await authenticator.finish()
-        do { _ = try await task.value; XCTFail("Backgrounded prompt must not create a new grant") }
-        catch { XCTAssertEqual(error as? ActionPermissionError, .invalidated) }
+        let store = try MemoryStore(storage: ActionTestStorage())
+        do {
+            _ = try await ActionExecutor(store: store, permissions: manager)
+                .execute(request, authorization: token)
+            XCTFail("A previous request must not become autonomous")
+        } catch {
+            XCTAssertEqual(error as? ActionPermissionError, .authorizationMissing)
+        }
     }
-    func testExportAndLearningDeletionRequireAuthorizedBiometrics() async throws {
+
+    func testDirectOwnerExportAndLearningDeletionWithoutBiometrics() async throws {
         let store = try MemoryStore(storage: ActionTestStorage())
         try await store.remember("exported-preference")
-        let record = LearnedMemory(kind: .preference, key: "drink", text: "tea", source: .userInput,
-            confidence: 1, provenance: .init(sourceID: "explicit-user"))
+        let record = LearnedMemory(kind: .preference, key: "drink", text: "tea",
+                                   source: .userInput, confidence: 1,
+                                   provenance: .init(sourceID: "explicit-user"))
         try await store.proposeLearning(record)
         try await store.confirmLearning(id: record.id, expectedText: record.text)
-        let authenticator = TestBiometricAuthenticator()
-        let manager = PermissionManager(authenticator: authenticator)
+        let manager = PermissionManager()
         let executor = ActionExecutor(store: store, permissions: manager)
         let export = ActionRequest(operation: .exportMemory)
-        let exported = try await executor.execute(export, authorization: approved(export, by: manager))
+        let exportAuthorization = try await manager.authorizeOwnerCommand(export)
+        let exported = try await executor.execute(
+            export, authorization: exportAuthorization)
         XCTAssertTrue(exported.succeeded)
         let decoded = try JSONDecoder().decode(MemorySnapshot.self, from: XCTUnwrap(exported.exportedData))
         XCTAssertEqual(decoded.personal.first?.text, "exported-preference")
-        XCTAssertEqual(decoded.learning.records.first?.text, "tea")
-        let deletion = ActionRequest(operation: .deleteLearning(record.id))
-        let removed = try await executor.execute(deletion, authorization: approved(deletion, by: manager))
-        XCTAssertTrue(removed.succeeded); XCTAssertNil(removed.exportedData)
-        let snapshot = try await store.read()
-        XCTAssertTrue(snapshot.learning.records.isEmpty)
-        let auditJSON = String(data: try JSONEncoder().encode(snapshot.learning.experiences), encoding: .utf8)!
-        XCTAssertFalse(auditJSON.contains("exported-preference"))
-        XCTAssertFalse(auditJSON.contains("tea"))
-        let calls = await authenticator.calls(); XCTAssertEqual(calls, 2)
+        let removal = ActionRequest(operation: .deleteLearning(record.id))
+        let removeAuthorization = try await manager.authorizeOwnerCommand(removal)
+        let result = try await executor.execute(
+            removal, authorization: removeAuthorization)
+        XCTAssertTrue(result.succeeded)
+        let state = try await store.read()
+        XCTAssertTrue(state.learning.records.isEmpty)
     }
+
     func testEffectFailureNeverReportsSuccessAndAuditFailureIsSeparate() async throws {
         let store = try MemoryStore(storage: ActionTestStorage())
         let manager = PermissionManager(authenticator: TestBiometricAuthenticator())

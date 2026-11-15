@@ -116,78 +116,62 @@ struct ActionDescriptor: Sendable {
         case .unsupported:
             throw ActionPermissionError.actionNotAllowed
         }
-        guard request.capabilities == descriptor.capabilities else { throw ActionPermissionError.capabilityMismatch }
+        // Capabilities describe the operation; they are not an extra owner approval gate.
         return descriptor
     }
 }
 
-/// `approve` must be called only by the explicit confirmation button in trusted UI.
-/// There is no automatic approval path for model/tool output. Every action uses the same
-/// binding checks, and sensitive/high-risk approval additionally invokes the platform authenticator.
+/// The only authorization condition is a present, directly issued owner command.
+/// No time-to-live, second approval, biometric challenge, or scoped capability gate.
+/// A bound request is consumed once so old commands cannot cause new autonomous actions.
 public actor PermissionManager {
-    private struct Pending: Sendable { let request: ActionRequest; let challenge: ActionApprovalChallenge }
-    private struct Authorized: Sendable { let request: ActionRequest; let expiresAt: Date }
-    private let authenticator: any BiometricAuthenticator
     private let clock: @Sendable () -> Date
-    private var pending: [UUID: Pending] = [:]
-    private var authorized: [UUID: Authorized] = [:]
-    private var generation = UUID()
+    private var pending: [UUID: ActionRequest] = [:]
+    private var authorized: [UUID: ActionRequest] = [:]
+
     public init(authenticator: any BiometricAuthenticator = UnavailableBiometricAuthenticator(),
                 clock: @escaping @Sendable () -> Date = { Date() }) {
-        self.authenticator = authenticator; self.clock = clock
+        self.clock = clock
+        _ = authenticator
     }
-    /// The owner's trusted UI command is the approval; no secondary biometric prompt.
-    /// Model proposals and persisted text never create authority.
-    /// A short-lived, single-use token binds the exact original request.
+
     public func authorizeOwnerCommand(_ request: ActionRequest) throws -> ActionAuthorization {
         _ = try ActionDescriptor.resolve(request)
-        purgeExpired()
         let token = UUID()
-        authorized[token] = Authorized(request: request, expiresAt: clock().addingTimeInterval(30))
+        authorized[token] = request
         return ActionAuthorization(token: token)
     }
 
+    /// Compatibility for legacy direct UI buttons: no additional approval is required.
     public func prepare(_ request: ActionRequest) throws -> ActionApprovalChallenge {
         let descriptor = try ActionDescriptor.resolve(request)
-        purgeExpired()
-        let challenge = ActionApprovalChallenge(id: UUID(), requestID: request.id,
-            summary: descriptor.summary, risk: descriptor.risk, capabilities: descriptor.capabilities,
-            expiresAt: clock().addingTimeInterval(60))
-        pending[challenge.id] = Pending(request: request, challenge: challenge)
+        let challenge = ActionApprovalChallenge(
+            id: UUID(), requestID: request.id, summary: descriptor.summary,
+            risk: descriptor.risk, capabilities: descriptor.capabilities,
+            expiresAt: .distantFuture)
+        pending[challenge.id] = request
         return challenge
     }
-    /// A challenge is consumed before any asynchronous biometric prompt, preventing reuse.
-    public func approve(_ challenge: ActionApprovalChallenge) async throws -> ActionAuthorization {
-        guard let approval = pending.removeValue(forKey: challenge.id) else { throw ActionPermissionError.approvalMissing }
-        guard approval.challenge == challenge else { throw ActionPermissionError.requestMismatch }
-        guard challenge.expiresAt > clock() else { throw ActionPermissionError.approvalExpired }
-        let currentGeneration = generation
-        if challenge.risk != .low {
-            do { try await authenticator.authenticate(reason: challenge.summary + ". Cihaz biyometrisiyle doğrulayın.") }
-            catch let error as ActionPermissionError { throw error }
-            catch { throw ActionPermissionError.biometricRejected }
-        }
-        guard generation == currentGeneration else { throw ActionPermissionError.invalidated }
-        guard challenge.expiresAt > clock() else { throw ActionPermissionError.approvalExpired }
-        let token = UUID()
-        authorized[token] = Authorized(request: approval.request,
-            expiresAt: min(challenge.expiresAt, clock().addingTimeInterval(30)))
-        return ActionAuthorization(token: token)
+
+    public func approve(_ challenge: ActionApprovalChallenge) throws -> ActionAuthorization {
+        guard let request = pending.removeValue(forKey: challenge.id),
+              request.id == challenge.requestID else { throw ActionPermissionError.approvalMissing }
+        return try authorizeOwnerCommand(request)
     }
-    public func deny(_ challenge: ActionApprovalChallenge) { pending.removeValue(forKey: challenge.id) }
-    /// Call when the app backgrounds, locks, logs out, or its security context changes.
+
+    public func deny(_ challenge: ActionApprovalChallenge) {
+        pending.removeValue(forKey: challenge.id)
+    }
+
     public func invalidateAll() {
-        pending.removeAll(); authorized.removeAll(); generation = UUID()
+        pending.removeAll()
+        authorized.removeAll()
     }
+
     func consume(_ authorization: ActionAuthorization, for request: ActionRequest) throws -> ActionDescriptor {
-        guard let grant = authorized.removeValue(forKey: authorization.token) else { throw ActionPermissionError.authorizationMissing }
-        guard grant.expiresAt > clock() else { throw ActionPermissionError.authorizationExpired }
-        guard grant.request == request else { throw ActionPermissionError.requestMismatch }
+        guard let authorizedRequest = authorized.removeValue(forKey: authorization.token)
+        else { throw ActionPermissionError.authorizationMissing }
+        guard authorizedRequest == request else { throw ActionPermissionError.requestMismatch }
         return try ActionDescriptor.resolve(request)
-    }
-    private func purgeExpired() {
-        let now = clock()
-        pending = pending.filter { $0.value.challenge.expiresAt > now }
-        authorized = authorized.filter { $0.value.expiresAt > now }
     }
 }

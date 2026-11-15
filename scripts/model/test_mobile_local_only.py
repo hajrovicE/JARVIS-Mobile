@@ -21,6 +21,17 @@ class LocalOnlyMobileTests(unittest.TestCase):
         self.assertIn("contextLength: Int32(clamping: modelContextTokens)", text)
         self.assertIn("temperature: Float(modelTemperature)", text)
 
+    def test_owner_selected_security_gates_are_off(self):
+        ui = UI.read_text(encoding="utf-8")
+        runtime = (ROOT / "Sources" / "JarvisCore" / "LocalAIProvider.swift").read_text(encoding="utf-8")
+        permissions = (ROOT / "Sources" / "JarvisCore" / "PermissionManager.swift").read_text(encoding="utf-8")
+        self.assertIn("PlainFileStorage(url: jsonURL)", ui)
+        self.assertNotIn("PlatformSHA256Checker()", ui)
+        self.assertNotIn("digester.sha256", runtime)
+        self.assertNotIn("authenticator.authenticate(reason:", permissions)
+        self.assertNotIn("clock().addingTimeInterval(30)", permissions)
+        self.assertIn("request.origin == .userInterface", permissions)
+
     def test_llama_inference_is_local_and_owner_command_gate_remains(self):
         text = RUNTIME.read_text(encoding="utf-8")
         self.assertIn("llama_model_load_from_file", text)
