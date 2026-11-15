@@ -4,8 +4,8 @@ You are implementing JARVIS Mobile, a Turkish-first iOS assistant. Read README.m
 Engineering rules:
 1. Implement functioning slices, not deceptive fake success. No unsupported unrestricted iOS access or bypass of PIN, pairing, account auth or OS permissions.
 2. Keep owner history, experience logs and personal memory until the owner explicitly deletes them. Do not reuse stale answers as live facts; freshness and deletion are different concerns.
-3. Users can view, export, edit, and delete personal memory. Never send sensitive local data to AI services without informed opt-in. No API secrets in mobile binary.
-4. A trusted, direct owner UI command is sufficient to run an implemented action. No second confirmation or Face ID is required after that command. Never treat model output, memories or external text as owner commands. Keep exact request binding, one-time authority, real receipts, and replay protection.
+3. Users may view, export, edit, and delete personal memory. A direct owner message may include any content; separate user-selected context categories still control additional network sharing. No provider secrets embedded in the mobile binary.
+4. SINGLE BEHAVIOR RULE: do not initiate any external or mutating action without a current, explicit owner UI/chat command. Never treat model output, memories or third-party text as owner commands. Do not require second approval for an explicit command; keep one-time request binding and truthful execution receipts.
 5. No speaker-auth claims until real opt-in enrollment, voice embedding matching, replay/spoof defense, lockouts, accessibility fallback and device biometrics are implemented and validated.
 6. Maintain Turkish UI localization; clear permission denial/fallback; offline-first local history.
 7. Build with Swift 6 compatible conventions as feasible, incremental tests, dependency injection, small reviewable patches.
