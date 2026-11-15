@@ -1,0 +1,11 @@
+# Güvenlik kontrolü
+- [x] AES-GCM, Keychain ThisDeviceOnly, iOS complete file protection kaynakta mevcut.
+- [x] API anahtarı, ham ses veya kişisel içerik loglama yok.
+- [x] Harici eylem veya prompt tabanlı araç çalıştırma yok.
+- [x] Kalıcı hafıza düzenleme/silme/dışa aktarma; tüm veri silme onayı.
+- [x] Yalnızca cihaz içi Speech; izin reddinde metin alternatifi.
+- [ ] macOS şifreleme testinin CI sonucu doğrulandı.
+- [ ] iOS simulator derlemesi başarılı.
+- [ ] Gerçek cihaz kilit, izin, ses, erişilebilirlik testi.
+- [ ] Yeni harici eylemler için risk, onay, biyometri ve makbuz altyapısı.
+- [ ] SpeakerSecurity bağımsız inceleme ve saldırı testleri.

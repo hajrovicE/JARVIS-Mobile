@@ -1,0 +1,31 @@
+name: JarvisMobile
+options:
+  bundleIdPrefix: com.jarvis
+  deploymentTarget:
+    iOS: '17.0'
+packages:
+  JarvisCore:
+    path: ..
+targets:
+  JarvisMobile:
+    type: application
+    platform: iOS
+    sources: [JarvisMobile]
+    dependencies:
+      - package: JarvisCore
+    settings:
+      base:
+        SWIFT_VERSION: '6.0'
+        PRODUCT_BUNDLE_IDENTIFIER: com.jarvis.mobile
+        TARGETED_DEVICE_FAMILY: '1'
+        CODE_SIGN_STYLE: Automatic
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: JARVIS
+        CFBundleDevelopmentRegion: tr
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        NSMicrophoneUsageDescription: Türkçe sesli komutunuzu almak için mikrofon erişimi gerekir.
+        NSSpeechRecognitionUsageDescription: Sesinizi Türkçe komut metnine dönüştürmek için izin gerekir.

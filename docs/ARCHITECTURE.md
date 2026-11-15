@@ -1,0 +1,8 @@
+# Mimari
+`JarvisCore`: actor tabanlı MemoryStore, Sendable SnapshotStorage arayüzü, Codable sürümlü veri ve sınırlı yerel CommandRouter. Saat parametresi TTL sınırlarını test etmeye izin verir. Her değişiklik önce diske yazılır; yazma başarısızsa canlı durum değiştirilmez. Okumada ve açılışta TTL temizliği kalıcılaştırılır; uygulama aktifleştiğinde tekrar okunur. Uygulama kapalıyken iOS kesin zamanlı arka plan silme garantisi vermez; süre dolmuş kayıtlar sonraki erişimde temizlenir.
+
+Apple platformlarında EncryptedFileStorage, CryptoKit AES-256-GCM ve atomik dosya değişimi kullanır. 256 bit anahtar Keychain WhenUnlockedThisDeviceOnly erişimiyle saklanır; iOS dosyaları completeFileProtection kullanır ve yedeklemeye dahil edilmez. Mevcut dosyada anahtar yoksa veri ezilmez. Bozuk şifreli veri hata üretir. JSON yalnızca şifre çözülmüş bellekte veya kullanıcının açık dışa aktarma işlemi sırasında bulunur. Dışa aktarılan dosya şifreli değildir; kullanıcı paylaşacağı yeri seçer.
+
+Şema v0→v1 aynı veri alanlarıyla yükseltilir ve TTL temizliği uygulanır. Bilinmeyen sürümler reddedilir; önceki depoda veri uygulaması bulunmadığından başka eski biçim içe aktarımı yoktur. Silme mevcut şifreli dosyayı kayıtlar olmadan yeniden yazar; flash depolamada adli düzey fiziksel silme garantisi verilmez.
+
+SwiftUI uygulaması yalnızca uygulama tercihlerini UserDefaults içinde tutar. Ses ham dosyaya veya loga kaydedilmez. Yerel Speech zorunludur; uzak tanımaya otomatik geçilmez. Kimlik güvenliği ses transkripsiyonundan ayrıdır. Harici araçlar çalıştırılmaz; desteklenmeyen metinler güvenli açıklama döndürür.
