@@ -64,7 +64,8 @@ final class LocalAIProviderTests: XCTestCase, @unchecked Sendable {
             identifier: "owner-model", revision: "my-version", licenseIdentifier: "owner",
             byteCount: 0, sha256: "")
         let installed = try await manager.importModel(from: source, manifest: metadata)
-        XCTAssertEqual(try await manager.installedModelURL(for: metadata), installed)
+        let found = try await manager.installedModelURL(for: metadata)
+        XCTAssertEqual(found, installed)
     }
     func testOwnerModelIsAcceptedByContentNotFileExtension() async throws {
         let (root, source) = try files()
