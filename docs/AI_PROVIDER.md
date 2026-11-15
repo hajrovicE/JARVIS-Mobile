@@ -24,4 +24,4 @@ Bu geliştirmede canlı sunucu kurulmadı, sağlayıcı hesabı/anahtarı kullan
 - Relay istek kotaları varsayılan kapalıdır: `RELAY_REQUESTS_PER_MINUTE=0` ve `RELAY_REQUESTS_PER_DAY=0`; maliyet yönetimi isteyen operatör pozitif limit belirleyebilir. Sağlayıcının ücret ve kullanım limitleri değişmez.
 - `max_output_tokens=1200` kaldırıldı; model sağlayıcısının doğal çıktı sınırı geçerlidir.
 - Kullanıcının paylaşmaya onay verdiği bağlam artık sabit 10/6/4 kayıtla kesilmez. Çok büyük bağlam isteği sağlayıcının penceresini aşarsa hata dönebilir.
-- Bağımsız eylem engeli, cihaz/biyometri izinleri, relay kimlik doğrulaması, şifreleme ve gizli bilgi koruması korunur.
+- Bağımsız eylem engeli korunur: doğrudan kullanıcı komutları ek onay veya Face ID istemeden yürütülür; model çıktısı komut olamaz. Relay kimlik doğrulaması, şifreleme ve kullanıcı tarafından yönetilen paylaşım ayarları korunur.
