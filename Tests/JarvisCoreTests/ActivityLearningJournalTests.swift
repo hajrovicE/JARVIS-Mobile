@@ -85,17 +85,19 @@ final class ActivityLearningJournalTests: XCTestCase, @unchecked Sendable {
         XCTAssertFalse(encoded.contains("screen"))
     }
 
-    func testInsightsNeedRepeatedEvidenceAndAreNotAutoApproved() async throws {
+    func testInsightsAnalyzeAnyObservedEvidenceWithoutRepeatQuota() async throws {
         let journal = try ActivityLearningJournal(storage: ActivityMemoryDisk(), now: t0)
         try await journal.setEnabled(true, now: t0)
-        for _ in 0..<4 { try await journal.record(.voiceInputFinished, at: t0) }
-        let tooEarly = try await journal.insights(now: t0)
-        XCTAssertTrue(tooEarly.isEmpty)
         try await journal.record(.voiceInputFinished, at: t0)
         let insights = try await journal.insights(now: t0)
         XCTAssertEqual(insights.count, 1)
         XCTAssertEqual(insights.first?.id, "input.voice")
-        XCTAssertEqual(insights.first?.evidenceCount, 5)
+        XCTAssertEqual(insights.first?.evidenceCount, 1)
+        try await journal.record(.typedCommand, at: t0)
+        XCTAssertTrue(try await journal.insights(now: t0).isEmpty)
+        try await journal.record(.typedCommand, at: t0)
+        let typed = try await journal.insights(now: t0)
+        XCTAssertEqual(typed.first?.id, "input.typed")
         // ActivityInsight has no userConfirmed field and no execution capability.
     }
 
