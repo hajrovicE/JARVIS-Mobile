@@ -15,9 +15,10 @@ actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
     private let maxNewTokens: Int
     private let contextLength: Int32
 
-    init(maxNewTokens: Int = 160, contextLength: Int32 = 2048) {
-        self.maxNewTokens = max(1, min(512, maxNewTokens))
-        self.contextLength = max(512, min(4096, contextLength))
+    init(maxNewTokens: Int = 512, contextLength: Int32 = 4096) {
+        // Only numeric runtime/ABI bounds remain; the selected model and device set the real budget.
+        self.maxNewTokens = max(1, min(Int(Int32.max - 1), maxNewTokens))
+        self.contextLength = max(512, contextLength)
     }
 
     func generate(prompt: String, modelURL: URL) async throws -> String {
@@ -101,7 +102,7 @@ actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
         defer { llama_sampler_free(sampler) }
 
         var bytes = [UInt8]()
-        bytes.reserveCapacity(maxNewTokens * 5)
+        bytes.reserveCapacity(min(32_768, maxNewTokens * 5))
         var position = Int32(tokens.count)
 
         for _ in 0..<maxNewTokens {
@@ -122,7 +123,6 @@ actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
                 throw LocalModelError.runtimeUnavailable
             }
             bytes.append(contentsOf: piece.prefix(Int(written)).map { UInt8(bitPattern: $0) })
-            guard bytes.count < 16_384 else { break }
 
             batch.n_tokens = 1
             batch.token[0] = token
