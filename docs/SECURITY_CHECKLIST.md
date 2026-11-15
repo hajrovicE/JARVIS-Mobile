@@ -1,4 +1,7 @@
 # Güvenlik kontrolü
+
+**Mevcut yürütme kuralı:** Güvenilir UI'dan gelen kullanıcı komutu eylem için yeterlidir; ek onay penceresi/Face ID zorunlu değildir. Model çıktısı dış eylem başlatamaz. Şifreleme, Keychain, sunucu kimlik doğrulaması ve gerçek işlem makbuzu korunur. Konuşma/öğrenme/etkinlik kayıtları kullanıcı silene kadar saklanır. Önceki onay/90-30 gün maddeleri tarihi Alpha 0.3 değerlendirmesidir.
+
 - [x] AES-GCM, Keychain ThisDeviceOnly, iOS complete file protection kaynakta mevcut.
 - [x] API anahtarı, ham ses veya kişisel içerik loglama yok.
 - [x] Harici eylem veya prompt tabanlı araç çalıştırma yok.
