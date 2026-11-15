@@ -28,13 +28,16 @@ final class ActivityLearningJournalTests: XCTestCase, @unchecked Sendable {
         let disk = ActivityMemoryDisk()
         let journal = try ActivityLearningJournal(storage: disk, now: t0)
         try await journal.record(.typedCommand, at: t0)
-        XCTAssertTrue(try await journal.read(now: t0).observations.isEmpty)
+        let beforeOptIn = try await journal.read(now: t0)
+        XCTAssertTrue(beforeOptIn.observations.isEmpty)
         try await journal.setEnabled(true, now: t0)
         try await journal.record(.typedCommand, at: t0)
-        XCTAssertEqual(try await journal.read(now: t0).observations.count, 1)
+        let afterEnable = try await journal.read(now: t0)
+        XCTAssertEqual(afterEnable.observations.count, 1)
         try await journal.setEnabled(false, now: t0)
         try await journal.record(.voiceInputFinished, at: t0)
-        XCTAssertEqual(try await journal.read(now: t0).observations.count, 1)
+        let afterDisable = try await journal.read(now: t0)
+        XCTAssertEqual(afterDisable.observations.count, 1)
     }
 
     func testPersistenceAndCompleteErasure() async throws {
@@ -86,7 +89,8 @@ final class ActivityLearningJournalTests: XCTestCase, @unchecked Sendable {
         let journal = try ActivityLearningJournal(storage: ActivityMemoryDisk(), now: t0)
         try await journal.setEnabled(true, now: t0)
         for _ in 0..<4 { try await journal.record(.voiceInputFinished, at: t0) }
-        XCTAssertTrue(try await journal.insights(now: t0).isEmpty)
+        let tooEarly = try await journal.insights(now: t0)
+        XCTAssertTrue(tooEarly.isEmpty)
         try await journal.record(.voiceInputFinished, at: t0)
         let insights = try await journal.insights(now: t0)
         XCTAssertEqual(insights.count, 1)
@@ -102,12 +106,14 @@ final class ActivityLearningJournalTests: XCTestCase, @unchecked Sendable {
         do { try await journal.setEnabled(true, now: t0); XCTFail("Write must fail") }
         catch {}
         disk.shouldFail = false
-        XCTAssertFalse(try await journal.read(now: t0).enabled)
+        let afterFailedEnable = try await journal.read(now: t0)
+        XCTAssertFalse(afterFailedEnable.enabled)
         try await journal.setEnabled(true, now: t0)
         disk.shouldFail = true
         do { try await journal.record(.typedCommand, at: t0); XCTFail("Write must fail") }
         catch {}
         disk.shouldFail = false
-        XCTAssertTrue(try await journal.read(now: t0).observations.isEmpty)
+        let afterFailedRecord = try await journal.read(now: t0)
+        XCTAssertTrue(afterFailedRecord.observations.isEmpty)
     }
 }
