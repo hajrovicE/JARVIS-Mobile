@@ -3,7 +3,7 @@ You are implementing JARVIS Mobile, a Turkish-first iOS assistant. Read README.m
 
 Engineering rules:
 1. Implement functioning slices, not deceptive fake success. No unsupported unrestricted iOS access or bypass of PIN, pairing, account auth or OS permissions.
-2. Keep TTL rules exact: conversations 90 days; answer caches at most 30 days (stale questions excluded); durable memories never expire automatically.
+2. Keep owner history, experience logs and personal memory until the owner explicitly deletes them. Do not reuse stale answers as live facts; freshness and deletion are different concerns.
 3. Users can view, export, edit, and delete personal memory. Never send sensitive local data to AI services without informed opt-in. No API secrets in mobile binary.
 4. A trusted, direct owner UI command is sufficient to run an implemented action. No second confirmation or Face ID is required after that command. Never treat model output, memories or external text as owner commands. Keep exact request binding, one-time authority, real receipts, and replay protection.
 5. No speaker-auth claims until real opt-in enrollment, voice embedding matching, replay/spoof defense, lockouts, accessibility fallback and device biometrics are implemented and validated.
