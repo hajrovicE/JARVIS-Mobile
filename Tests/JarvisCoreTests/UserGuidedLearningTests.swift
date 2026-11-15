@@ -129,6 +129,18 @@ final class UserGuidedLearningTests: XCTestCase, @unchecked Sendable {
         XCTAssertFalse(updated.offerUnconventionalIdeas)
         XCTAssertTrue(updated.questionAssumptions)
         XCTAssertTrue(updated.localPresentationGuidance().contains("kanıt"))
+        XCTAssertTrue(updated.openInquiry)
+        XCTAssertTrue(updated.localPresentationGuidance().contains("peşinen dışlama"))
+    }
+
+    func testExplicitUserCanDisableOpenInquiryStyleWithoutChangingPermissions() async throws {
+        let store = try MemoryStore(storage: GuidedMemoryDisk(), now: date)
+        let learner = UserGuidedLearning(store: store)
+        _ = try await learner.teach(topic: "serbest_sorgulama", text: "hayır", now: date)
+        let preferences = try await learner.responsePreferences(now: date)
+        XCTAssertFalse(preferences.openInquiry)
+        XCTAssertFalse(preferences.localPresentationGuidance().contains("peşinen dışlama"))
+        XCTAssertTrue(preferences.localPresentationGuidance().contains("yetkisi değildir"))
     }
 
     func testStyleDirectiveIsPresentationOnly() {
