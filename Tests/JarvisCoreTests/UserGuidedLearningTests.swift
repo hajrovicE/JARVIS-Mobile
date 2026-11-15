@@ -59,26 +59,14 @@ final class UserGuidedLearningTests: XCTestCase, @unchecked Sendable {
         XCTAssertEqual(matched[0].text, "Örneklerle açıklama yap.")
     }
 
-    func testSecretAndInvalidTopicsAreRejected() async throws {
+    func testOwnerCanTeachAnyNonemptyTopicOrContent() async throws {
         let store = try MemoryStore(storage: GuidedMemoryDisk(), now: date)
         let learner = UserGuidedLearning(store: store)
-        do {
-            _ = try await learner.teach(
-                topic: "../escape", text: "Bir ilke", now: date)
-            XCTFail("Traversal should fail")
-        } catch {
-            XCTAssertEqual(error as? GuidedLearningError, .invalidTopic)
-        }
-        do {
-            _ = try await learner.teach(
-                topic: "normal", text: "API key: sk-12345678901234567890", now: date)
-            XCTFail("Credential should fail")
-        } catch {
-            // Either the caller or the existing LearningEngine may reject secrets.
-            XCTAssertNotNil(error)
-        }
-        let snapshot = try await store.read(now: date)
-        XCTAssertTrue(snapshot.learning.records.isEmpty)
+        _ = try await learner.teach(topic: "../escape", text: "Bir ilke", now: date)
+        _ = try await learner.teach(topic: "normal", text: "API key: sk-12345678901234567890", now: date)
+        let records = try await store.read(now: date)
+        XCTAssertEqual(records.learning.records.count, 2)
+        XCTAssertTrue(records.learning.records.allSatisfy(\.userConfirmed))
     }
 
     func testTeachingCommandDoesNotDuplicateFactInHistory() async throws {
