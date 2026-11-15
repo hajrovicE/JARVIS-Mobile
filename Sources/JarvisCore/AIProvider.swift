@@ -128,8 +128,7 @@ public struct HTTPRelayAIProvider: AIProvider {
     public func respond(to request: AIRequest) async throws -> AIResponse {
         guard !Task.isCancelled else { throw AIProviderError.cancelled }
         guard !request.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              request.prompt.count <= 8000, request.context.count <= 20,
-              request.context.allSatisfy({ !$0.id.isEmpty && $0.id.count <= 128 && !$0.text.isEmpty && $0.text.count <= 2000 }) else {
+              request.context.allSatisfy({ !$0.id.isEmpty && !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
             throw AIProviderError.invalidRequest
         }
         var http = URLRequest(url: endpoint)
@@ -139,7 +138,7 @@ public struct HTTPRelayAIProvider: AIProvider {
         http.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         http.setValue("no-store", forHTTPHeaderField: "Cache-Control")
         let body = try JSONEncoder().encode(request)
-        guard body.count <= 131_072 else { throw AIProviderError.invalidRequest }
+        guard body.count <= 4_194_304 else { throw AIProviderError.invalidRequest }
         http.httpBody = body
         let payload: Data
         let response: HTTPURLResponse
@@ -160,7 +159,7 @@ public struct HTTPRelayAIProvider: AIProvider {
         case 500...599: throw AIProviderError.unavailable
         default: throw AIProviderError.invalidResponse
         }
-        guard payload.count <= 256_000 else { throw AIProviderError.invalidResponse }
+        guard payload.count <= 8_388_608 else { throw AIProviderError.invalidResponse }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
             let text = try decoder.singleValueContainer().decode(String.self)
@@ -175,8 +174,7 @@ public struct HTTPRelayAIProvider: AIProvider {
         do { answer = try decoder.decode(AIResponse.self, from: payload) }
         catch { throw AIProviderError.invalidResponse }
         guard !answer.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw AIProviderError.emptyResponse }
-        guard !answer.provider.isEmpty, !answer.model.isEmpty, answer.text.count <= 60_000,
-              answer.sources.count <= 20,
+        guard !answer.provider.isEmpty, !answer.model.isEmpty,
               answer.sources.allSatisfy({ $0.url.scheme?.lowercased() == "https" && $0.url.host != nil && $0.url.user == nil && $0.url.password == nil }),
               answer.generatedAt <= Date().addingTimeInterval(300) else { throw AIProviderError.invalidResponse }
         if answer.freshness == .verifiedStatic {

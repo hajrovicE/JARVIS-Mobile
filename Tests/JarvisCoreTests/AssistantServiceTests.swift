@@ -69,7 +69,7 @@ final class AssistantServiceTests: XCTestCase, @unchecked Sendable {
         XCTAssertNil(state.generatedAnswers[0].cacheUntil)
         XCTAssertEqual(state.generatedAnswers[0].response.generatedAt, now)
         let expired = try await reopened.read(now: now.addingTimeInterval(90 * 86400))
-        XCTAssertTrue(expired.generatedAnswers.isEmpty)
+        XCTAssertEqual(expired.generatedAnswers.count, 2)
     }
     func testStaticCacheExact30DayExpiryAndContextMutation() async throws {
         let store = try MemoryStore(storage: TestStorage(), now: now)
@@ -84,7 +84,7 @@ final class AssistantServiceTests: XCTestCase, @unchecked Sendable {
         _ = try await service.reply(to: "Sabit soru", consent: .init(networkAllowed: true), now: now.addingTimeInterval(30 * 86400))
         let calls = await provider.count(); XCTAssertEqual(calls, 2)
         try await store.remember("changed", now: now)
-        let invalidated = try await store.read(now: now); XCTAssertTrue(invalidated.generatedAnswers.isEmpty)
+        let preserved = try await store.read(now: now); XCTAssertEqual(preserved.generatedAnswers.count, 2)
         XCTAssertNil(AnswerFreshnessPolicy.cacheUntil(question: "Şimdi saat kaç?", response: sourced, now: now))
     }
     func testDeleteDuringRequestDoesNotResurrectData() async throws {
@@ -134,13 +134,17 @@ final class AssistantServiceTests: XCTestCase, @unchecked Sendable {
         do { try await store.validateAIContext(expectedEpoch: epoch); XCTFail("Stale cache cannot be displayed") }
         catch { XCTAssertEqual(error as? AssistantError, .contextChanged) }
     }
-    func testUnavailableProviderNeverWritesFabricatedAnswerAndCredentialsBlocked() async throws {
+    func testOwnerCanSendAnyPromptButUnavailableProviderNeverFakesAnswers() async throws {
         let store = try MemoryStore(storage: TestStorage(), now: now)
-        let service = AssistantService(store: store)
-        do { _ = try await service.reply(to: "Bir plan", consent: .init(networkAllowed: true), now: now); XCTFail("No provider") }
+        let unavailable = AssistantService(store: store)
+        do { _ = try await unavailable.reply(to: "Bir plan", consent: .init(networkAllowed: true), now: now); XCTFail("No provider") }
         catch { XCTAssertEqual(error as? AIProviderError, .notConfigured) }
-        do { _ = try await service.reply(to: "password=abcdefghi", consent: .init(networkAllowed: true), now: now); XCTFail("Credential must not be sent") }
-        catch { XCTAssertEqual(error as? AssistantError, .credentialDetected) }
-        let state = try await store.read(now: now); XCTAssertTrue(state.generatedAnswers.isEmpty)
+        let provider = RecordingProvider(response: response())
+        let service = AssistantService(store: store, provider: provider)
+        _ = try await service.reply(to: "password=abcdefghi", consent: .init(networkAllowed: true), now: now)
+        let request = await provider.last()
+        XCTAssertEqual(request?.prompt, "password=abcdefghi")
+        let state = try await store.read(now: now)
+        XCTAssertEqual(state.generatedAnswers.count, 1)
     }
 }

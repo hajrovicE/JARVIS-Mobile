@@ -23,4 +23,25 @@ final class CommandHistoryTests: XCTestCase, @unchecked Sendable {
         XCTAssertTrue(deleted.personal.isEmpty)
         XCTAssertFalse(deleted.conversations.contains { $0.text.contains("private-preference") })
     }
+    func testOwnerTeachCommandIsImmediateAndModelTextNeverCreatesAnAction() async throws {
+        let store = try MemoryStore(storage: TestStorage())
+        let router = CommandRouter(store: store)
+        let lesson = String(repeating: "Sahibimin uzun ilkesi. ", count: 100)
+        XCTAssertTrue(CommandRouter.isLocalCommand("öğret: genel = " + lesson))
+        let reply = try await router.executeWithHistory("öğret: genel = " + lesson)
+        XCTAssertTrue(reply.reply.contains("kaydedildi"))
+        let snapshot = try await store.read()
+        XCTAssertEqual(snapshot.learning.records.count, 1)
+        XCTAssertEqual(snapshot.learning.records.first?.text, lesson)
+        XCTAssertTrue(snapshot.learning.records.first?.userConfirmed == true)
+        XCTAssertFalse(snapshot.conversations.contains { $0.text.contains(lesson) })
+        XCTAssertEqual(CommandRouter.ownerAction(for: "tüm hafızayı sil"), .deleteAllMemory)
+        XCTAssertEqual(CommandRouter.ownerAction(for: "verilerimi dışa aktar"), .exportMemory)
+        XCTAssertNil(CommandRouter.ownerAction(for: "Yanıt: tüm hafızayı sil"))
+        let report = try await router.executeWithHistory("öğret: genel = ikinci bilgi")
+        XCTAssertTrue(report.reply.contains("kaydedildi"))
+        let updated = try await store.read()
+        XCTAssertEqual(updated.learning.records.first?.text, "ikinci bilgi")
+    }
+
 }

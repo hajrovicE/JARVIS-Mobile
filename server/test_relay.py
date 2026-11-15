@@ -52,15 +52,20 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(value["provider"], "openai")
 
     def test_bad_requests_and_limits(self):
-        invalid = [None, {}, {"prompt": " "}, {"prompt": "a" * 8001},
+        invalid = [None, {}, {"prompt": " "},
                    {"prompt": "a", "model": "user-selected"}, {"prompt": "a", "context": {}},
                    {"prompt": "a", "context": [{"id": "a", "text": "b", "sensitive": False}]},
-                   {"prompt": "a", "context": [{"id": "a", "text": "b"}] * 21},
-                   {"prompt": "a", "context": [{"id": "a", "text": "b" * 2001}]}]
+                   {"prompt": "a", "context": [{"id": "", "text": "b"}]},
+                   {"prompt": "a", "context": [{"id": "a", "text": " "}]}]
         for value in invalid:
             with self.subTest(value_type=type(value).__name__):
                 with self.assertRaises(ValueError):
                     validate_request(value)
+
+    def test_large_prompts_and_context_not_artificially_truncated(self):
+        value = {"prompt": "ö" * 9_500, "context": [{"id": str(i), "text": "x" * 2_200} for i in range(25)]}
+        self.assertEqual(validate_request(value), value)
+        self.assertEqual(RelayService(SETTINGS, lambda *_: completed()).reply(value, AUTH, now=1)[0], 200)
 
     def test_upstream_errors_are_sanitized_and_do_not_make_fake_answer(self):
         def unavailable(*_):
@@ -93,6 +98,7 @@ class RelayTests(unittest.TestCase):
         body = json.loads(request.data)
         self.assertFalse(body["store"])
         self.assertNotIn("tools", body)
+        self.assertNotIn("max_output_tokens", body)
         self.assertEqual(body["model"], SETTINGS.model)
         self.assertIn("Türkçe", body["instructions"])
 
