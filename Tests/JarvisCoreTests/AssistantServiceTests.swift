@@ -139,8 +139,10 @@ final class AssistantServiceTests: XCTestCase, @unchecked Sendable {
         let service = AssistantService(store: store)
         do { _ = try await service.reply(to: "Bir plan", consent: .init(networkAllowed: true), now: now); XCTFail("No provider") }
         catch { XCTAssertEqual(error as? AIProviderError, .notConfigured) }
-        do { _ = try await service.reply(to: "password=abcdefghi", consent: .init(networkAllowed: true), now: now); XCTFail("Credential must not be sent") }
-        catch { XCTAssertEqual(error as? AssistantError, .credentialDetected) }
+        // Owner-authored prompts are not content-filtered by AssistantService;
+        // the unavailable provider still must report its actual configuration error.
+        do { _ = try await service.reply(to: "password=abcdefghi", consent: .init(networkAllowed: true), now: now); XCTFail("No provider") }
+        catch { XCTAssertEqual(error as? AIProviderError, .notConfigured) }
         let state = try await store.read(now: now); XCTAssertTrue(state.generatedAnswers.isEmpty)
     }
 }
