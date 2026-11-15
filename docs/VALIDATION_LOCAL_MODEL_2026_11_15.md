@@ -10,6 +10,7 @@ Başlangıç ve en güncel kontrol edilen `main`: `e0e710f714dd31b40f49354b6ca23
 | Python sunucu | 22 test başarılı; gerçek sağlayıcı çağrısı yok |
 | Python Release politikası | 9 test başarılı; Apple Secrets kullanılmadı |
 | Python model/veri/routing | 8 test başarılı; eğitim veya model kalitesi kanıtı değildir |
+| Docker dağıtım entegrasyonu | 2 test başarılı: gerçek yerel TLS/Caddy, tek kullanıcı/429, Secrets mount, sağlık ve güvenli günlükler; upstream sentetik |
 | Üretimdeki Swift çıkarım kaynağı + gerçek llama.cpp | Derlendi ve gerçek Qwen GGUF ile CPU çıkarımı yapıldı |
 | İnternet kapalı çıkarım | Docker `--network none`, gerçek GGUF; kanıt kaydı aşağıda |
 | Sistem talimatı | Çok satırlı Türkçe/Unicode metin eksiksiz model sohbet şablonuna aktarıldı; 1220 tokenlık prompt çoklu 512-token prefill ile işlendi |
@@ -20,7 +21,7 @@ Başlangıç ve en güncel kontrol edilen `main`: `e0e710f714dd31b40f49354b6ca23
 | İşlem sınırı | Doğrudan sahip komutu çalışır; model yanıtı/geçmiş/dış veri eylem başlatmaz; iptal öncesi yan etki yok; başarısız makbuz başarı demez |
 | Swift iOS sözdizimi/YAML/shell | Ayrıştırma ve `git diff --check` başarılı; Apple SDK ile typecheck/derleme yerine geçmez |
 
-Yerel test kanıtları: [Swift](validation-artifacts/2026-11-15/swift-tests.log), [sunucu](validation-artifacts/2026-11-15/python-server.log), [Release](validation-artifacts/2026-11-15/python-release.log), [model kuralları](validation-artifacts/2026-11-15/python-model.log), [ağ kapalı gerçek çıkarım](validation-artifacts/2026-11-15/real-runtime-network-none.log). Bunlar bu geliştirme ortamının kayıtlarıdır; GitHub macOS koşusu değildir. Tüm metinler sentetik test verisidir.
+Yerel test kanıtları: [Swift](validation-artifacts/2026-11-15/swift-tests.log), [sunucu](validation-artifacts/2026-11-15/python-server.log), [Release](validation-artifacts/2026-11-15/python-release.log), [model kuralları](validation-artifacts/2026-11-15/python-model.log), [Docker/HTTPS](validation-artifacts/2026-11-15/deployment-smoke.log), [ağ kapalı gerçek çıkarım](validation-artifacts/2026-11-15/real-runtime-network-none.log). Bunlar bu geliştirme ortamının kayıtlarıdır; GitHub macOS koşusu değildir. Tüm metinler sentetik test verisidir.
 
 ## Model kalitesi: başarısız gözlem
 
@@ -47,6 +48,12 @@ Küçük `Qwen3-0.6B-Q4_0` test modeli, deterministik ayarlarda “Türkiye'nin 
 Referans main [Actions koşusu](https://github.com/hajrovicE/JARVIS-Mobile/actions/runs/43710329593) hiçbir test adımı başlamadan başarısız oldu:
 
 > The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the 'Billing & plans' section in your settings.
+
+Düzeltme commit'i: [4268c4e](https://github.com/hajrovicE/JARVIS-Mobile/commit/4268c4e9fe44ab741f08e89793bbbf514b7058a9). [PR #19](https://github.com/hajrovicE/JARVIS-Mobile/pull/19) taslak/açık bırakıldı, main'e birleştirilmedi. Yeni kaynakta da şu koşular hiçbir derleme/test adımı başlamadan aynı hesap engeliyle reddedildi:
+
+- [Swift/macOS/iOS ve gerçek yerel model CI](https://github.com/hajrovicE/JARVIS-Mobile/actions/runs/43726552698)
+- [Release build-only](https://github.com/hajrovicE/JARVIS-Mobile/actions/runs/43726551602): preflight başlamadı, build ve imza/upload işleri skipped.
+- [Relay deployment CI](https://github.com/hajrovicE/JARVIS-Mobile/actions/runs/43726552536)
 
 Bu ortam Linux'tur. Mevcut kaynak için macOS Swift testleri, Xcode simulator/iPhone SDK derlemesi, hosted Apple AES/Keychain geçişi ve UI testleri **ÇALIŞTIRILAMADI**. Yeni workflow gerçek GGUF dosyasını test bundle'ına alır; CI'da dosya eksikse gerçek çıkarımı sessizce atlamak yerine başarısız olur. Yerel ağırlık indirme ve eğitim veri setleri Git'e alınmaz. Ücretli servis başlatılmadı, harici AI API çağrısı yapılmadı, Apple imzası/TestFlight yüklemesi yapılmadı.
 
