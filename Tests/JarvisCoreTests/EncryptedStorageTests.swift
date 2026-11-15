@@ -133,6 +133,11 @@ final class EncryptedStorageTests: XCTestCase, @unchecked Sendable {
 
     #if os(iOS)
     func testIOSFileProtectionSurvivesReplacement() async throws {
+        #if targetEnvironment(simulator)
+        // Simulator files live on the host Mac filesystem, which does not implement iOS
+        // Data Protection classes or report NSFileProtectionKey. Verify on physical iOS.
+        throw XCTSkip("iOS Data Protection attributes require a physical iPhone; simulator does not expose NSFileProtectionKey.")
+        #else
         let f = fixture(); defer { cleanup(f.directory, f.account) }
         let disk = try EncryptedFileStorage(url: f.url, keychainAccount: f.account)
         for value in ["first", "replacement"] {
@@ -141,6 +146,7 @@ final class EncryptedStorageTests: XCTestCase, @unchecked Sendable {
             XCTAssertEqual(attributes[.protectionKey] as? FileProtectionType, .complete)
             XCTAssertEqual(try disk.load(), Data(value.utf8))
         }
+        #endif
     }
     #endif
 }

@@ -45,10 +45,12 @@ jobs:
           with open(os.environ['GITHUB_ENV'], 'a') as env:
               env.write('SIMULATOR_ID=' + phones[0]['udid'] + '\n')
           PY
+      - name: Boot iPhone simulator
+        run: xcrun simctl bootstatus "$SIMULATOR_ID" -b
       - name: iOS encrypted storage, permissions and launch tests
         run: |
           set -o pipefail
-          xcodebuild -project ios/JarvisMobile.xcodeproj -scheme JarvisMobile -sdk iphonesimulator -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -derivedDataPath build -resultBundlePath TestResults.xcresult -parallel-testing-enabled NO CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES test 2>&1 | tee ios-tests.log
+          xcodebuild -project ios/JarvisMobile.xcodeproj -scheme JarvisMobile -sdk iphonesimulator -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -derivedDataPath build -resultBundlePath TestResults.xcresult -parallel-testing-enabled NO -test-timeouts-enabled YES -default-test-execution-time-allowance 180 -maximum-test-execution-time-allowance 180 CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES test 2>&1 | tee ios-tests.log
       - name: Collect simulator and unsigned device apps
         run: |
           ditto -c -k --sequesterRsrc --keepParent build/Build/Products/Debug-iphonesimulator/JarvisMobile.app JarvisMobile-simulator.zip
