@@ -9,6 +9,7 @@ final class PermissionConfigurationTests: XCTestCase {
         XCTAssertFalse(speech.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         XCTAssertTrue(microphone.contains("Türkçe"))
         XCTAssertTrue(speech.contains("Türkçe"))
+        XCTAssertNotNil(Bundle.main.object(forInfoDictionaryKey: "NSFaceIDUsageDescription") as? String)
         XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "CFBundleDevelopmentRegion") as? String, "tr")
     }
 }

@@ -16,6 +16,24 @@ public struct LearningProvenance: Codable, Equatable, Sendable {
     }
 }
 
+/// A flat prior version avoids recursively copying the entire history on each correction.
+public struct LearningRevision: Codable, Equatable, Sendable {
+    public var revision: Int
+    public var text: String
+    public var source: LearningSource
+    public var updatedAt: Date
+    public var expiresAt: Date?
+    public var confidence: Double
+    public var userConfirmed: Bool
+    public var sensitivity: MemorySensitivity
+    public var provenance: LearningProvenance
+    public init(record: LearnedMemory) {
+        revision = record.revision; text = record.text; source = record.source
+        updatedAt = record.updatedAt; expiresAt = record.expiresAt; confidence = record.confidence
+        userConfirmed = record.userConfirmed; sensitivity = record.sensitivity; provenance = record.provenance
+    }
+}
+
 public struct LearnedMemory: Codable, Identifiable, Equatable, Sendable {
     public var id: UUID
     public var kind: LearningKind
@@ -32,6 +50,8 @@ public struct LearnedMemory: Codable, Identifiable, Equatable, Sendable {
     public var provenance: LearningProvenance
     public var revision: Int
     public var supersededBy: UUID?
+    /// Optional for decoding Alpha 0.2 records which did not contain a revision archive.
+    public var revisions: [LearningRevision]?
     public init(id: UUID = UUID(), kind: LearningKind, key: String, text: String,
                 source: LearningSource, createdAt: Date = Date(), expiresAt: Date? = nil,
                 confidence: Double, sensitivity: MemorySensitivity = .ordinary,
@@ -39,7 +59,7 @@ public struct LearnedMemory: Codable, Identifiable, Equatable, Sendable {
         self.id = id; self.kind = kind; self.key = key; self.text = text; self.source = source
         self.createdAt = createdAt; self.updatedAt = createdAt; self.expiresAt = expiresAt
         self.confidence = confidence; self.userConfirmed = false; self.sensitivity = sensitivity
-        self.provenance = provenance; self.revision = 1; self.supersededBy = nil
+        self.provenance = provenance; self.revision = 1; self.supersededBy = nil; self.revisions = []
     }
 }
 
@@ -57,15 +77,17 @@ public struct TaskExperience: Codable, Identifiable, Equatable, Sendable {
     public var backupReference: String?
     public var executionReceipt: String?
     public var createdAt: Date
+    /// Links a user-proposed correction. The experience never authorizes the rule itself.
+    public var correctionMemoryID: UUID?
     /// An audit record cannot itself authorize or repeat an action.
     public init(id: UUID = UUID(), action: String, permissionScope: [String] = [],
                 risk: TaskRisk, outcome: TaskOutcome = .proposed, result: String? = nil,
                 error: String? = nil, rollback: String? = nil, backupReference: String? = nil,
-                executionReceipt: String? = nil, createdAt: Date = Date()) {
+                executionReceipt: String? = nil, createdAt: Date = Date(), correctionMemoryID: UUID? = nil) {
         self.id = id; self.action = action; self.permissionScope = permissionScope
         self.risk = risk; self.outcome = outcome; self.result = result; self.error = error
         self.rollback = rollback; self.backupReference = backupReference
-        self.executionReceipt = executionReceipt; self.createdAt = createdAt
+        self.executionReceipt = executionReceipt; self.createdAt = createdAt; self.correctionMemoryID = correctionMemoryID
     }
 }
 public struct LearningState: Codable, Equatable, Sendable {
@@ -75,5 +97,7 @@ public struct LearningState: Codable, Equatable, Sendable {
     /// Persist the resulting state on read; expired source-backed claims cannot be reused.
     public mutating func purgeExpired(now: Date) {
         records.removeAll { $0.expiresAt.map { $0 <= now } ?? false }
+        // Task history follows conversation retention; confirmed personal rules do not expire.
+        experiences.removeAll { now.timeIntervalSince($0.createdAt) >= 90 * 86400 }
     }
 }

@@ -18,7 +18,7 @@ final class CommandHistoryTests: XCTestCase, @unchecked Sendable {
         XCTAssertEqual(after.conversations, before.conversations)
         XCTAssertFalse(after.conversations.contains { $0.text.contains("private-preference") })
         let id = try XCTUnwrap(after.personal.first?.id)
-        _ = try await router.executeWithHistory("unut \(id)")
+        try await store.forget(id: id)
         let deleted = try await store.read()
         XCTAssertTrue(deleted.personal.isEmpty)
         XCTAssertFalse(deleted.conversations.contains { $0.text.contains("private-preference") })

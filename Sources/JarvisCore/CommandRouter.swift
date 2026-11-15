@@ -8,6 +8,11 @@ public struct CommandExecution: Sendable {
 public struct CommandRouter: Sendable {
     public let store: MemoryStore
     public init(store: MemoryStore) { self.store = store }
+    public static func isLocalCommand(_ input: String) -> Bool {
+        let text = input.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(with: Locale(identifier: "tr_TR"))
+        return ["ne hatırlıyorsun", "öğrendiklerin", "geçmiş", "hatırla ki", "bunu hatırla", "unut"].contains(text)
+            || ["hatırla ki ", "bunu hatırla ", "unut "].contains { text.hasPrefix($0) }
+    }
     /// Read-only listings never copy their contents into newer conversations.
     /// Mutating memory commands leave only an operation marker, not another copy of a fact.
     public func executeWithHistory(_ input: String) async throws -> CommandExecution {
@@ -34,7 +39,8 @@ public struct CommandRouter: Sendable {
         }
         if normalized.hasPrefix("unut ") {
             guard let id = UUID(uuidString: String(text.dropFirst(5))) else { return "Silmek için hafıza kimliğini kullanın veya Hafıza sekmesini açın." }
-            try await store.forget(id: id); return "Kayıt silindi."
+            _ = id
+            throw AssistantError.approvalRequired
         }
         if normalized == "öğrendiklerin" {
             let records = try await store.learnedMemories(query: "")

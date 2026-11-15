@@ -7,7 +7,7 @@ final class SmokeTests: XCTestCase {
     }
 
     @MainActor
-    func testTypedMemorySurvivesRelaunchAndDeletion() throws {
+    func testTypedMemorySurvivesRelaunchAndDeletionRequiresApproval() throws {
         let app = XCUIApplication()
         app.launch()
         let onboarding = app.buttons["onboarding.start"]
@@ -16,17 +16,6 @@ final class SmokeTests: XCTestCase {
             onboarding.tap()
         }
         XCTAssertTrue(app.tabBars.buttons["Sohbet"].waitForExistence(timeout: 10))
-
-        // Clear through the same explicit confirmation used by the user.
-        app.tabBars.buttons["Hafıza"].tap()
-        let clear = app.buttons["memory.deleteAll"]
-        XCTAssertTrue(reveal(clear, in: app))
-        XCTAssertTrue(waitUntilEnabled(clear))
-        clear.tap()
-        let confirm = app.buttons["Tümünü sil"]
-        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
-        confirm.tap()
-        XCTAssertTrue(waitUntilEnabled(clear))
 
         app.tabBars.buttons["Sohbet"].tap()
         try send("hatırla ki test tercihim sade kahve", in: app)
@@ -46,14 +35,16 @@ final class SmokeTests: XCTestCase {
         let delete = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "memory.delete.")).firstMatch
         XCTAssertTrue(reveal(delete, in: app))
         delete.tap()
-        XCTAssertTrue(waitForAbsence(memoryFields.firstMatch))
-
-        // A second restart demonstrates that deletion reached encrypted storage.
+        let approval = app.buttons["Onayla ve biyometriyle doğrula"]
+        XCTAssertTrue(approval.waitForExistence(timeout: 5))
+        // No biometric simulation or production bypass: cancellation must preserve data.
+        app.buttons["İptal"].tap()
+        XCTAssertTrue(memoryFields.firstMatch.waitForExistence(timeout: 5))
         app.terminate()
         app.launch()
         XCTAssertTrue(app.tabBars.buttons["Sohbet"].waitForExistence(timeout: 10))
         try send("ne hatırlıyorsun", in: app)
-        XCTAssertTrue(waitForLabel(reply, containing: "Kişisel hafıza boş."))
+        XCTAssertTrue(waitForLabel(reply, containing: "test tercihim sade kahve"))
 
         app.tabBars.buttons["Durum"].tap()
         let speakerStatus = app.staticTexts["status.speakerIdentity"]

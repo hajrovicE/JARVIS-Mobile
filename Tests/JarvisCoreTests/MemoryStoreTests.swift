@@ -69,7 +69,7 @@ final class MemoryStoreTests: XCTestCase, @unchecked Sendable {
         try disk.save(JSONEncoder().encode(legacy))
         let store = try MemoryStore(storage: disk, now: now)
         let migrated = try await store.read(now: now)
-        XCTAssertEqual(migrated.version, 2); XCTAssertTrue(migrated.conversations.isEmpty); XCTAssertEqual(migrated.personal.count, 1)
+        XCTAssertEqual(migrated.version, 3); XCTAssertTrue(migrated.conversations.isEmpty); XCTAssertEqual(migrated.personal.count, 1)
         legacy.version = 99; try disk.save(JSONEncoder().encode(legacy))
         XCTAssertThrowsError(try MemoryStore(storage: disk, now: now))
     }
@@ -82,7 +82,7 @@ final class MemoryStoreTests: XCTestCase, @unchecked Sendable {
         XCTAssertTrue(response.contains("desteklenmiyor"))
         let listed = try await router.execute("ne hatırlıyorsun"); XCTAssertTrue(listed.contains("kahveyi severim"))
         let id = try await store.read().personal[0].id
-        _ = try await router.execute("unut \(id)")
+        try await store.forget(id: id)
         let state = try await store.read(); XCTAssertTrue(state.personal.isEmpty)
     }
 }
