@@ -28,13 +28,22 @@ public struct ActionExecutionResult: Sendable {
     }
 }
 
-/// An explicit local allowlist, not a general tool interpreter. Model proposals cannot
-/// invoke it, request additional scopes, or turn text into system/phone access.
+/// Owners may supply additional handlers without modifying the core permission cases.
+/// Only current trusted owner commands receive one-time authorization.
+public protocol OwnerActionHandler: Sendable {
+    func executeOwnerAction(named name: String) async throws -> Data?
+}
+
+/// A registered owner's tool can run only after an exact, one-use owner request.
+/// Model text and imported data never grant authorization.
 public actor ActionExecutor {
     private let store: MemoryStore
     private let permissions: PermissionManager
-    public init(store: MemoryStore, permissions: PermissionManager) {
+    private let ownerActionHandler: (any OwnerActionHandler)?
+    public init(store: MemoryStore, permissions: PermissionManager,
+                ownerActionHandler: (any OwnerActionHandler)? = nil) {
         self.store = store; self.permissions = permissions
+        self.ownerActionHandler = ownerActionHandler
     }
     public func execute(_ request: ActionRequest, authorization: ActionAuthorization) async throws -> ActionExecutionResult {
         let descriptor = try await permissions.consume(authorization, for: request)
@@ -43,6 +52,10 @@ public actor ActionExecutor {
         do {
             switch request.operation {
             case .remember(let text): try await store.remember(text)
+            case .editMemory(let id, let text): try await store.edit(id: id, text: text)
+            case .custom(let name):
+                guard let ownerActionHandler else { throw ActionPermissionError.actionNotAllowed }
+                exportedData = try await ownerActionHandler.executeOwnerAction(named: name)
             case .deleteMemory(let id): try await store.forget(id: id)
             case .deleteAllMemory: try await store.deleteAll()
             case .deleteLearning(let id): try await store.deleteLearning(id: id)
