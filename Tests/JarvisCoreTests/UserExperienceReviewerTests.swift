@@ -78,6 +78,17 @@ final class UserExperienceReviewerTests: XCTestCase, @unchecked Sendable {
         XCTAssertEqual(saved.learning.records.count, 3)
     }
 
+    func testLongOwnerReviewCanBeLearnedWithoutTruncation() async throws {
+        let store = try MemoryStore(storage: ReviewMemoryDisk(), now: now)
+        let item = experience(outcome: .succeeded, at: now)
+        try await store.recordExperience(item, now: now)
+        let lesson = String(repeating: "Deneyimle doğrulandı. ", count: 100)
+        _ = try await UserExperienceReviewer(store: store).review(
+            experienceID: item.id, verdict: .correct, lesson: lesson, now: now)
+        let records = try await store.read(now: now)
+        XCTAssertEqual(records.learning.records.first?.text, "doğru: " + lesson)
+    }
+
     func testDuplicateAndCredentialFeedbackAreRejected() async throws {
         let store = try MemoryStore(storage: ReviewMemoryDisk(), now: now)
         let item = experience(outcome: .failed, at: now)
