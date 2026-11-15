@@ -35,11 +35,8 @@ struct RootView: View {
   @State private var errorText: String?
   @State private var exporting = false
   @State private var document = ExportDocument(data: Data())
-  @State private var showActionApproval = false
   @State private var runningOperation: Task<Void, Never>?
-  @State private var pendingAction: ActionApprovalChallenge?
-  @State private var actionRequest: ActionRequest?
-  @State private var permissions = PermissionManager(authenticator: DeviceBiometricAuthenticator())
+  @State private var permissions = PermissionManager()
   @State private var holdStartTask: Task<Void, Never>?
   @State private var activeReply: StoredAIAnswer?
   @State private var experiences: [TaskExperience] = []
@@ -52,7 +49,6 @@ struct RootView: View {
   @State private var endpointDraft = ""
   @State private var tokenDraft = ""
   @State private var connectionStatus = "Gerçek model bağlantısı henüz doğrulanmadı."
-  @State private var confirmingExport = false
   @State private var busy = false
   @Environment(\.scenePhase) private var scenePhase
   var body: some View {
@@ -85,9 +81,6 @@ struct RootView: View {
         speech.cancel()
         if phase == .background {
           Task { await permissions.invalidateAll() }
-          pendingAction = nil
-          actionRequest = nil
-          showActionApproval = false
         }
       } else {
         Task { if store == nil { await open() } else { perform { try await refresh() } } }
@@ -104,27 +97,6 @@ struct RootView: View {
       Button("Tamam") { errorText = nil }
     } message: {
       Text(errorText ?? "")
-    }
-    .confirmationDialog(
-      pendingAction?.summary ?? "İşlem onayı",
-      isPresented: $showActionApproval, titleVisibility: .visible
-    ) {
-      Button("Onayla ve biyometriyle doğrula", role: .destructive) { approveAction() }
-      Button("İptal", role: .cancel) {
-        if let challenge = pendingAction { Task { await permissions.deny(challenge) } }
-        pendingAction = nil
-        actionRequest = nil
-      }
-    } message: {
-      Text("Bu işlem yalnızca onayınız ve başarılı cihaz biyometrisiyle yapılır.")
-    }
-    .confirmationDialog(
-      "Dışa aktarılan JSON kişisel verilerinizi içerir ve şifreli değildir. Devam edilsin mi?",
-      isPresented: $confirmingExport, titleVisibility: .visible
-    ) {
-      Button("JSON dışa aktar") {
-        prepareAction(.exportMemory)
-      }
     }
     .fileExporter(
       isPresented: $exporting, document: document, contentType: .json,
@@ -229,7 +201,7 @@ struct RootView: View {
                   id: memory.id, text: memories.first { $0.id == memory.id }?.text ?? "")
               }
             }
-            Button("Sil", role: .destructive) { prepareAction(.deleteMemory(memory.id)) }
+            Button("Sil", role: .destructive) { executeOwnerCommand(.deleteMemory(memory.id)) }
               .accessibilityIdentifier("memory.delete.\(memory.id)")
           }
         }
@@ -250,8 +222,8 @@ struct RootView: View {
             }
           }
         }
-        Button("Verilerimi dışa aktar") { confirmingExport = true }
-        Button("Tüm verileri sil", role: .destructive) { prepareAction(.deleteAllMemory) }
+        Button("Verilerimi dışa aktar") { executeOwnerCommand(.exportMemory) }
+        Button("Tüm verileri sil", role: .destructive) { executeOwnerCommand(.deleteAllMemory) }
           .accessibilityIdentifier(
             "memory.deleteAll")
         Section("Öğrenme önerileri") {
@@ -296,7 +268,7 @@ struct RootView: View {
                 }
               }
               Button("Öneriyi sil", role: .destructive) {
-                prepareAction(.deleteLearning(record.id))
+                executeOwnerCommand(.deleteLearning(record.id))
               }
             }
           }
@@ -378,31 +350,26 @@ struct RootView: View {
         .onAppear { endpointDraft = relayEndpoint }
     }.tabItem { Label("AI", systemImage: "sparkles") }
   }
-  private func prepareAction(_ operation: ActionOperation) {
+  private func executeOwnerCommand(_ operation: ActionOperation) {
     perform {
-      let request = ActionRequest(operation: operation)
-      let challenge = try await permissions.prepare(request)
-      actionRequest = request
-      pendingAction = challenge
-      showActionApproval = true
+      guard let store else { return }
+      try await runOwnerAction(operation, using: store)
     }
   }
-  private func approveAction() {
-    guard let challenge = pendingAction, let request = actionRequest, let store else { return }
-    pendingAction = nil
-    actionRequest = nil
-    perform {
-      let authorization = try await permissions.approve(challenge)
-      let result = try await ActionExecutor(store: store, permissions: permissions).execute(
-        request, authorization: authorization)
-      if let data = result.exportedData {
-        document = ExportDocument(data: data)
-        exporting = true
-      }
-      reply = result.message
-      activeReply = nil
-      if !result.succeeded || result.auditWriteFailed { errorText = result.message }
+  /// This method is reachable only from a direct user UI gesture / typed command.
+  /// An AI reply is never an executable command.
+  private func runOwnerAction(_ operation: ActionOperation, using store: MemoryStore) async throws {
+    let request = ActionRequest(operation: operation, origin: .userInterface)
+    let authorization = try await permissions.authorizeOwnerCommand(request)
+    let result = try await ActionExecutor(store: store, permissions: permissions).execute(
+      request, authorization: authorization)
+    if let data = result.exportedData {
+      document = ExportDocument(data: data)
+      exporting = true
     }
+    reply = result.message
+    activeReply = nil
+    if !result.succeeded || result.auditWriteFailed { errorText = result.message }
   }
   private func open() async {
     guard store == nil else { return }
@@ -459,11 +426,7 @@ struct RootView: View {
       } catch let error as AssistantError { errorText = error.userMessage } catch let error
         as ActionPermissionError
       {
-        switch error {
-        case .biometricUnavailable: errorText = "Cihaz biyometrisi kullanılamıyor. İşlem yapılmadı."
-        case .biometricRejected: errorText = "Biyometrik doğrulama tamamlanmadı. İşlem yapılmadı."
-        default: errorText = "İşlem yetkisi geçersiz veya süresi dolmuş. Yeniden onaylayın."
-        }
+        errorText = "Kullanıcı komutu doğrulanamadı veya işlem yetkisi geçersiz: \(error)."
       } catch { errorText = "İşlem kaydedilemedi. Lütfen yeniden deneyin." }
     }
   }
@@ -487,11 +450,8 @@ struct RootView: View {
       let normalized = command.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(
         with: Locale(identifier: "tr_TR"))
       if normalized.hasPrefix("unut "), let id = UUID(uuidString: String(normalized.dropFirst(5))) {
-        let request = ActionRequest(operation: .deleteMemory(id))
-        let challenge = try await permissions.prepare(request)
-        actionRequest = request
-        pendingAction = challenge
-        showActionApproval = true
+        try await runOwnerAction(.deleteMemory(id), using: store)
+        input = ""
         return
       }
       let provider: any AIProvider
