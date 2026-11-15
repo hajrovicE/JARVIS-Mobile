@@ -282,7 +282,7 @@ final class ActionExecutorTests: XCTestCase, @unchecked Sendable {
         let current = try await store.read()
         XCTAssertEqual(current.personal.first?.text, "Sahibin düzelttiği metin")
         XCTAssertEqual(CommandRouter.ownerAction(
-            for: "düzenle \\(id.uuidString) = Yeni bilgi"), .editMemory(id, "Yeni bilgi"))
+            for: "düzenle \(id.uuidString) = Yeni bilgi"), .editMemory(id, "Yeni bilgi"))
     }
 
     func testOwnerProvidedToolHandlerCanRunWithoutCentralToolAllowlist() async throws {
