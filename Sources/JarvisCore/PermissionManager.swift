@@ -7,13 +7,18 @@ public enum ActionCapability: String, CaseIterable, Sendable {
     case memoryDeleteAll = "memory.deleteAll"
     case learningDelete = "learning.delete"
     case memoryExport = "memory.export"
+    case memoryEdit = "memory.edit"
+    case ownerCustom = "owner.custom"
 }
 public enum ActionOperation: Equatable, Sendable {
     case remember(String)
+    case editMemory(UUID, String)
     case deleteMemory(UUID)
     case deleteAllMemory
     case deleteLearning(UUID)
     case exportMemory
+    /// Extensible owner-triggered operation; an actual registered implementation is required.
+    case custom(String)
     /// Unknown tools remain unexecutable even when presented by a model or imported data.
     case unsupported(String)
 }
@@ -72,6 +77,8 @@ struct ActionDescriptor: Sendable {
     static func capabilities(for operation: ActionOperation) -> Set<ActionCapability> {
         switch operation {
         case .remember: [.memoryWrite]
+        case .editMemory: [.memoryEdit]
+        case .custom: [.ownerCustom]
         case .deleteMemory: [.memoryDelete]
         case .deleteAllMemory: [.memoryDeleteAll]
         case .deleteLearning: [.learningDelete]
@@ -88,6 +95,16 @@ struct ActionDescriptor: Sendable {
                 throw ActionPermissionError.invalidPayload
             }
             descriptor = .init(identifier: "memory.remember", summary: "Bu metni kişisel hafızaya kaydet", risk: .low, capabilities: [.memoryWrite])
+        case .editMemory(_, let text):
+            guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw ActionPermissionError.invalidPayload
+            }
+            descriptor = .init(identifier: "memory.edit", summary: "Seçilen hafıza kaydını güncelle", risk: .low, capabilities: [.memoryEdit])
+        case .custom(let name):
+            guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw ActionPermissionError.invalidPayload
+            }
+            descriptor = .init(identifier: "owner.custom", summary: "Sahibin doğrudan seçtiği kayıtlı aracı çalıştır", risk: .low, capabilities: [.ownerCustom])
         case .deleteMemory:
             descriptor = .init(identifier: "memory.delete", summary: "Seçilen kişisel hafıza kaydını kalıcı olarak sil", risk: .sensitive, capabilities: [.memoryDelete])
         case .deleteAllMemory:

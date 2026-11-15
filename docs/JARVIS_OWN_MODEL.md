@@ -45,3 +45,10 @@ Tam iPhone gerçek cihaz GGUF inference hızı/RAM/ısınma, iOS derlemesi ve Te
 - **Kullanıcıdan bağımsız eylem yapılmaz.** Model metni, talimat belleği veya üçüncü taraf içerik uygulamanın işlem yürütücüsünden izin üretemez. Yalnızca kullanıcının o andaki doğrudan komutu uygulama eylemini tetikleyebilir.
 - Eğitimin `--thinking`, `--lora-rank`, `--lora-alpha`, `--batch-size`, `--accumulation`, `--device` ve `--epochs` değerleri kullanıcı tarafından verilebilir. Model eğitimi ayrıca gerçekleştirilmedikçe ağırlıklar değişmiş sayılmaz.
 - Açık kaynak modeli, Metal/iOS çalışma izinlerini, veri dosyası bütünlük doğrulamasını ve cihaz donanım gereksinimlerini ortadan kaldırmak mümkün değildir.
+
+## Kullanıcının doğrudan komutları ve model dosyaları
+- Hafıza komutu: `düzenle <UUID> = yeni metin` doğrudan kullanıcı girdisinden yetki alır, ikinci onay istemez.
+- `OwnerActionHandler`, çekirdek kodun içine her aracı ayrı ayrı sabitlemeden yeni **gerçekten uygulanmış** araçlar bağlamaya izin verir. Bağlı olmayan araçlar çalıştırılmış gibi gösterilmez.
+- Model uzantısı `.gguf` olmak zorunda değildir; içerikte GGUF dosya imzası doğrulanır. Modelin SHA-256 bütünlük denetimi dosyanın kullanıcının seçtiği sürümle aynı olmasını sağlar; bu bir davranış filtresi değildir.
+- Yerel veriler AES-GCM ile şifreli saklanmaya devam eder. Şifreleme kaldırılmadı çünkü sahibinin komut verme veya öğrenme özgürlüğünü kısıtlamaz.
+- Model önerileri bağımsız eylem yetkisi kazanmaz. Yalnızca güvenilir kullanıcı komutuyla yürütücü harekete geçer.

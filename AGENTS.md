@@ -15,3 +15,5 @@ Engineering rules:
 10. The user owns JARVIS prompts, instruction/response datasets and fine-tuned adapter; third-party base model/runtime licenses remain applicable. Do not auto-export personal memories into datasets or upload them. Mobile inference uses a verified owner-selected GGUF and no cloud API.
 
 11. The owner defines the on-device model's system prompt in app settings; do not inject an additional hardcoded behavioral policy. Output length, context, sampling and training hyperparameters are owner-configurable, subject only to actual runtime/device capability. Preserve exact user-command binding for executable actions, local model integrity, and encryption.
+
+12. The owner may import GGUF models with arbitrary filenames and descriptive metadata; verify actual GGUF structure and checksum instead of filtering by file extension. OwnerActionHandler extends actionable tools without editing a central tool allowlist. Missing handlers cannot fake success, and model output cannot authorize an action.

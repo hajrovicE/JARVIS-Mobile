@@ -18,10 +18,12 @@ public struct LocalModelManifest: Codable, Equatable, Sendable {
             (65...90).contains(byte) || (97...122).contains(byte) ||
             (48...57).contains(byte) || byte == 45 || byte == 46 || byte == 95
         }
-        guard (2...80).contains(identifier.utf8.count), identifier.utf8.allSatisfy(allowed),
+        // Only filesystem-safe identity and digest structure are enforced;
+        // owner-defined descriptive metadata has no arbitrary character limits.
+        guard !identifier.isEmpty, identifier.utf8.allSatisfy(allowed),
               identifier != ".", identifier != "..",
-              (1...128).contains(revision.utf8.count), revision.utf8.allSatisfy(allowed),
-              (1...80).contains(licenseIdentifier.utf8.count), licenseIdentifier.utf8.allSatisfy(allowed),
+              !revision.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !licenseIdentifier.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               byteCount > 0, sha256.utf8.count == 64,
               sha256.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) }) else {
             throw LocalModelError.invalidManifest
@@ -96,6 +98,12 @@ public actor OnDeviceModelManager {
         guard values.isRegularFile == true, values.isSymbolicLink != true else {
             throw LocalModelError.invalidFile
         }
+        // GGUF is identified by file content, not the filename or extension.
+        let source = try FileHandle(forReadingFrom: file)
+        defer { try? source.close() }
+        guard try source.read(upToCount: 4) == Data([0x47, 0x47, 0x55, 0x46]) else {
+            throw LocalModelError.invalidFile
+        }
         guard Int64(values.fileSize ?? -1) == manifest.byteCount else {
             throw LocalModelError.mismatchedSize
         }
@@ -113,7 +121,7 @@ public actor OnDeviceModelManager {
 
     @discardableResult
     public func importModel(from source: URL, manifest: LocalModelManifest) throws -> URL {
-        guard source.isFileURL, source.pathExtension.lowercased() == "gguf" else {
+        guard source.isFileURL else {
             throw LocalModelError.invalidSource
         }
         let destination = destination(for: manifest)

@@ -47,6 +47,15 @@ private final class ActionTestStorage: SnapshotStorage, @unchecked Sendable {
     }
 }
 
+private actor CustomOwnerHandler: OwnerActionHandler {
+    private var calls: [String] = []
+    func executeOwnerAction(named name: String) async throws -> Data? {
+        calls.append(name)
+        return Data("owner-success".utf8)
+    }
+    func invocations() -> [String] { calls }
+}
+
 final class ActionExecutorTests: XCTestCase, @unchecked Sendable {
     private func approved(_ request: ActionRequest, by manager: PermissionManager) async throws -> ActionAuthorization {
         let challenge = try await manager.prepare(request)
@@ -259,4 +268,57 @@ final class ActionExecutorTests: XCTestCase, @unchecked Sendable {
         XCTAssertEqual(persisted.personal.count, 1)
         XCTAssertTrue(persisted.learning.experiences.isEmpty)
     }
+    func testOwnerCanEditMemoryByDirectCommandWithoutSecondApproval() async throws {
+        let store = try MemoryStore(storage: ActionTestStorage())
+        try await store.remember("İlk not")
+        let initial = try await store.read()
+        let id = try XCTUnwrap(initial.personal.first?.id)
+        let manager = PermissionManager()
+        let edit = ActionRequest(operation: .editMemory(id, "Sahibin düzelttiği metin"))
+        let authorization = try await manager.authorizeOwnerCommand(edit)
+        let result = try await ActionExecutor(store: store, permissions: manager)
+            .execute(edit, authorization: authorization)
+        XCTAssertTrue(result.succeeded)
+        let current = try await store.read()
+        XCTAssertEqual(current.personal.first?.text, "Sahibin düzelttiği metin")
+        XCTAssertEqual(CommandRouter.ownerAction(
+            for: "düzenle \(id.uuidString) = Yeni bilgi"), .editMemory(id, "Yeni bilgi"))
+    }
+
+    func testOwnerProvidedToolHandlerCanRunWithoutCentralToolAllowlist() async throws {
+        let store = try MemoryStore(storage: ActionTestStorage())
+        let manager = PermissionManager()
+        let handler = CustomOwnerHandler()
+        let executor = ActionExecutor(store: store, permissions: manager,
+                                      ownerActionHandler: handler)
+        let action = ActionRequest(operation: .custom("user-tool.example"))
+        let grant = try await manager.authorizeOwnerCommand(action)
+        let result = try await executor.execute(action, authorization: grant)
+        XCTAssertTrue(result.succeeded)
+        XCTAssertEqual(result.exportedData, Data("owner-success".utf8))
+        let calls = await handler.invocations()
+        XCTAssertEqual(calls, ["user-tool.example"])
+        do {
+            _ = try await executor.execute(action, authorization: grant)
+            XCTFail("A direct owner command may run only once")
+        } catch { XCTAssertEqual(error as? ActionPermissionError, .authorizationMissing) }
+        do {
+            _ = try await manager.authorizeOwnerCommand(
+                ActionRequest(operation: .custom("user-tool.example"), origin: .modelProposal))
+            XCTFail("Model may not authorize a tool")
+        } catch { XCTAssertEqual(error as? ActionPermissionError, .untrustedOrigin) }
+    }
+
+    func testMissingOwnerToolHandlerNeverFakesSuccessfulOperation() async throws {
+        let store = try MemoryStore(storage: ActionTestStorage())
+        let manager = PermissionManager()
+        let request = ActionRequest(operation: .custom("not-yet-connected"))
+        let authorization = try await manager.authorizeOwnerCommand(request)
+        let result = try await ActionExecutor(store: store, permissions: manager)
+            .execute(request, authorization: authorization)
+        XCTAssertFalse(result.succeeded)
+        let state = try await store.read()
+        XCTAssertEqual(state.learning.experiences.last?.outcome, .failed)
+    }
+
 }

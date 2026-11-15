@@ -111,8 +111,7 @@ struct RootView: View {
         perform {
           let scoped = url.startAccessingSecurityScopedResource()
           defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-          guard url.pathExtension.lowercased() == "gguf",
-                let size = try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber,
+          guard let size = try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber,
                 size.int64Value > 0 else { throw LocalModelError.invalidFile }
           // Official seed uses a pinned digest. Owner-generated Qwen3 GGUF files
           // are identified by their own digest, never silently relabeled as official.
@@ -335,9 +334,9 @@ struct RootView: View {
           Text("Başlangıç ağırlıkları: Qwen3 1.7B Q4_K_M (Apache-2.0). Bu, henüz JARVIS'e özel eğitilmiş bir ağırlık değildir.")
           Link("GGUF başlangıç modelini indir",
             destination: URL(string: "https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF/blob/daeb8e2/Qwen3-1.7B-Q4_K_M.gguf")!)
-          Button("Qwen3 veya kendi GGUF modelimi yükle") { importingLocalModel = true }
+          Button("Kendi GGUF modelimi dosyadan seç") { importingLocalModel = true }
           Text(localModelStatus)
-          Text("Kendi eğitilmiş modelinizi de yükleyebilirsiniz: Qwen3 tokenizer ve sohbet şablonuyla uyumlu GGUF olmalı. Her dosyanın SHA-256 özeti saklanır ve yeniden doğrulanır.")
+          Text("Dosya uzantısından bağımsız olarak gerçek GGUF içeriği okunur. Her dosyanın SHA-256 özeti saklanır; modelin çalışma uyumluluğu çıkarım sırasında belirlenir.")
           Text("Hazır başlangıç modeli yaklaşık 1,28 GB; telefonda çalışma belleği ayrıca gerekir.")
         }
         Section("Sahibin davranış kuralları") {
