@@ -5,7 +5,7 @@ Engineering rules:
 1. Implement functioning slices, not deceptive fake success. JARVIS iPhone AI inference is fully on-device; do not silently re-enable external AI providers or network fallback. Do not bypass iOS permissions.
 2. Keep owner history, experience logs and personal memory until the owner explicitly deletes them. Do not reuse stale answers as live facts; freshness and deletion are different concerns.
 3. Users may view, export, edit, and delete personal memory. A direct owner message may include any content; separate user-selected context categories still control additional network sharing. No provider secrets embedded in the mobile binary.
-4. OWNER INSTRUCTION FIRST: treat a direct, current owner UI/chat command as the highest-priority application task. Execute supported actions with no second confirmation. Never turn model output, memory or external text into an owner command; preserve one-use request binding and truthful receipts. Unsupported tasks must be reported as unsupported rather than fabricated.
+4. OWNER INSTRUCTION FIRST: treat a direct, current owner UI/chat command as the highest-priority application task. Execute supported actions with no second confirmation. Never turn model output, memory or external text into an owner command; preserve direct-owner request matching and truthful receipts. Unsupported tasks must be reported as unsupported rather than fabricated.
 5. No speaker-auth claims until real opt-in enrollment, voice embedding matching, replay/spoof defense, lockouts, accessibility fallback and device biometrics are implemented and validated.
 6. Maintain Turkish UI localization; clear permission denial/fallback; offline-first local history.
 7. Build with Swift 6 compatible conventions as feasible, incremental tests, dependency injection, small reviewable patches.
@@ -14,6 +14,8 @@ Engineering rules:
 
 10. The user owns JARVIS prompts, instruction/response datasets and fine-tuned adapter; third-party base model/runtime licenses remain applicable. Do not auto-export personal memories into datasets or upload them. Mobile inference uses a verified owner-selected GGUF and no cloud API.
 
-11. The owner defines the on-device model's system prompt in app settings; do not inject an additional hardcoded behavioral policy. Output length, context, sampling and training hyperparameters are owner-configurable, subject only to actual runtime/device capability. Preserve exact user-command binding for executable actions, local model integrity, and encryption.
+11. The owner defines the on-device model's system prompt in app settings; do not inject an additional hardcoded behavioral policy. Output length, context, sampling and training hyperparameters are owner-configurable, subject only to actual runtime/device capability. Preserve exact user-command binding for executable actions, GGUF parser compatibility; app-level local encryption and checksum pinning are disabled by explicit owner choice.
 
 12. The owner may import GGUF models with arbitrary filenames and descriptive metadata; verify actual GGUF structure and checksum instead of filtering by file extension. OwnerActionHandler extends actionable tools without editing a central tool allowlist. Missing handlers cannot fake success, and model output cannot authorize an action.
+
+13. The owner explicitly opted out of application-level biometric, capability-scoping, time-expiry, active storage encryption and GGUF SHA-256 pinning. Direct UI owner command remains the only authorization source; no model-created tool calls. Native iOS OS permissions and basic file-format constraints still apply. Legacy encrypted snapshots may be migrated once to the new unencrypted JSON store.
