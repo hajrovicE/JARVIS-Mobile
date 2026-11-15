@@ -72,13 +72,13 @@ public actor UserGuidedLearning {
             .lowercased(with: Locale(identifier: "tr_TR"))
         let validCharacters = CharacterSet.letters.union(.decimalDigits)
             .union(CharacterSet(charactersIn: "._-"))
-        guard (1...64).contains(normalized.count),
+        guard !normalized.isEmpty,
               normalized.unicodeScalars.allSatisfy({ validCharacters.contains($0) }),
               !normalized.hasPrefix("."), !normalized.hasSuffix(".") else {
             throw GuidedLearningError.invalidTopic
         }
         let lesson = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !lesson.isEmpty, lesson.count <= 500,
+        guard !lesson.isEmpty,
               !lesson.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else {
             throw GuidedLearningError.invalidTeaching
         }
