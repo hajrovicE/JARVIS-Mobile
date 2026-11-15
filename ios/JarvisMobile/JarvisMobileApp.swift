@@ -132,7 +132,7 @@ struct RootView: View {
     VStack(spacing: 20) {
       Text("JARVIS'e hoş geldiniz").font(.largeTitle)
       Text(
-        "Konuşma geçmişi ve öğrenilen bilgiler siz silene kadar korunur. Güncelliği doğrulanmamış cevaplar otomatik güncel sayılmaz. Veriler cihazda şifrelenir."
+        "Konuşma geçmişi ve öğrenilen bilgiler siz silene kadar korunur. Güncelliği doğrulanmamış cevaplar otomatik güncel sayılmaz. Veriler uygulama tarafından ayrıca şifrelenmez."
       )
       Text(
         "Ses isteğe bağlıdır. İlk kullanımda mikrofon ve konuşma izni istenir. Yazarak da kullanabilirsiniz. Konuşmacı kimlik doğrulaması etkin değildir."
@@ -391,10 +391,23 @@ struct RootView: View {
   private func open() async {
     guard store == nil else { return }
     do {
-      let url = try FileManager.default.url(
+      let directory = try FileManager.default.url(
         for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true
-      ).appendingPathComponent("Jarvis/memory.aes")
-      store = try MemoryStore(storage: EncryptedFileStorage(url: url, keychainAccount: "primary"))
+      ).appendingPathComponent("Jarvis", isDirectory: true)
+      let jsonURL = directory.appendingPathComponent("memory.json")
+      let plainStorage = try PlainFileStorage(url: jsonURL)
+      // Legacy encrypted snapshots are read at most once when upgrading.
+      // Future writes use only the owner's plaintext JSON file.
+      let legacyURL = directory.appendingPathComponent("memory.aes")
+      if !FileManager.default.fileExists(atPath: jsonURL.path),
+         FileManager.default.fileExists(atPath: legacyURL.path) {
+        let legacyStorage = try EncryptedFileStorage(
+          url: legacyURL, keychainAccount: "primary")
+        if let old = try legacyStorage.load() {
+          try plainStorage.save(old)
+        }
+      }
+      store = try MemoryStore(storage: plainStorage)
       if let manifest = try? selectedModelManifest(),
          let modelURL = try? localModelDirectory().appendingPathComponent(manifest.identifier + ".gguf"),
          FileManager.default.fileExists(atPath: modelURL.path) {
