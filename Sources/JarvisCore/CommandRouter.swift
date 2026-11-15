@@ -41,7 +41,11 @@ public struct CommandRouter: Sendable {
         }
         if normalized == "öğrenme raporu" {
             let report = try await UserGuidedLearning(store: store).report()
-            return "Onaylanan bilgi: \(report.confirmed) · Onay bekleyen: \(report.pending) · Başarılı görev: \(report.successfulTasks) · Başarısız görev: \(report.failedTasks)."
+            let state = try await store.read()
+            let opportunities = ImprovementReview.opportunities(from: state.learning)
+            let improvements = opportunities.isEmpty ? "Gözlenen tekrarlı işlem hatası yok." :
+                "İncelenmesi önerilen görev: " + opportunities.map { $0.title }.joined(separator: "; ")
+            return "Onaylanan bilgi: \(report.confirmed) · Onay bekleyen: \(report.pending) · Başarılı görev: \(report.successfulTasks) · Başarısız görev: \(report.failedTasks). " + improvements
         }
         if let prefix = ["hatırla ki ", "bunu hatırla "].first(where: { normalized.hasPrefix($0) }) {
             try await store.remember(String(text.dropFirst(prefix.count)))
