@@ -43,7 +43,7 @@ public actor UserExperienceReviewer {
     public func review(experienceID: UUID, verdict: ExperienceVerdict,
                        lesson: String, now: Date = Date()) async throws -> UUID {
         let cleaned = lesson.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !cleaned.isEmpty, cleaned.count <= 500,
+        guard !cleaned.isEmpty,
               !cleaned.unicodeScalars.contains(where: {
                   CharacterSet.controlCharacters.contains($0)
               }) else { throw ExperienceReviewError.invalidFeedback }
