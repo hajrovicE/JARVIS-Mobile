@@ -1,10 +1,5 @@
 import Foundation
-#if canImport(CryptoKit)
-import CryptoKit
-#endif
-
-/// A local GGUF's identity must be pinned before the file can be used for inference.
-/// Manifests are metadata, not a model download instruction.
+/// Owner-owned local model metadata. No hash pinning or model provenance restrictions.
 public struct LocalModelManifest: Codable, Equatable, Sendable {
     public let identifier: String
     public let revision: String
@@ -24,8 +19,7 @@ public struct LocalModelManifest: Codable, Equatable, Sendable {
               identifier != ".", identifier != "..",
               !revision.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               !licenseIdentifier.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              byteCount > 0, sha256.utf8.count == 64,
-              sha256.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) }) else {
+              byteCount >= 0 else {
             throw LocalModelError.invalidManifest
         }
         self.identifier = identifier
@@ -50,42 +44,17 @@ public struct LocalModelManifest: Codable, Equatable, Sendable {
 
 public enum LocalModelError: Error, Equatable, Sendable {
     case invalidManifest, invalidSource, notInstalled, invalidFile
-    case mismatchedSize, mismatchedDigest, digestUnavailable
     case runtimeUnavailable, emptyOutput
-}
-
-public protocol LocalModelDigestChecking: Sendable {
-    func sha256(of fileURL: URL) throws -> String
-}
-
-/// Uses incremental hashing so even gigabyte-sized model files are not loaded into RAM.
-public struct PlatformSHA256Checker: LocalModelDigestChecking {
-    public init() {}
-    public func sha256(of fileURL: URL) throws -> String {
-        #if canImport(CryptoKit)
-        let handle = try FileHandle(forReadingFrom: fileURL)
-        defer { try? handle.close() }
-        var hasher = SHA256()
-        while let chunk = try handle.read(upToCount: 1_048_576), !chunk.isEmpty {
-            hasher.update(data: chunk)
-        }
-        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
-        #else
-        throw LocalModelError.digestUnavailable
-        #endif
-    }
 }
 
 /// Imports a user-provided model file into an app-private directory.
 /// Does not download models, use a network connection, or execute a model.
 public actor OnDeviceModelManager {
     private let directory: URL
-    private let digester: any LocalModelDigestChecking
 
-    public init(directory: URL, digester: any LocalModelDigestChecking = PlatformSHA256Checker()) throws {
+    public init(directory: URL) throws {
         guard directory.isFileURL else { throw LocalModelError.invalidSource }
         self.directory = directory
-        self.digester = digester
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }
 
@@ -104,12 +73,7 @@ public actor OnDeviceModelManager {
         guard try source.read(upToCount: 4) == Data([0x47, 0x47, 0x55, 0x46]) else {
             throw LocalModelError.invalidFile
         }
-        guard Int64(values.fileSize ?? -1) == manifest.byteCount else {
-            throw LocalModelError.mismatchedSize
-        }
-        guard try digester.sha256(of: file) == manifest.sha256 else {
-            throw LocalModelError.mismatchedDigest
-        }
+        // No additional owner-selected model checksum or exact-size gate.
     }
 
     public func installedModelURL(for manifest: LocalModelManifest) throws -> URL {
