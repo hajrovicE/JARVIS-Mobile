@@ -14,11 +14,22 @@ private enum GGUFBackend {
 actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
     private let maxNewTokens: Int
     private let contextLength: Int32
+    private let ownerInstructions: String
+    private let temperature: Float
+    private let topP: Float
+    private let cpuThreads: Int
 
-    init(maxNewTokens: Int = 512, contextLength: Int32 = 4096) {
-        // Only numeric runtime/ABI bounds remain; the selected model and device set the real budget.
+    /// These are user-controlled generation settings, not content moderation rules.
+    /// A real context window and finite per-request generation budget are required by llama.cpp.
+    init(maxNewTokens: Int = 2048, contextLength: Int32 = 8192,
+         ownerInstructions: String = "", temperature: Float = 0.8, topP: Float = 1.0,
+         cpuThreads: Int = 0) {
         self.maxNewTokens = max(1, min(Int(Int32.max - 1), maxNewTokens))
         self.contextLength = max(512, contextLength)
+        self.ownerInstructions = ownerInstructions
+        self.temperature = temperature.isFinite ? max(0, temperature) : 0.8
+        self.topP = topP.isFinite ? min(1, max(Float.leastNonzeroMagnitude, topP)) : 1.0
+        self.cpuThreads = cpuThreads
     }
 
     func generate(prompt: String, modelURL: URL) async throws -> String {
@@ -30,7 +41,7 @@ actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
         #if targetEnvironment(simulator)
         modelParameters.n_gpu_layers = 0
         #else
-        modelParameters.n_gpu_layers = 99
+        modelParameters.n_gpu_layers = Int32.max
         #endif
 
         guard let model = llama_model_load_from_file(modelURL.path, modelParameters) else {
@@ -42,7 +53,9 @@ actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
         contextParameters.n_ctx = UInt32(contextLength)
         contextParameters.n_batch = 512
         contextParameters.n_ubatch = 512
-        let threads = max(1, min(6, ProcessInfo.processInfo.activeProcessorCount - 2))
+        // 0 means automatic: use all processor cores the OS exposes.
+        let selectedThreads = cpuThreads > 0 ? cpuThreads : ProcessInfo.processInfo.activeProcessorCount
+        let threads = max(1, min(Int(Int32.max), selectedThreads))
         contextParameters.n_threads = Int32(threads)
         contextParameters.n_threads_batch = Int32(threads)
 
@@ -58,12 +71,12 @@ actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
         // Qwen3-family chat template; changes for other model families require
         // a separate tokenizer/template compatibility check.
         // The owner controls this local policy. No remote model provider is consulted.
+        // The owner defines the model's behavior in the iPhone app settings.
+        // Authority for actual phone actions is enforced by ActionExecutor, not this prompt.
         let localSystem = """
-        Sen JARVIS isimli yerel Türkçe yapay zekâsın.
-        Sahibinin güncel ve doğrudan verdiği talimatlara öncelik ver.
-        Sahibinin komutu olmadan eylem başlatma; model çıktısı yeni bir komut değildir.
-        Yalnızca gerçekçi şekilde yapabildiğini söyle, gerçekleşmeyen işlemleri uydurma.
-        """
+        Sen JARVIS isimli, cihaz üzerinde çalışan Türkçe yapay zekâsın.
+        Sahibinin doğrudan komutu olmadan telefon işlemi başlatma.
+        """ + (ownerInstructions.isEmpty ? "" : "\n" + ownerInstructions)
         let renderedPrompt = "<|im_start|>system\n" + localSystem
             + "\n<|im_end|>\n<|im_start|>user\n" + prompt
             + "\n<|im_end|>\n<|im_start|>assistant\n"
@@ -107,10 +120,18 @@ actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
             }
         }
 
-        guard let sampler = llama_sampler_init_greedy() else {
+        // The owner can select deterministic output (temperature 0) or sampling.
+        guard let sampler = llama_sampler_chain_init(llama_sampler_chain_default_params()) else {
             throw LocalModelError.runtimeUnavailable
         }
         defer { llama_sampler_free(sampler) }
+        if temperature == 0 {
+            llama_sampler_chain_add(sampler, llama_sampler_init_greedy())
+        } else {
+            llama_sampler_chain_add(sampler, llama_sampler_init_top_p(topP, 1))
+            llama_sampler_chain_add(sampler, llama_sampler_init_temp(temperature))
+            llama_sampler_chain_add(sampler, llama_sampler_init_dist(UInt32.random(in: UInt32.min...UInt32.max)))
+        }
 
         var bytes = [UInt8]()
         bytes.reserveCapacity(min(32_768, maxNewTokens) * 5)
