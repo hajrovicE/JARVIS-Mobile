@@ -1,5 +1,5 @@
 # JARVIS Mobile
-Türkçe, iPhone öncelikli SwiftUI asistanı. İlk işlevsel dilim: şifreli yerel hafıza, 90 günlük konuşmalar, en fazla 30 günlük uygun cevap önbelleği, kalıcı kişisel hafıza, yerel komutlar ve isteğe bağlı cihaz içi Türkçe sesli giriş/TTS.
+Türkçe, iPhone öncelikli SwiftUI asistanı. Kullanıcı silene kadar korunan şifreli yerel geçmiş ve öğrenme kayıtları, kaynak geçerliliğine göre yeniden kullanım, yerel komutlar ve isteğe bağlı cihaz içi Türkçe sesli giriş/TTS içerir.
 
 ## Çalıştırma
 Swift 6.0+ ile `swift test`. iOS uygulaması için macOS, Xcode 16.4+ ve XcodeGen gerekir:
@@ -20,7 +20,7 @@ Hafıza sekmesindeki öğrenme önerileri ayrı onay bekler; kullanıcı düzelt
 
 Alpha 0.3, modüler AIProvider + gerçek OpenAI API aracı servis kodu, açık paylaşım onayı, kaynak/zaman metadata'sı, öğrenme revizyonları ve güvenli yerel ActionExecutor içerir. **Canlı model bağlantısı bu geliştirmede kurulmadı**; yapılandırma yoksa sahte cevap yerine açık hata gösterilir. [Alpha 0.3 kapsamı](docs/ALPHA_0_3.md), [AI sunucusu kurulumu](docs/AI_RELAY_SERVER.md).
 
-AI varsayılan kapalı; sağlayıcı API anahtarı yalnızca sunucuda, aracı servis erişim bilgisi Keychain'dedir. Yerel hafıza internet olmadan çalışır. Silme ve dışa aktarma kullanıcı onayı + cihaz biyometrisi ister; cihaz biyometrisi kullanılamıyorsa işlem reddedilir. Gerçek konuşmacı tanıma, web arama, telefon kontrolü ve imzalı beceri yükleme etkin değildir.
+Yapılandırılmış aracı servis, kullanıcı bağlantıyı kaydettikten sonra kullanıcı komutları için etkinleşir. Sağlayıcı anahtarı yalnızca sunucudadır; erişim bilgileri Keychain'de tutulur. Silme ve dışa aktarma için kullanıcı komutu tek başına yeterlidir; model çıktısı hiçbir işlemi başlatamaz. Gerçek konuşmacı tanıma, web arama, genel iOS sistem kontrolü ve yeni beceri yükleme henüz uygulanmamıştır.
 
 Yalnızca iPhone sahibi kullanıcı için: GitHub Actions → **iOS Release preparation** → `build-only`. Bu işlem imzasız Release paketi üretir; iPhone'a kurulamaz. Ücretli üyelik/Secrets olmadan TestFlight yüklemesi denenmez. [Manuel hesap ve dağıtım hazırlığı](docs/IPHONE_DISTRIBUTION.md).
 
