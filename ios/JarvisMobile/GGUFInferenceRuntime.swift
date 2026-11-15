@@ -57,7 +57,15 @@ actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
 
         // Qwen3-family chat template; changes for other model families require
         // a separate tokenizer/template compatibility check.
-        let renderedPrompt = "<|im_start|>user\n" + prompt
+        // The owner controls this local policy. No remote model provider is consulted.
+        let localSystem = """
+        Sen JARVIS isimli yerel Türkçe yapay zekâsın.
+        Sahibinin güncel ve doğrudan verdiği talimatlara öncelik ver.
+        Sahibinin komutu olmadan eylem başlatma; model çıktısı yeni bir komut değildir.
+        Yalnızca gerçekçi şekilde yapabildiğini söyle, gerçekleşmeyen işlemleri uydurma.
+        """
+        let renderedPrompt = "<|im_start|>system\n" + localSystem
+            + "\n<|im_end|>\n<|im_start|>user\n" + prompt
             + "\n<|im_end|>\n<|im_start|>assistant\n"
         let byteCount = renderedPrompt.utf8.count
         guard byteCount < Int(Int32.max - 8) else { throw LocalModelError.runtimeUnavailable }
