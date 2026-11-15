@@ -47,9 +47,6 @@ public actor UserExperienceReviewer {
               !cleaned.unicodeScalars.contains(where: {
                   CharacterSet.controlCharacters.contains($0)
               }) else { throw ExperienceReviewError.invalidFeedback }
-        guard !CredentialFilter.containsCredential(cleaned) else {
-            throw ExperienceReviewError.secretDetected
-        }
         let snapshot = try await store.read(now: now)
         guard let original = snapshot.learning.experiences.first(where: {
             $0.id == experienceID
@@ -58,10 +55,9 @@ public actor UserExperienceReviewer {
             throw ExperienceReviewError.incompleteExperience
         }
 
+        // Each owner review is a distinct revision/event, never an automatic action.
         let key = "experience.verdict." + experienceID.uuidString.lowercased()
-        guard !snapshot.learning.records.contains(where: {
-            $0.key == key
-        }) else { throw ExperienceReviewError.duplicateReview }
+            + "." + UUID().uuidString.lowercased()
 
         let text = verdict.turkishName + ": " + cleaned
         let record = LearnedMemory(
