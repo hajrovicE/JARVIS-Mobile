@@ -15,7 +15,9 @@ targets:
   JarvisMobile:
     type: application
     platform: iOS
-    sources: [JarvisMobile]
+    sources:
+      - path: JarvisMobile
+        excludes: [Simulator.entitlements]
     dependencies:
       - package: JarvisCore
     settings:
@@ -23,6 +25,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.jarvis.mobile
         TARGETED_DEVICE_FAMILY: '1'
         CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]: JarvisMobile/Simulator.entitlements
     info:
       path: Info.plist
       properties:
