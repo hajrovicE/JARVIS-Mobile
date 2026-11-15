@@ -57,7 +57,7 @@ final class OfflineAssistantTests: XCTestCase, @unchecked Sendable {
         XCTAssertTrue(requests.isEmpty)
     }
 
-    func testLocalContextTruncatedToSmallModelBudget() async throws {
+    func testLocalContextPreservesUserApprovedMemoryWithoutArbitraryTruncation() async throws {
         let store = try MemoryStore(storage: OfflineMemoryStorage())
         for i in 0..<12 { try await store.remember(String(repeating: "bilgi-\(i) ", count: 80)) }
         let provider = OfflineResponder()
@@ -66,7 +66,7 @@ final class OfflineAssistantTests: XCTestCase, @unchecked Sendable {
         _ = try await assistant.reply(to: "Öneri ver", consent: AISharingConsent(networkAllowed: false, personalMemory: true))
         let requests = await provider.requests()
         XCTAssertEqual(requests.count, 1)
-        XCTAssertLessThanOrEqual(requests[0].context.count, 5)
-        XCTAssertTrue(requests[0].context.allSatisfy { $0.text.count <= 400 })
+        XCTAssertEqual(requests[0].context.count, 12)
+        XCTAssertTrue(requests[0].context.allSatisfy { $0.text.count > 400 })
     }
 }
