@@ -71,14 +71,11 @@ actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
         // Qwen3-family chat template; changes for other model families require
         // a separate tokenizer/template compatibility check.
         // The owner controls this local policy. No remote model provider is consulted.
-        // The owner defines the model's behavior in the iPhone app settings.
-        // Authority for actual phone actions is enforced by ActionExecutor, not this prompt.
-        let localSystem = """
-        Sen JARVIS isimli, cihaz üzerinde çalışan Türkçe yapay zekâsın.
-        Sahibinin doğrudan komutu olmadan telefon işlemi başlatma.
-        """ + (ownerInstructions.isEmpty ? "" : "\n" + ownerInstructions)
-        let renderedPrompt = "<|im_start|>system\n" + localSystem
-            + "\n<|im_end|>\n<|im_start|>user\n" + prompt
+        // No built-in behavioral system prompt: every instruction is set by the owner.
+        // ActionExecutor independently rejects model-issued device operations.
+        let systemTurn = ownerInstructions.isEmpty ? "" :
+            "<|im_start|>system\n" + ownerInstructions + "\n<|im_end|>\n"
+        let renderedPrompt = systemTurn + "<|im_start|>user\n" + prompt
             + "\n<|im_end|>\n<|im_start|>assistant\n"
         let byteCount = renderedPrompt.utf8.count
         guard byteCount < Int(Int32.max - 8) else { throw LocalModelError.runtimeUnavailable }
