@@ -116,6 +116,10 @@ public struct AssistantService: Sendable {
             context += history.map { AIContextEntry(id: $0.1, text: String($0.2.prefix(1800))) }
             history.forEach { historyCategories.formUnion($0.3) }
         }
+        if processingMode == .onDevice {
+            // Small local models need bounded context; no private data is uploaded.
+            context = Array(context.prefix(5)).map { AIContextEntry(id: $0.id, text: String($0.text.prefix(400))) }
+        }
         try Task.checkCancellation()
         let response = try await provider.respond(to: AIRequest(prompt: prompt, context: context))
         try Task.checkCancellation()
