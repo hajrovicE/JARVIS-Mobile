@@ -88,11 +88,11 @@ public struct AssistantService: Sendable {
         var historyCategories: Set<String> = []
         if consent.confirmedLearning {
             let memories = LocalLearningEngine().shareableContext(query: "", in: state.learning, now: now)
-            context += memories.prefix(10).map { AIContextEntry(id: "learning:\($0.id)", text: String("\($0.key): \($0.text)".prefix(1800))) }
+            context += memories.map { AIContextEntry(id: "learning:\($0.id)", text: "\($0.key): \($0.text)") }
         }
         if consent.personalMemory {
-            context += state.personal.reversed().filter { !CredentialFilter.containsCredential($0.text) }.prefix(6)
-                .map { AIContextEntry(id: "personal:\($0.id)", text: String($0.text.prefix(1800))) }
+            context += state.personal.reversed().filter { !CredentialFilter.containsCredential($0.text) }
+                .map { AIContextEntry(id: "personal:\($0.id)", text: $0.text) }
         }
         if consent.recentHistory {
             let local = state.conversations.map { ($0.createdAt, "conversation:\($0.id)", $0.text, Set<String>()) }
@@ -105,8 +105,8 @@ public struct AssistantService: Sendable {
                 return (answer.savedAt, "answer:\(answer.id)", "Kullanıcı: \(answer.question)\nAI: \(answer.response.text)", categories)
             }
             let history = (local + generated).sorted { $0.0 < $1.0 }
-                .filter { !CredentialFilter.containsCredential($0.2) }.suffix(4)
-            context += history.map { AIContextEntry(id: $0.1, text: String($0.2.prefix(1800))) }
+                .filter { !CredentialFilter.containsCredential($0.2) }
+            context += history.map { AIContextEntry(id: $0.1, text: $0.2) }
             history.forEach { historyCategories.formUnion($0.3) }
         }
         try Task.checkCancellation()
