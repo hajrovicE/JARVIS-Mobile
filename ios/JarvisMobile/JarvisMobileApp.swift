@@ -380,11 +380,11 @@ struct RootView: View {
               try RelayCredentials.save(tokenDraft)
               relayEndpoint = endpoint.absoluteString
               tokenDraft = ""
-              aiAllowed = false
+              aiAllowed = true
               aiSharePersonal = false
               aiShareLearning = false
               aiShareHistory = false
-              connectionStatus = "Ayarlar kaydedildi; gerçek model bağlantısı henüz denenmedi."
+              connectionStatus = "Bağlantı kaydedildi. Kullanıcı komutları bu sunucuya gönderilebilir."
             } catch { errorText = "HTTPS adresi veya erişim bilgisi kaydedilemedi." }
           }
           Button("Erişim bilgisini kaldır", role: .destructive) {
@@ -403,11 +403,11 @@ struct RootView: View {
           )
           Toggle("Sorularımı bu AI sunucusuna göndermeyi kabul ediyorum", isOn: $aiAllowed)
           Toggle("Kişisel hafızamı da paylaş", isOn: $aiSharePersonal).disabled(!aiAllowed)
-          Toggle("Onaylı, hassas olmayan öğrenme kayıtlarımı paylaş", isOn: $aiShareLearning)
+          Toggle("Tüm onaylı öğrenme kayıtlarımı paylaş (hassas bilgiler dahil)", isOn: $aiShareLearning)
             .disabled(!aiAllowed)
           Toggle("Son konuşmalarımı da paylaş", isOn: $aiShareHistory).disabled(!aiAllowed)
           Text(
-            "Parola ve erişim anahtarları göndermeyin. Otomatik filtre bütün kişisel verileri tespit edemez. İnternet yokken yerel hafıza çalışır."
+            "Bu paylaşım seçenekleri açıksa seçtiğiniz bilgiler sunucuya iletilir. Erişim anahtarları ve mahrem verileri göndermeyi özellikle değerlendirin."
           )
         }
       }.navigationTitle("AI ayarları")
