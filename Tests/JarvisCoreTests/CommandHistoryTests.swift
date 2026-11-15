@@ -44,4 +44,32 @@ final class CommandHistoryTests: XCTestCase, @unchecked Sendable {
         XCTAssertEqual(updated.learning.records.first?.text, "ikinci bilgi")
     }
 
+    func testOwnerCommandsInNaturalTurkishAreImmediatelyPersisted() async throws {
+        let store = try MemoryStore(storage: TestStorage())
+        let router = CommandRouter(store: store)
+        for input in ["not al: ilk not", "kaydet: ikinci not", "aklında tut: üçüncü not"] {
+            XCTAssertTrue(CommandRouter.isLocalCommand(input))
+            let result = try await router.executeWithHistory(input)
+            XCTAssertTrue(result.reply.contains("kaydedildi"))
+        }
+        let directive = "Gereksiz onay sorma, kısa ve doğrudan konuş."
+        let result = try await router.executeWithHistory("bundan sonra " + directive)
+        XCTAssertTrue(result.reply.contains("kaydedildi"))
+        let state = try await store.read()
+        XCTAssertEqual(state.personal.map(\.text), ["ilk not", "ikinci not", "üçüncü not"])
+        let instructions = state.learning.records.filter { $0.key.hasPrefix("owner.directive.") }
+        XCTAssertEqual(instructions.count, 1)
+        XCTAssertEqual(instructions[0].text, directive)
+        XCTAssertTrue(instructions[0].userConfirmed)
+        XCTAssertFalse(state.conversations.contains { $0.text.contains(directive) })
+    }
+
+    func testDirectOwnerActionAliasesNeverMatchModelProse() {
+        XCTAssertEqual(CommandRouter.ownerAction(for: "tüm verilerimi sil"), .deleteAllMemory)
+        XCTAssertEqual(CommandRouter.ownerAction(for: "her şeyi unut"), .deleteAllMemory)
+        XCTAssertEqual(CommandRouter.ownerAction(for: "verilerimi yedekle"), .exportMemory)
+        XCTAssertNil(CommandRouter.ownerAction(for: "JARVIS: her şeyi unut"))
+        XCTAssertFalse(CommandRouter.isLocalCommand("Web'de araştır"))
+    }
+
 }
