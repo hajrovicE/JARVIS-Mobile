@@ -15,7 +15,7 @@ class LocalOnlyMobileTests(unittest.TestCase):
         self.assertNotIn("relayEndpoint", text)
         self.assertIn("processingMode: .onDevice", text)
         self.assertIn("networkAllowed: false", text)
-        self.assertIn("localManifest", "localManifest" if "selectedModelManifest" in text else "")
+        self.assertIn("selectedModelManifest", text)
 
     def test_llama_inference_is_local_and_owner_command_gate_remains(self):
         text = RUNTIME.read_text(encoding="utf-8")
