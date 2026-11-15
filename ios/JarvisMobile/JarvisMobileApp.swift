@@ -43,6 +43,7 @@ struct RootView: View {
   @State private var correctionText = ""
   @State private var importingLocalModel = false
   @State private var localModelStatus = "Yerel JARVIS modeli henüz kurulmadı."
+  @AppStorage("activeLocalModelManifest") private var activeLocalModelManifest = ""
   @State private var busy = false
   @Environment(\.scenePhase) private var scenePhase
   var body: some View {
@@ -107,10 +108,22 @@ struct RootView: View {
           guard url.pathExtension.lowercased() == "gguf",
                 let size = try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber,
                 size.int64Value > 0 else { throw LocalModelError.invalidFile }
-          let manifest = try localManifest(byteCount: size.int64Value)
+          // Official seed uses a pinned digest. Owner-generated Qwen3 GGUF files
+          // are identified by their own digest, never silently relabeled as official.
+          let digest = try PlatformSHA256Checker().sha256(of: url)
+          let official = digest == Self.seedSHA256
+          let manifest = try LocalModelManifest(
+            identifier: official ? Self.seedID : "jarvis-owner-qwen3",
+            revision: official ? "daeb8e2" : "owner-" + String(digest.prefix(12)),
+            licenseIdentifier: official ? "Apache-2.0" : "owner-provided",
+            byteCount: size.int64Value, sha256: digest)
           let manager = try OnDeviceModelManager(directory: localModelDirectory())
           _ = try await manager.importModel(from: url, manifest: manifest)
-          localModelStatus = "Model doğrulandı ve cihaz içine yüklendi. Çıkarım testi bekleniyor."
+          activeLocalModelManifest = String(
+            decoding: try JSONEncoder().encode(manifest), as: UTF8.self)
+          localModelStatus = official
+            ? "Qwen3 başlangıç modeli doğrulandı. Çıkarım testi bekleniyor."
+            : "Sahibin Qwen3-uyumlu modeli kaydedildi. Uyumluluk testi bekleniyor."
         }
       case .failure:
         errorText = "Model dosyası seçilemedi."
@@ -316,14 +329,15 @@ struct RootView: View {
           Text("Başlangıç ağırlıkları: Qwen3 1.7B Q4_K_M (Apache-2.0). Bu, henüz JARVIS'e özel eğitilmiş bir ağırlık değildir.")
           Link("GGUF başlangıç modelini indir",
             destination: URL(string: "https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF/blob/daeb8e2/Qwen3-1.7B-Q4_K_M.gguf")!)
-          Button("Dosyalardan GGUF modelini yükle") { importingLocalModel = true }
+          Button("Qwen3 veya kendi GGUF modelimi yükle") { importingLocalModel = true }
           Text(localModelStatus)
-          Text("Dosya SHA-256 ile kontrol edilir. Model dosyası yaklaşık 1,28 GB; telefonda çalışma belleği ayrıca gerekir.")
+          Text("Kendi eğitilmiş modelinizi de yükleyebilirsiniz: Qwen3 tokenizer ve sohbet şablonuyla uyumlu GGUF olmalı. Her dosyanın SHA-256 özeti saklanır ve yeniden doğrulanır.")
+          Text("Hazır başlangıç modeli yaklaşık 1,28 GB; telefonda çalışma belleği ayrıca gerekir.")
         }
         Section("Çalışma biçimi") {
           Text("İnternetsiz varsayılan: JARVIS yalnızca kurulu modeli kullanır. Model yoksa hata verir, uzaktaki sağlayıcıya geçmez.")
           Text("Sahibinin açık komutu olmadan işlem başlatılmaz. Model yanıtı telefon eylemi değildir.")
-          Text("Gelecekte JARVIS'e özel eğitilen, uyumlu GGUF ağırlıkları sürümlenerek bu başlangıç modelinin yerini alacak.")
+          Text("Kendi eğittiğiniz uyumlu GGUF ağırlıklarını Dosyalar'dan seçerek başlangıç modelini değiştirebilirsiniz. Eğitim işlemi telefonda otomatik yapılmaz.")
         }
       }.navigationTitle("Yerel yapay zekâ")
     }.tabItem { Label("AI", systemImage: "cpu") }
@@ -434,8 +448,8 @@ struct RootView: View {
       reply = "Öğrettiğiniz bilgi kaydedildi."
     }
   }
-  private static let localModelID = "qwen3-1-7b-q4km"
-  private static let localModelSHA256 = "d2387ca2dbfee2ffabce7120d3770dadca0b293052bc2f0e138fdc940d9bc7b5"
+  private static let seedID = "qwen3-1-7b-q4km"
+  private static let seedSHA256 = "d2387ca2dbfee2ffabce7120d3770dadca0b293052bc2f0e138fdc940d9bc7b5"
 
   private func localModelDirectory() throws -> URL {
     try FileManager.default.url(
@@ -444,10 +458,12 @@ struct RootView: View {
       .appendingPathComponent("Jarvis/models", isDirectory: true)
   }
 
-  private func localManifest(byteCount: Int64) throws -> LocalModelManifest {
-    try LocalModelManifest(identifier: Self.localModelID, revision: "daeb8e2",
-                           licenseIdentifier: "Apache-2.0", byteCount: byteCount,
-                           sha256: Self.localModelSHA256)
+  private func selectedModelManifest() throws -> LocalModelManifest {
+    guard !activeLocalModelManifest.isEmpty,
+          let bytes = activeLocalModelManifest.data(using: .utf8),
+          let manifest = try? JSONDecoder().decode(LocalModelManifest.self, from: bytes)
+    else { throw LocalModelError.notInstalled }
+    return manifest
   }
 
   private func submit() {
@@ -461,21 +477,18 @@ struct RootView: View {
         return
       }
       let provider: any AIProvider
+      var scope = "local-command"
       if CommandRouter.isLocalCommand(command) {
         provider = UnavailableAIProvider()
       } else {
+        let manifest = try selectedModelManifest()
         let manager = try OnDeviceModelManager(directory: localModelDirectory())
-        let modelURL = try localModelDirectory()
-          .appendingPathComponent(Self.localModelID + ".gguf")
-        guard let attrs = try? FileManager.default.attributesOfItem(atPath: modelURL.path),
-              let size = attrs[.size] as? NSNumber else { throw LocalModelError.notInstalled }
-        provider = LocalAIProvider(
-          manager: manager,
-          manifest: try localManifest(byteCount: size.int64Value),
-          runtime: GGUFInferenceRuntime())
+        provider = LocalAIProvider(manager: manager, manifest: manifest,
+            runtime: GGUFInferenceRuntime())
+        scope = "local:" + manifest.identifier + ":" + manifest.sha256
       }
       let result = try await AssistantService(
-        store: store, provider: provider, providerScope: "local:" + Self.localModelID,
+        store: store, provider: provider, providerScope: scope,
         processingMode: .onDevice
       ).reply(
         to: command,
