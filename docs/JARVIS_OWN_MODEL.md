@@ -37,3 +37,11 @@ JARVIS modelinin yanıtı kendi başına telefon komutu değildir. Yalnızca o a
 
 ## Henüz doğrulanmamış olanlar
 Tam iPhone gerçek cihaz GGUF inference hızı/RAM/ısınma, iOS derlemesi ve TestFlight dağıtımı; eğitim/LoRA ve modelin Türkçe çıktı kalitesi. Model yüklü değilse yapay başarı uydurulmaz.
+
+## Sahibin kontrol ettiği model kuralları ve işlem parametreleri
+- iPhone uygulamasındaki **Yerel yapay zekâ → Sahibin davranış kuralları** alanı, modelin tek davranış yönergesini belirler; boşsa model için uygulamadan sabit sistem yönergesi eklenmez.
+- **Yanıt token bütçesi, bağlam penceresi, sıcaklık, top-p, CPU iş parçacığı** ayarları telefon içinden değiştirilir. Bunlar ürün tarafından keyfî sabit maksimumlarla sınırlandırılmaz; llama.cpp arayüzünün sayısal kapasitesi, yüklenen modelin gerçek bağlam penceresi, kullanılabilir RAM ve iOS işlemleri sınırlamaya devam eder.
+- Sıcaklık 0 deterministik seçim, 0'dan büyük değerler olasılıksal örnekleme sağlar. Top-p matematiksel olarak 0–1 aralığındadır, kullanıcı istediği değeri seçebilir.
+- **Kullanıcıdan bağımsız eylem yapılmaz.** Model metni, talimat belleği veya üçüncü taraf içerik uygulamanın işlem yürütücüsünden izin üretemez. Yalnızca kullanıcının o andaki doğrudan komutu uygulama eylemini tetikleyebilir.
+- Eğitimin `--thinking`, `--lora-rank`, `--lora-alpha`, `--batch-size`, `--accumulation` ve `--epochs` değerleri kullanıcı tarafından verilebilir. Model eğitimi ayrıca gerçekleştirilmedikçe ağırlıklar değişmiş sayılmaz.
+- Açık kaynak modeli, Metal/iOS çalışma izinlerini, veri dosyası bütünlük doğrulamasını ve cihaz donanım gereksinimlerini ortadan kaldırmak mümkün değildir.
