@@ -237,14 +237,16 @@ final class ActionExecutorTests: XCTestCase, @unchecked Sendable {
         let manager = PermissionManager()
         let executor = ActionExecutor(store: store, permissions: manager)
         let export = ActionRequest(operation: .exportMemory)
+        let exportAuthorization = try await manager.authorizeOwnerCommand(export)
         let exported = try await executor.execute(
-            export, authorization: await manager.authorizeOwnerCommand(export))
+            export, authorization: exportAuthorization)
         XCTAssertTrue(exported.succeeded)
         let decoded = try JSONDecoder().decode(MemorySnapshot.self, from: XCTUnwrap(exported.exportedData))
         XCTAssertEqual(decoded.personal.first?.text, "exported-preference")
         let removal = ActionRequest(operation: .deleteLearning(record.id))
+        let removeAuthorization = try await manager.authorizeOwnerCommand(removal)
         let result = try await executor.execute(
-            removal, authorization: await manager.authorizeOwnerCommand(removal))
+            removal, authorization: removeAuthorization)
         XCTAssertTrue(result.succeeded)
         let state = try await store.read()
         XCTAssertTrue(state.learning.records.isEmpty)
