@@ -1,4 +1,7 @@
 # Doğrulama
+
+**Güncel kabul ölçütü:** Kullanıcının doğrudan komutu işlemi tek adımda başlatır; model önerisi aynı eylemi başlatamaz. İstek eşleşmesi, tek kullanımlık token, yeniden oynatma ve sahte model kökeni testleri korunur. Konuşma, görev ve etkinlik kayıtları kullanıcı silene kadar kalır; önbelleğin yeniden kullanım geçerliliği kayıtların silinmesinden ayrıdır. Önceki biyometri ve otomatik 90/30 günlük saklama test anlatımları tarihsel niteliktedir.
+
 `swift test`: tam 90/30 gün ve bir saniye önceki sınırlar, kalıcı hafıza, zaman duyarlı önbellek dışlama, yeniden açma, düzenleme, tekli ve toplu silme, dışa aktarma, başarısız yazma, sürüm geçişi ve güvenli komut yönlendirme. Apple platformlarında ek AES-GCM yeniden açma ve değiştirilmiş şifreli dosyayı reddetme testi.
 
 macOS: `brew install xcodegen`; `cd ios && xcodegen generate`; kökten `xcodebuild -project ios/JarvisMobile.xcodeproj -scheme JarvisMobile -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES build`. CI bu adımları uygular.
