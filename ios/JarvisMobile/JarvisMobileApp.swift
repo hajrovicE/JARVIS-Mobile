@@ -44,6 +44,9 @@ struct RootView: View {
   @State private var activeReply: StoredAIAnswer?
   @State private var experiences: [TaskExperience] = []
   @State private var correctionText = ""
+  @State private var experienceReviewID: UUID?
+  @State private var experienceReviewLabel: ExperienceVerdict = .incorrect
+  @State private var experienceLesson = ""
   @AppStorage("aiAllowed") private var aiAllowed = false
   @AppStorage("aiSharePersonal") private var aiSharePersonal = false
   @AppStorage("aiShareLearning") private var aiShareLearning = false
@@ -249,6 +252,33 @@ struct RootView: View {
               }.disabled(correctionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
           }
+        }
+        Section("Görevlerden doğruyu ve yanlışı öğren") {
+          Text("Sadece JARVIS'in gerçekten kaydettiği görev sonuçlarını değerlendirebilirsin. Mahrem etiketi yalnızca yerel hafızada saklanır ve buluta seçilmez.")
+          Picker("Görev deneyimi", selection: $experienceReviewID) {
+            Text("Bir görev seç").tag(Optional<UUID>.none)
+            ForEach(experiences.suffix(20).filter { $0.outcome != .proposed }) { experience in
+              Text(experience.action + " · " + experience.outcome.rawValue)
+                .tag(Optional(experience.id))
+            }
+          }
+          Picker("Değerlendirmem", selection: $experienceReviewLabel) {
+            ForEach(ExperienceVerdict.allCases, id: \.self) { verdict in
+              Text(verdict.turkishName.capitalized).tag(verdict)
+            }
+          }
+          TextField("Bu deneyimden çıkarılan ders", text: $experienceLesson, axis: .vertical)
+          Button("Değerlendirmemi öğret") {
+            guard let id = experienceReviewID else { return }
+            perform {
+              guard let store else { return }
+              _ = try await UserExperienceReviewer(store: store).review(
+                experienceID: id, verdict: experienceReviewLabel, lesson: experienceLesson)
+              experienceLesson = ""
+              experienceReviewID = nil
+            }
+          }
+          .disabled(experienceReviewID == nil || experienceLesson.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         Button("Verilerimi dışa aktar") { confirmingExport = true }
         Button("Tüm verileri sil", role: .destructive) { prepareAction(.deleteAllMemory) }
