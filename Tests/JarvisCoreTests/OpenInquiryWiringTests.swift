@@ -15,6 +15,12 @@ private final class InquiryDisk: SnapshotStorage, @unchecked Sendable {
     }
 }
 
+private struct InquiryDigest: LocalModelDigestChecking {
+    func sha256(of fileURL: URL) throws -> String {
+        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    }
+}
+
 private actor CapturedPromptRuntime: OnDeviceInferenceRuntime {
     private var received: [String] = []
     func generate(prompt: String, modelURL: URL) async throws -> String {
@@ -37,7 +43,8 @@ final class OpenInquiryWiringTests: XCTestCase, @unchecked Sendable {
             identifier: "tiny-test", revision: "test", licenseIdentifier: "MIT",
             byteCount: 3, sha256: verified)
         let manager = try OnDeviceModelManager(
-            directory: base.appendingPathComponent("private", isDirectory: true))
+            directory: base.appendingPathComponent("private", isDirectory: true),
+            digester: InquiryDigest())
         _ = try await manager.importModel(from: input, manifest: manifest)
 
         let store = try MemoryStore(storage: InquiryDisk())
