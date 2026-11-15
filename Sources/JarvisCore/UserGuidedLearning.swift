@@ -111,6 +111,31 @@ public actor UserGuidedLearning {
         return record.id
     }
 
+    /// Only exact, user-confirmed preference topics change the assistant's
+    /// response style. Arbitrary learning records remain data, not permissions.
+    public func responsePreferences(now: Date = Date()) async throws -> PersonalAIPreferences {
+        let state = try await store.read(now: now)
+        let confirmed = state.learning.records.filter {
+            $0.userConfirmed && $0.supersededBy == nil && $0.sensitivity == .ordinary &&
+                ($0.expiresAt == nil || $0.expiresAt! > now)
+        }
+        func lesson(_ topic: String) -> String? {
+            confirmed.first(where: { $0.key == prefix + topic })?
+                .text.trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased(with: Locale(identifier: "tr_TR"))
+        }
+        var preferences = PersonalAIPreferences()
+        switch lesson("yanıt_tarzı") {
+        case "kısa", "kısa ve net": preferences.answerStyle = .concise
+        case "analitik", "detaylı ve analitik": preferences.answerStyle = .analytical
+        case "doğrudan", "direkt", "net": preferences.answerStyle = .direct
+        default: break
+        }
+        if lesson("varsayımları_sorgula") == "hayır" { preferences.questionAssumptions = false }
+        if lesson("yaratıcı_öneriler") == "hayır" { preferences.offerUnconventionalIdeas = false }
+        return preferences
+    }
+
     public func report(now: Date = Date()) async throws -> LearningProgressReport {
         let state = try await store.read(now: now)
         let active = state.learning.records.filter { $0.supersededBy == nil }
