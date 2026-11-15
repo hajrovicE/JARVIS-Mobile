@@ -1,6 +1,7 @@
 import contextlib
 import io
 import json
+import socket
 import threading
 import time
 import unittest
@@ -126,7 +127,20 @@ class RelayTests(unittest.TestCase):
                 self.assertEqual(request(b'{"prompt":"synthetic private prompt"}')[0], 200)
                 self.assertEqual(request(b'{"prompt":"a"}', auth=None)[0], 401)
                 self.assertEqual(request(b'broken')[0], 400)
-                self.assertEqual(request(b'x' * (MAX_BODY_BYTES + 1))[0], 413)
+                # The server rejects an oversized Content-Length before reading
+                # the body. Avoid urllib sending a large body after the server
+                # closes its response (ConnectionResetError on Python 3.15).
+                oversized_headers = (
+                    "POST /v1/chat HTTP/1.1\r\n"
+                    "Host: 127.0.0.1\r\n"
+                    f"Authorization: {AUTH}\r\n"
+                    "Content-Type: application/json\r\n"
+                    f"Content-Length: {MAX_BODY_BYTES + 1}\r\n\r\n"
+                ).encode("ascii")
+                with socket.create_connection(server.server_address, timeout=3) as connection:
+                    connection.sendall(oversized_headers)
+                    status_line = connection.makefile("rb").readline()
+                self.assertIn(b" 413 ", status_line)
                 self.assertEqual(request(b'{}', content_type="text/plain")[0], 415)
                 self.assertEqual(request(b'{}', path="/unknown")[0], 404)
             self.assertEqual(logs.getvalue(), "")
