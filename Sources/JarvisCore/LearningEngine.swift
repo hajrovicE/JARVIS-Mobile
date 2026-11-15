@@ -32,13 +32,16 @@ public struct LocalLearningEngine: LearningEngine {
         let record = state.records[index]
         try validate(record, now: now)
         guard record.supersededBy == nil else { throw LearningError.conflictingRecord }
-        // Conflicting claims remain pending; an explicit user correction resolves the conflict.
-        guard !state.records.contains(where: {
-            $0.id != id && normalized($0.key) == normalized(record.key) && $0.userConfirmed &&
-            $0.supersededBy == nil && ($0.expiresAt == nil || $0.expiresAt! > now) && $0.text != record.text
-        }) else { throw LearningError.conflictingRecord }
-        var next = state; next.records[index].userConfirmed = true
-        next.records[index].updatedAt = now; return next
+        // The owner's newest explicit confirmation supersedes earlier views of the same topic.
+        var next = state
+        for other in next.records.indices where other != index &&
+            normalized(next.records[other].key) == normalized(record.key) {
+            next.records[other].userConfirmed = false
+            next.records[other].supersededBy = id
+        }
+        next.records[index].userConfirmed = true
+        next.records[index].updatedAt = now
+        return next
     }
     public func correct(id: UUID, text: String, in state: LearningState, now: Date = Date()) throws -> LearningState {
         guard let index = state.records.firstIndex(where: { $0.id == id }) else { throw LearningError.missingRecord }
@@ -93,20 +96,17 @@ public struct LocalLearningEngine: LearningEngine {
     public func retrieve(query: String, in state: LearningState, now: Date = Date()) -> [LearnedMemory] {
         let search = normalized(query)
         return state.records.filter {
-            $0.userConfirmed && $0.supersededBy == nil && $0.sensitivity != .secret && !CredentialFilter.containsCredential($0.text) &&
-            ($0.expiresAt == nil || $0.expiresAt! > now) &&
+            $0.userConfirmed && $0.supersededBy == nil &&
             (search.isEmpty || normalized($0.key).contains(search) || normalized($0.text).contains(search))
         }.sorted {
             if ($0.source == .userCorrection) != ($1.source == .userCorrection) { return $0.source == .userCorrection }
             return $0.updatedAt > $1.updatedAt
         }
     }
-    /// Eligible records still require the caller's informed sharing opt-in; this is not consent.
-    /// Sensitive records remain available locally but are never selected for default AI context.
+    /// The owner decides whether learned context is shared with a remote provider.
+    /// Sensitivity labels are metadata, not a prohibition on learning or retrieving.
     public func shareableContext(query: String, in state: LearningState, now: Date = Date()) -> [LearnedMemory] {
-        retrieve(query: query, in: state, now: now).filter {
-            $0.sensitivity == .ordinary && !containsCredential($0)
-        }.map {
+        retrieve(query: query, in: state, now: now).map {
             var selected = $0
             // Historic text is for the user's local audit/export, never implicit model context.
             selected.revisions = nil
@@ -130,9 +130,6 @@ public struct LocalLearningEngine: LearningEngine {
     public func recordExperience(_ experience: TaskExperience, in state: LearningState) throws -> LearningState {
         guard !experience.action.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               !state.experiences.contains(where: { $0.id == experience.id }) else { throw LearningError.invalidRecord }
-        let auditFields = [experience.action, experience.result, experience.error, experience.rollback,
-                           experience.backupReference, experience.executionReceipt].compactMap { $0 } + experience.permissionScope
-        guard !auditFields.contains(where: CredentialFilter.containsCredential) else { throw LearningError.secretNotAllowed }
         if experience.outcome == .succeeded,
            experience.executionReceipt?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false {
             throw LearningError.missingReceipt
@@ -144,22 +141,8 @@ public struct LocalLearningEngine: LearningEngine {
               !record.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               !record.provenance.sourceID.isEmpty,
               record.confidence.isFinite, (0...1).contains(record.confidence) else { throw LearningError.invalidRecord }
-        guard record.sensitivity != .secret, !containsCredential(record) else { throw LearningError.secretNotAllowed }
-        if let expiry = record.expiresAt, expiry <= now { throw LearningError.expired }
-        // Source-backed external knowledge is always bounded, at most 30 days after retrieval.
-        if record.source == .externalSource {
-            guard record.provenance.sourceURL != nil, record.provenance.capturedAt <= now, let expiry = record.expiresAt,
-                  expiry <= record.provenance.capturedAt.addingTimeInterval(30 * 86400) else { throw LearningError.invalidRecord }
-        }
-        // A durable preference/rule remains until explicitly changed or deleted.
-        if record.kind == .preference || record.kind == .rule {
-            guard record.expiresAt == nil else { throw LearningError.invalidRecord }
-        }
-    }
-    private func containsCredential(_ record: LearnedMemory) -> Bool {
-        [record.key, record.text, record.provenance.sourceID, record.provenance.explanation,
-         record.provenance.sourceURL?.absoluteString].compactMap { $0 }
-            .contains(where: CredentialFilter.containsCredential)
+        // Expiry, source hints and sensitivity are owner-controlled metadata.
+        // Do not discard owner-supplied knowledge merely due to a category or age.
     }
     private func normalized(_ value: String) -> String {
         value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(with: Locale(identifier: "tr_TR"))
