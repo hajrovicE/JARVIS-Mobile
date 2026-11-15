@@ -37,5 +37,17 @@ class LocalOnlyMobileTests(unittest.TestCase):
         self.assertNotIn("urllib", text)
 
 
+    def test_training_parameters_are_owner_selectable(self):
+        script = (ROOT / "scripts" / "model" / "train_lora.py").read_text(encoding="utf-8")
+        for flag in ("--thinking", "--lora-rank", "--lora-alpha", "--batch-size",
+                     "--accumulation", "--epochs"):
+            self.assertIn(flag, script)
+
+    def test_owner_prompt_is_not_overridden_by_fixed_local_policy(self):
+        runtime = RUNTIME.read_text(encoding="utf-8")
+        provider = (ROOT / "Sources" / "JarvisCore" / "LocalAIProvider.swift").read_text(encoding="utf-8")
+        self.assertIn("let systemTurn = ownerInstructions.isEmpty", runtime)
+        self.assertNotIn("Gereksiz ikinci onay isteme", provider)
+
 if __name__ == "__main__":
     unittest.main()
