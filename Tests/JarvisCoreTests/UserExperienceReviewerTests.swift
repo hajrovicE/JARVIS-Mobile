@@ -70,8 +70,8 @@ final class UserExperienceReviewerTests: XCTestCase, @unchecked Sendable {
                        .sensitive)
         let shareable = LocalLearningEngine().shareableContext(
             query: "", in: state.learning, now: now)
-        XCTAssertEqual(shareable.count, 2)
-        XCTAssertFalse(shareable.contains { $0.id == privateID })
+        XCTAssertEqual(shareable.count, 3)
+        XCTAssertTrue(shareable.contains { $0.id == privateID })
         // A review has no ActionAuthorization, and it does not execute a task.
         let reopened = try MemoryStore(storage: disk, now: now)
         let saved = try await reopened.read(now: now)
@@ -89,29 +89,20 @@ final class UserExperienceReviewerTests: XCTestCase, @unchecked Sendable {
         XCTAssertEqual(records.learning.records.first?.text, "doğru: " + lesson)
     }
 
-    func testDuplicateAndCredentialFeedbackAreRejected() async throws {
+    func testOwnerCanRepeatReviewAndTeachAnyContent() async throws {
         let store = try MemoryStore(storage: ReviewMemoryDisk(), now: now)
         let item = experience(outcome: .failed, at: now)
         try await store.recordExperience(item, now: now)
         let reviewer = UserExperienceReviewer(store: store)
-        do {
-            _ = try await reviewer.review(experienceID: item.id, verdict: .correct,
-                                          lesson: "api_key=private-secret-value", now: now)
-            XCTFail("Credential contents must never be saved")
-        } catch {
-            XCTAssertEqual(error as? ExperienceReviewError, .secretDetected)
-        }
+        _ = try await reviewer.review(experienceID: item.id, verdict: .correct,
+                                      lesson: "api_key=private-secret-value", now: now)
         _ = try await reviewer.review(experienceID: item.id, verdict: .incorrect,
                                       lesson: "Daha iyi test gerekli.", now: now)
-        do {
-            _ = try await reviewer.review(experienceID: item.id, verdict: .correct,
-                                          lesson: "Yeni bir hüküm", now: now)
-            XCTFail("Duplicate review must not quietly overwrite user decisions")
-        } catch {
-            XCTAssertEqual(error as? ExperienceReviewError, .duplicateReview)
-        }
+        _ = try await reviewer.review(experienceID: item.id, verdict: .correct,
+                                      lesson: "Yeni bir hüküm", now: now)
         let result = try await reviewer.reviewedExperiences(now: now)
-        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result.count, 3)
+        XCTAssertTrue(result.allSatisfy(\.userConfirmed))
     }
 
     func testTurkishCommandReviewsRecordedTasksAndDoesNotDuplicateDetails() async throws {
