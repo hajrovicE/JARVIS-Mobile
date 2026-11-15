@@ -40,3 +40,5 @@ Standart kütüphane testleri gerçek ağ/model yerine sahte upstream kullanır:
 Localhost geliştirmede `python3 server/relay.py --port 8787`; container'da özel Docker ağı için `--host 0.0.0.0 --port 8787` kullanılır. Port 8787'yi public açmayın. Anahtarı/oturumu güncellemek için Secret manager'da döndürüp relay sürecini recreate edin; otomatik hot reload yoktur.
 
 Otomatik ek doğrulama: `python3 server/deployment_smoke.py`. Docker gerekir; gerçek giriş noktası dış ağ kapalı çalıştırılır. TLS testi localhost adına yerel CA sertifikası doğrular ve test-only upstream kullanır; public port açmaz, ACME veya gerçek model servisine bağlanamaz. Üretim domain sertifikası/canlı model sonucu kanıtı olarak sunulmaz.
+
+[Dağıtım hazırlığı test sonuçları ve CI kanıtları](AI_RELAY_DEPLOYMENT_VALIDATION.md).

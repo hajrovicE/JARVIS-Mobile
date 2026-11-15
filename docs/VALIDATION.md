@@ -56,3 +56,6 @@ Artifact'lar 14 gün saklanır. xcresult Xcode ile açılır; screenshot'lar yal
 3. İmzalı erişim hazır olunca fiziksel cihazda Türkçe mikrofon/izin ret-kısıt/arka plan, opt-in TTS, gerçek Face ID/Touch ID, kilitli cihaz koruması ve erişilebilirlik testlerini tamamlayın. Konuşmacı tanımayı tamamlandı saymayın.
 
 **TestFlight'a yükleme yapılmadı.** Üyelik/Secrets olmadan gerçek dağıtım denenmedi. Yeni kaynak commit'leri: [8194fe8](https://github.com/hajrovicE/JARVIS-Mobile/commit/8194fe828e8a73f24ab5a0ab44e2abe4b6569151), [8afab2a](https://github.com/hajrovicE/JARVIS-Mobile/commit/8afab2a78d2ea0306616f8bae2ab13257fe2d96b).
+
+
+Sonraki sunucuya odaklı dağıtım hazırlığı ve aynı native testlerin yeni regresyon sonucu: [AI relay deployment doğrulaması](AI_RELAY_DEPLOYMENT_VALIDATION.md). Bu ek çalışma public sunucu veya gerçek model çağrısı başlatmaz.
