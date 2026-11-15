@@ -20,7 +20,7 @@ final class SmokeTests: XCTestCase {
         // Clear through the same explicit confirmation used by the user.
         app.tabBars.buttons["Hafıza"].tap()
         let clear = app.buttons["memory.deleteAll"]
-        XCTAssertTrue(clear.waitForExistence(timeout: 10))
+        XCTAssertTrue(reveal(clear, in: app))
         XCTAssertTrue(waitUntilEnabled(clear))
         clear.tap()
         let confirm = app.buttons["Tümünü sil"]
@@ -38,12 +38,13 @@ final class SmokeTests: XCTestCase {
         XCTAssertTrue(app.tabBars.buttons["Sohbet"].waitForExistence(timeout: 10))
         try send("ne hatırlıyorsun", in: app)
         XCTAssertTrue(waitForLabel(reply, containing: "test tercihim sade kahve"))
+        attachScreenshot(app, name: "Şifreli hafıza — yeniden açma sonrası test kaydı")
 
         app.tabBars.buttons["Hafıza"].tap()
         let memoryFields = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "memory.text."))
-        XCTAssertTrue(memoryFields.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(reveal(memoryFields.firstMatch, in: app, towardTop: true))
         let delete = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "memory.delete.")).firstMatch
-        XCTAssertTrue(delete.waitForExistence(timeout: 5))
+        XCTAssertTrue(reveal(delete, in: app))
         delete.tap()
         XCTAssertTrue(waitForAbsence(memoryFields.firstMatch))
 
@@ -58,7 +59,28 @@ final class SmokeTests: XCTestCase {
         let speakerStatus = app.staticTexts["status.speakerIdentity"]
         XCTAssertTrue(speakerStatus.waitForExistence(timeout: 5))
         XCTAssertTrue(speakerStatus.label.contains("ETKİN DEĞİL"))
+        attachScreenshot(app, name: "Yetenek durumu — konuşmacı doğrulaması etkin değil")
         // No microphone or Speech authorization is needed for this complete interaction.
+    }
+
+    @MainActor
+    private func reveal(_ element: XCUIElement, in app: XCUIApplication, towardTop: Bool = false) -> Bool {
+        let collection = app.collectionViews.firstMatch
+        let list = collection.waitForExistence(timeout: 2) ? collection : app.tables.firstMatch
+        guard list.waitForExistence(timeout: 5) else { return false }
+        for _ in 0..<8 {
+            if element.exists && element.isHittable { return true }
+            if towardTop { list.swipeDown() } else { list.swipeUp() }
+        }
+        return element.exists && element.isHittable
+    }
+
+    @MainActor
+    private func attachScreenshot(_ app: XCUIApplication, name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 
     @MainActor

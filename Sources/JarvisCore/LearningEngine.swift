@@ -11,7 +11,7 @@ public protocol LearningEngine: Sendable {
     func recordExperience(_ experience: TaskExperience, in state: LearningState) throws -> LearningState
 }
 public enum LearningError: Error, Equatable {
-    case invalidRecord, secretNotAllowed, missingRecord, expired, conflictingRecord, missingReceipt
+    case invalidRecord, secretNotAllowed, missingRecord, expired, conflictingRecord, missingReceipt, staleProposal
 }
 
 public struct LocalLearningEngine: LearningEngine {

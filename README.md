@@ -2,7 +2,7 @@
 Türkçe, iPhone öncelikli SwiftUI asistanı. İlk işlevsel dilim: şifreli yerel hafıza, 90 günlük konuşmalar, en fazla 30 günlük uygun cevap önbelleği, kalıcı kişisel hafıza, yerel komutlar ve isteğe bağlı cihaz içi Türkçe sesli giriş/TTS.
 
 ## Çalıştırma
-Swift 5.9+ ile `swift test`. iOS uygulaması için macOS, Xcode 16+ ve XcodeGen gerekir:
+Swift 6.0+ ile `swift test`. iOS uygulaması için macOS, Xcode 16.4+ ve XcodeGen gerekir:
 
 ```sh
 brew install xcodegen
@@ -11,10 +11,12 @@ xcodegen generate
 open JarvisMobile.xcodeproj
 ```
 
-Xcode'da imzalama takımını seçip iPhone'da çalıştırın. Speech desteği cihaza bağlıdır. Üretilen proje/Info.plist kaynak denetimine alınmaz; yapılandırma `ios/project.yml` içindedir. `.github/workflows/swift.yml` macOS üzerinde test ve simulator derlemesi yapar.
+Xcode'da imzalama takımını seçip iPhone'da çalıştırın. Speech desteği cihaza bağlıdır. Üretilen proje/Info.plist kaynak denetimine alınmaz; yapılandırma `ios/project.yml` içindedir. `.github/workflows/swift.yml` macOS üzerinde Swift 6 testleri, simulator derlemesi, iOS Keychain/şifreleme testleri ve uygulama arayüz testini çalıştırır. Sonuç logları, xcresult ve simulator uygulaması Actions artifact olarak saklanır.
 
 ## Komutlar
-`hatırla ki kahveyi severim`, `ne hatırlıyorsun`, `unut <UUID>`, `geçmiş`. Hafıza sekmesinden kayıtları düzenleyebilir, silebilir ve verileri JSON olarak dışa aktarabilirsiniz. Dışa aktarılan JSON kişisel veri içerir ve şifreli değildir.
+`hatırla ki kahveyi severim` (veya `bunu hatırla …`), `ne hatırlıyorsun`, `unut <UUID>`, `geçmiş`, `öğrendiklerin`. Hafıza sekmesinden kayıtları düzenleyebilir, silebilir ve verileri JSON olarak dışa aktarabilirsiniz. Dışa aktarılan JSON kişisel veri içerir ve şifreli değildir.
+
+Hafıza sekmesindeki öğrenme önerileri ayrı onay bekler; kullanıcı düzeltmesi çelişkili eski kayda üstün gelir. [Learning Engine temeli ve kapsamı](docs/LEARNING_ENGINE.md).
 
 Konuşmacı doğrulaması, bulut AI, web kaynakları ve telefon kontrolü etkin değildir. Önbellek altyapısı API düzeyindedir; harici cevap sağlayıcısı henüz bağlı değildir. Süresi dolan veriler erişimde/açılışta temizlenir; uygulama kapalıyken kesin zamanlı arka plan silme garantisi yoktur.
 

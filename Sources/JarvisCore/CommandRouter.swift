@@ -1,8 +1,26 @@
 import Foundation
 
+public struct CommandExecution: Sendable {
+    public let reply: String
+    public let historyWriteFailed: Bool
+}
+
 public struct CommandRouter: Sendable {
     public let store: MemoryStore
     public init(store: MemoryStore) { self.store = store }
+    /// Read-only listings never copy their contents into newer conversations.
+    /// Mutating memory commands leave only an operation marker, not another copy of a fact.
+    public func executeWithHistory(_ input: String) async throws -> CommandExecution {
+        let reply = try await execute(input)
+        let normalized = input.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(with: Locale(identifier: "tr_TR"))
+        if ["geçmiş", "ne hatırlıyorsun", "öğrendiklerin"].contains(normalized) {
+            return CommandExecution(reply: reply, historyWriteFailed: false)
+        }
+        let isMemoryAction = ["hatırla ki ", "bunu hatırla ", "unut "].contains { normalized.hasPrefix($0) }
+        let entry = isMemoryAction ? "Kişisel hafıza komutu işlendi." : "Siz: \(input)\nJARVIS: \(reply)"
+        do { try await store.record(entry); return CommandExecution(reply: reply, historyWriteFailed: false) }
+        catch { return CommandExecution(reply: reply, historyWriteFailed: true) }
+    }
     public func execute(_ input: String) async throws -> String {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalized = text.lowercased(with: Locale(identifier: "tr_TR"))

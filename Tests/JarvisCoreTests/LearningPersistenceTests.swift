@@ -17,7 +17,7 @@ final class LearningPersistenceTests: XCTestCase, @unchecked Sendable {
         try await store.proposeLearning(record, now: now)
         let pending = try await store.learnedMemories(query: "drink", now: now)
         XCTAssertTrue(pending.isEmpty)
-        try await store.confirmLearning(id: record.id, now: now)
+        try await store.confirmLearning(id: record.id, expectedText: record.text, now: now)
         let reopened = try MemoryStore(storage: disk, now: now)
         let results = try await reopened.learnedMemories(query: "drink", now: now)
         XCTAssertEqual(results.map(\.text), ["kahve"])
@@ -30,6 +30,17 @@ final class LearningPersistenceTests: XCTestCase, @unchecked Sendable {
         let deleted = try MemoryStore(storage: disk, now: now)
         let empty = try await deleted.learnedMemories(query: "drink", now: now)
         XCTAssertTrue(empty.isEmpty)
+    }
+    func testEditedDraftCannotConfirmStoredText() async throws {
+        let store = try MemoryStore(storage: TestStorage(), now: now)
+        let record = proposal()
+        try await store.proposeLearning(record, now: now)
+        do {
+            try await store.confirmLearning(id: record.id, expectedText: "çay", now: now)
+            XCTFail("Changed text must require explicit correction")
+        } catch { XCTAssertEqual(error as? LearningError, .staleProposal) }
+        let results = try await store.learnedMemories(query: "", now: now)
+        XCTAssertTrue(results.isEmpty)
     }
     func testLearningFailedWriteAndDeleteAll() async throws {
         let disk = TestStorage(); let store = try MemoryStore(storage: disk, now: now)

@@ -34,8 +34,12 @@ final class EncryptedStorageTests: XCTestCase, @unchecked Sendable {
         var attributes: CFTypeRef?
         XCTAssertEqual(SecItemCopyMatching(attributesQuery as CFDictionary, &attributes), errSecSuccess)
         let attributesDictionary = try XCTUnwrap(attributes as? [String: Any])
+        #if os(iOS)
+        // iOS exposes and enforces Data Protection accessibility. The legacy macOS login
+        // keychain does not return this iOS-only attribute in its item metadata.
         XCTAssertEqual(attributesDictionary[kSecAttrAccessible as String] as? String,
                        kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String)
+        #endif
         XCTAssertNotEqual(attributesDictionary[kSecAttrSynchronizable as String] as? Bool, true)
         let reopened = try EncryptedFileStorage(url: f.url, keychainAccount: f.account)
         XCTAssertEqual(try reopened.load(), plaintext)

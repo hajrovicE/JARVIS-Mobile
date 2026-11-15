@@ -102,8 +102,10 @@ public actor MemoryStore {
         next.learning = try learningEngine.propose(record, in: next.learning, now: now)
         try commit(next)
     }
-    public func confirmLearning(id: UUID, now: Date = Date()) throws {
+    public func confirmLearning(id: UUID, expectedText: String, now: Date = Date()) throws {
         var next = try read(now: now)
+        guard let record = next.learning.records.first(where: { $0.id == id }) else { throw LearningError.missingRecord }
+        guard record.text == expectedText else { throw LearningError.staleProposal }
         next.learning = try learningEngine.confirm(id: id, in: next.learning, now: now)
         try commit(next)
     }
