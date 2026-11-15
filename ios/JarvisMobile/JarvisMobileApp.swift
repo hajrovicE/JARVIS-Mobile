@@ -113,22 +113,15 @@ struct RootView: View {
           defer { if scoped { url.stopAccessingSecurityScopedResource() } }
           guard let size = try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber,
                 size.int64Value > 0 else { throw LocalModelError.invalidFile }
-          // Official seed uses a pinned digest. Owner-generated Qwen3 GGUF files
-          // are identified by their own digest, never silently relabeled as official.
-          let digest = try PlatformSHA256Checker().sha256(of: url)
-          let official = digest == Self.seedSHA256
           let manifest = try LocalModelManifest(
-            identifier: official ? Self.seedID : "jarvis-owner-" + String(digest.prefix(16)),
-            revision: official ? "daeb8e2" : "owner-" + String(digest.prefix(12)),
-            licenseIdentifier: official ? "Apache-2.0" : "owner-provided",
-            byteCount: size.int64Value, sha256: digest)
+            identifier: "owner-model-" + UUID().uuidString.lowercased(),
+            revision: "owner-selected", licenseIdentifier: "owner-provided",
+            byteCount: size.int64Value, sha256: "")
           let manager = try OnDeviceModelManager(directory: localModelDirectory())
           _ = try await manager.importModel(from: url, manifest: manifest)
           activeLocalModelManifest = String(
             decoding: try JSONEncoder().encode(manifest), as: UTF8.self)
-          localModelStatus = official
-            ? "Qwen3 başlangıç modeli doğrulandı. Çıkarım testi bekleniyor."
-            : "Sahibin Qwen3-uyumlu modeli kaydedildi. Uyumluluk testi bekleniyor."
+          localModelStatus = "Seçtiğin model içeriği yüklendi. Çıkarım testi bekleniyor."
         }
       case .failure:
         errorText = "Model dosyası seçilemedi."
@@ -336,7 +329,7 @@ struct RootView: View {
             destination: URL(string: "https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF/blob/daeb8e2/Qwen3-1.7B-Q4_K_M.gguf")!)
           Button("Kendi GGUF modelimi dosyadan seç") { importingLocalModel = true }
           Text(localModelStatus)
-          Text("Dosya uzantısından bağımsız olarak gerçek GGUF içeriği okunur. Her dosyanın SHA-256 özeti saklanır; modelin çalışma uyumluluğu çıkarım sırasında belirlenir.")
+          Text("Dosya uzantısı, SHA-256 sabitlemesi veya model kaynağı kısıtı yoktur. Çalıştırılabilir GGUF biçimi gereklidir.")
           Text("Hazır başlangıç modeli yaklaşık 1,28 GB; telefonda çalışma belleği ayrıca gerekir.")
         }
         Section("Sahibin davranış kuralları") {
@@ -455,8 +448,8 @@ struct RootView: View {
         switch error {
         case .notInstalled, .runtimeUnavailable:
           errorText = "Yerel JARVIS modeli kurulu değil veya çıkarım motoru kullanılamıyor."
-        case .mismatchedDigest, .mismatchedSize, .invalidFile:
-          errorText = "Model dosyası doğrulanamadı. Yalnızca belirtilen GGUF sürümünü yükleyin."
+        case .invalidFile:
+          errorText = "Dosya yerel GGUF motoruyla açılamadı."
         default:
           errorText = "Yerel model kurulumu veya çalıştırılması başarısız."
         }
@@ -486,8 +479,6 @@ struct RootView: View {
       reply = "Öğrettiğiniz bilgi kaydedildi."
     }
   }
-  private static let seedID = "qwen3-1-7b-q4km"
-  private static let seedSHA256 = "d2387ca2dbfee2ffabce7120d3770dadca0b293052bc2f0e138fdc940d9bc7b5"
 
   private func localModelDirectory() throws -> URL {
     try FileManager.default.url(
@@ -529,7 +520,7 @@ struct RootView: View {
                 temperature: Float(modelTemperature),
                 topP: Float(modelTopP),
                 cpuThreads: modelCPUThreads))
-        scope = "local:" + manifest.identifier + ":" + manifest.sha256
+        scope = "local:" + manifest.identifier
       }
       let result = try await AssistantService(
         store: store, provider: provider, providerScope: scope,
