@@ -56,7 +56,7 @@ final class ActivityLearningJournalTests: XCTestCase, @unchecked Sendable {
         XCTAssertTrue(cleared.observations.isEmpty)
     }
 
-    func testThirtyDayExpiryWithExactBoundaryAndNoExtension() async throws {
+    func testObservationsPersistUntilExplicitErasure() async throws {
         let disk = ActivityMemoryDisk()
         let old = t0.addingTimeInterval(-30 * 86400)
         let recent = old.addingTimeInterval(1)
@@ -65,19 +65,19 @@ final class ActivityLearningJournalTests: XCTestCase, @unchecked Sendable {
         try await journal.record(.typedCommand, at: old)
         try await journal.record(.voiceInputFinished, at: recent)
         let visible = try await journal.read(now: t0)
-        XCTAssertEqual(visible.observations.map(\.kind), [.voiceInputFinished])
-        let empty = try await journal.read(now: t0.addingTimeInterval(2))
-        XCTAssertTrue(empty.observations.isEmpty)
+        XCTAssertEqual(visible.observations.map(\.kind), [.typedCommand, .voiceInputFinished])
+        let stillThere = try await journal.read(now: t0.addingTimeInterval(2))
+        XCTAssertEqual(stillThere.observations.count, 2)
     }
 
-    func testHardCapAndNoFreeFormPayload() async throws {
+    func testNoObservationCountCapAndNoFreeFormPayload() async throws {
         let journal = try ActivityLearningJournal(storage: ActivityMemoryDisk(), now: t0)
         try await journal.setEnabled(true, now: t0)
         for i in 0..<1_020 {
             try await journal.record(.typedCommand, at: t0.addingTimeInterval(Double(i)))
         }
         let snapshot = try await journal.read(now: t0.addingTimeInterval(1_020))
-        XCTAssertEqual(snapshot.observations.count, 1_000)
+        XCTAssertEqual(snapshot.observations.count, 1_020)
         let data = try JSONEncoder().encode(snapshot)
         let encoded = try XCTUnwrap(String(data: data, encoding: .utf8))
         XCTAssertFalse(encoded.contains("password"))
