@@ -119,6 +119,17 @@ public actor PermissionManager {
                 clock: @escaping @Sendable () -> Date = { Date() }) {
         self.authenticator = authenticator; self.clock = clock
     }
+    /// The owner's trusted UI command is the approval; no secondary biometric prompt.
+    /// Model proposals and persisted text never create authority.
+    /// A short-lived, single-use token binds the exact original request.
+    public func authorizeOwnerCommand(_ request: ActionRequest) throws -> ActionAuthorization {
+        _ = try ActionDescriptor.resolve(request)
+        purgeExpired()
+        let token = UUID()
+        authorized[token] = Authorized(request: request, expiresAt: clock().addingTimeInterval(30))
+        return ActionAuthorization(token: token)
+    }
+
     public func prepare(_ request: ActionRequest) throws -> ActionApprovalChallenge {
         let descriptor = try ActionDescriptor.resolve(request)
         purgeExpired()

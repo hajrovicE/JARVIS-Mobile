@@ -1,4 +1,7 @@
 # Yol haritası
+
+**Güncel ürün kararı (15 Kasım 2026):** JARVIS'in tek dış eylem koşulu, gerçek kullanıcının doğrudan komutudur. Bu komut ek ikinci onay veya Face ID istemez. Model çıktısı ve kaydedilmiş metinler işlem başlatamaz. Önceki 90/30 günlük otomatik kayıt silme ve zorunlu ikinci onay maddeleri tarihsel plan olup artık geçerli değildir. Kayıtlar kullanıcı silene kadar korunur; doğruluk için kaynak güncelliği ayrıca değerlendirilir.
+
 1. P0: yerel hafıza, tam TTL, şifreli kalıcılık, Türkçe komutlar ve izin akışı. Yerel metin akışı simulator üzerinde yeniden açma/silme testiyle doğrulandı; fiziksel iPhone kabulü gerekir.
 2. macOS CI tamamlandı: Xcode simulator/iPhone SDK derlemeleri ve otomatik testler geçti (docs/VALIDATION.md). Kalan gerçek cihaz kabulü: yeniden başlatma, kilitli cihaz, izin reddi, Türkçe Speech kullanılabilirliği, VoiceOver ve dışa aktarma. Başarılı kontrol olmadan sürüm yayımlanmaz.
 3. Sağlayıcı soyutlaması ve açık veri paylaşımı onayıyla AI entegrasyonu. API anahtarları yalnızca sunucuda. Web cevaplarında kaynak, alınma zamanı ve zamana duyarlılık sınıflaması zorunlu; sınıflandırılamayan cevap önbelleğe alınmaz.

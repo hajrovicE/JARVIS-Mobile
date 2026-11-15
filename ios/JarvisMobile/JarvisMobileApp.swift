@@ -35,11 +35,8 @@ struct RootView: View {
   @State private var errorText: String?
   @State private var exporting = false
   @State private var document = ExportDocument(data: Data())
-  @State private var showActionApproval = false
   @State private var runningOperation: Task<Void, Never>?
-  @State private var pendingAction: ActionApprovalChallenge?
-  @State private var actionRequest: ActionRequest?
-  @State private var permissions = PermissionManager(authenticator: DeviceBiometricAuthenticator())
+  @State private var permissions = PermissionManager()
   @State private var holdStartTask: Task<Void, Never>?
   @State private var activeReply: StoredAIAnswer?
   @State private var experiences: [TaskExperience] = []
@@ -47,7 +44,6 @@ struct RootView: View {
   @State private var activityEnabled = false
   @State private var recentActivity: [ActivityObservation] = []
   @State private var activityInsights: [ActivityInsight] = []
-  @State private var confirmEraseActivity = false
   @State private var lastInputWasVoice = false
   @State private var correctionText = ""
   @AppStorage("aiAllowed") private var aiAllowed = false
@@ -58,7 +54,6 @@ struct RootView: View {
   @State private var endpointDraft = ""
   @State private var tokenDraft = ""
   @State private var connectionStatus = "Gerçek model bağlantısı henüz doğrulanmadı."
-  @State private var confirmingExport = false
   @State private var busy = false
   @Environment(\.scenePhase) private var scenePhase
   var body: some View {
@@ -94,9 +89,6 @@ struct RootView: View {
         speech.cancel()
         if phase == .background {
           Task { await permissions.invalidateAll() }
-          pendingAction = nil
-          actionRequest = nil
-          showActionApproval = false
         }
       } else {
         Task { if store == nil { await open() } else { perform { try await refresh() } } }
@@ -114,39 +106,6 @@ struct RootView: View {
     } message: {
       Text(errorText ?? "")
     }
-    .confirmationDialog(
-      pendingAction?.summary ?? "İşlem onayı",
-      isPresented: $showActionApproval, titleVisibility: .visible
-    ) {
-      Button("Onayla ve biyometriyle doğrula", role: .destructive) { approveAction() }
-      Button("İptal", role: .cancel) {
-        if let challenge = pendingAction { Task { await permissions.deny(challenge) } }
-        pendingAction = nil
-        actionRequest = nil
-      }
-    } message: {
-      Text("Bu işlem yalnızca onayınız ve başarılı cihaz biyometrisiyle yapılır.")
-    }
-    .confirmationDialog(
-      "JARVIS'in yerel etkinlik kayıtları silinsin ve etkinlik gözlemi kapatılsın mı?",
-      isPresented: $confirmEraseActivity, titleVisibility: .visible
-    ) {
-      Button("Etkinlik kayıtlarını sil", role: .destructive) {
-        perform {
-          try await activityJournal?.erase()
-          try await refreshActivity()
-        }
-      }
-      Button("İptal", role: .cancel) {}
-    }
-    .confirmationDialog(
-      "Dışa aktarılan JSON kişisel verilerinizi içerir ve şifreli değildir. Devam edilsin mi?",
-      isPresented: $confirmingExport, titleVisibility: .visible
-    ) {
-      Button("JSON dışa aktar") {
-        prepareAction(.exportMemory)
-      }
-    }
     .fileExporter(
       isPresented: $exporting, document: document, contentType: .json,
       defaultFilename: "jarvis-verilerim"
@@ -159,7 +118,7 @@ struct RootView: View {
     VStack(spacing: 20) {
       Text("JARVIS'e hoş geldiniz").font(.largeTitle)
       Text(
-        "Konuşmalar 90 gün, uygun cevap önbelleği en fazla 30 gün saklanır. Kişisel hafıza siz silene kadar kalır. Veriler cihazda şifrelenir."
+        "Konuşma geçmişi ve öğrenilen bilgiler siz silene kadar korunur. Güncelliği doğrulanmamış cevaplar otomatik güncel sayılmaz. Veriler cihazda şifrelenir."
       )
       Text(
         "Ses isteğe bağlıdır. İlk kullanımda mikrofon ve konuşma izni istenir. Yazarak da kullanabilirsiniz. Konuşmacı kimlik doğrulaması etkin değildir."
@@ -244,7 +203,7 @@ struct RootView: View {
               try await refreshActivity()
             }
           }
-          Text("Kayıtlar en fazla 30 gün saklanır. Hafıza önerilerini yalnızca sen onaylayabilirsin.")
+          Text("Etkinlik kayıtları, sen silene kadar saklanır. Öğrenilen bilgiler silinmeden korunur.")
           ForEach(activityInsights) { insight in
             VStack(alignment: .leading, spacing: 4) {
               Text(insight.title).font(.headline)
@@ -269,7 +228,10 @@ struct RootView: View {
             }
           }
           Button("Etkinlik kayıtlarını ve izlemeyi sil", role: .destructive) {
-            confirmEraseActivity = true
+            perform {
+              try await activityJournal?.erase()
+              try await refreshActivity()
+            }
           }
         }
         ForEach(memories) { memory in
@@ -292,36 +254,44 @@ struct RootView: View {
                 observe(.memoryEdited)
               }
             }
-            Button("Sil", role: .destructive) { prepareAction(.deleteMemory(memory.id)) }
+            Button("Sil", role: .destructive) { executeOwnerCommand(.deleteMemory(memory.id)) }
               .accessibilityIdentifier("memory.delete.\(memory.id)")
           }
         }
         Section("Görev deneyimleri") {
           TextField("Görev için düzeltmeniz", text: $correctionText)
-          ForEach(experiences.suffix(10).reversed()) { experience in
+          ForEach(experiences.reversed()) { experience in
             VStack(alignment: .leading) {
               Text(experience.action)
               Text(experience.outcome == .succeeded ? "Gerçekleşti" : "Başarı kaydı yok")
-              Button("Düzeltmeyi onaya sun") {
+              Button("Düzeltmeyi öğret") {
                 perform {
-                  try await store?.proposeTaskCorrection(
-                    experienceID: experience.id,
-                    key: "task:\(experience.action)", text: correctionText)
+                  guard let store else { return }
+                  let topic = "task:\(experience.action)"
+                  let teaching = correctionText
+                  try await store.proposeTaskCorrection(
+                    experienceID: experience.id, key: topic, text: teaching)
+                  let state = try await store.read()
+                  if let record = state.learning.records.last(where: {
+                    $0.key == topic && !$0.userConfirmed && $0.text == teaching
+                  }) {
+                    try await store.confirmLearning(id: record.id, expectedText: teaching)
+                  }
                   correctionText = ""
                 }
               }.disabled(correctionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
           }
         }
-        Button("Verilerimi dışa aktar") { confirmingExport = true }
-        Button("Tüm verileri sil", role: .destructive) { prepareAction(.deleteAllMemory) }
+        Button("Verilerimi dışa aktar") { executeOwnerCommand(.exportMemory) }
+        Button("Tüm verileri sil", role: .destructive) { executeOwnerCommand(.deleteAllMemory) }
           .accessibilityIdentifier(
             "memory.deleteAll")
         Section("Öğrenme önerileri") {
-          Text("Öneriler onaylamadan kullanılmaz. Parola, API anahtarı veya başka sırlar girmeyin.")
+          Text("Kendi yazdığın bilgiler doğrudan kaydedilir. Model tarafından önerilen bilgiler sen onaylamadıkça etkinleşmez.")
           TextField("Konu (ör. içecek tercihi)", text: $learningKey)
           TextField("Tercih önerisi", text: $learningText)
-          Button("Onaya sun") { proposeLearning() }
+          Button("Öğret ve kaydet") { proposeLearning() }
             .disabled(
               learningKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 || learningText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -360,7 +330,7 @@ struct RootView: View {
                 }
               }
               Button("Öneriyi sil", role: .destructive) {
-                prepareAction(.deleteLearning(record.id))
+                executeOwnerCommand(.deleteLearning(record.id))
               }
             }
           }
@@ -370,7 +340,7 @@ struct RootView: View {
     }.tabItem { Label("Hafıza", systemImage: "brain") }
   }
   private var historyTab: some View {
-    NavigationStack { List(history) { Text($0.text) }.navigationTitle("Son 90 gün") }
+    NavigationStack { List(history) { Text($0.text) }.navigationTitle("Konuşma geçmişi") }
       .tabItem { Label("Geçmiş", systemImage: "clock") }
   }
   private var statusTab: some View {
@@ -384,7 +354,7 @@ struct RootView: View {
           "status.speakerIdentity")
         Text(aiAllowed ? connectionStatus : "Bulut AI kapalı; yerel hafıza kullanılabilir.")
         Text("Web arama ve telefon kontrolü: bağlı değil.")
-        Text("Hassas işlemler: açık onay + Face ID/Touch ID. Konuşmacı sesi yetki vermez.")
+        Text("Eylemler: yalnızca doğrudan kullanıcı komutuyla yürütülür; ikinci onay gerekmez.")
         Text("Alpha 0.3 · TestFlight yüklemesi yapılmadı.")
       }.navigationTitle("Yetenek durumu")
     }.tabItem { Label("Durum", systemImage: "info.circle") }
@@ -410,11 +380,11 @@ struct RootView: View {
               try RelayCredentials.save(tokenDraft)
               relayEndpoint = endpoint.absoluteString
               tokenDraft = ""
-              aiAllowed = false
+              aiAllowed = true
               aiSharePersonal = false
               aiShareLearning = false
               aiShareHistory = false
-              connectionStatus = "Ayarlar kaydedildi; gerçek model bağlantısı henüz denenmedi."
+              connectionStatus = "Bağlantı kaydedildi. Kullanıcı komutları bu sunucuya gönderilebilir."
             } catch { errorText = "HTTPS adresi veya erişim bilgisi kaydedilemedi." }
           }
           Button("Erişim bilgisini kaldır", role: .destructive) {
@@ -433,48 +403,42 @@ struct RootView: View {
           )
           Toggle("Sorularımı bu AI sunucusuna göndermeyi kabul ediyorum", isOn: $aiAllowed)
           Toggle("Kişisel hafızamı da paylaş", isOn: $aiSharePersonal).disabled(!aiAllowed)
-          Toggle("Onaylı, hassas olmayan öğrenme kayıtlarımı paylaş", isOn: $aiShareLearning)
+          Toggle("Tüm onaylı öğrenme kayıtlarımı paylaş (hassas bilgiler dahil)", isOn: $aiShareLearning)
             .disabled(!aiAllowed)
           Toggle("Son konuşmalarımı da paylaş", isOn: $aiShareHistory).disabled(!aiAllowed)
           Text(
-            "Parola ve erişim anahtarları göndermeyin. Otomatik filtre bütün kişisel verileri tespit edemez. İnternet yokken yerel hafıza çalışır."
+            "Bu paylaşım seçenekleri açıksa seçtiğiniz bilgiler sunucuya iletilir. Erişim anahtarları ve mahrem verileri göndermeyi özellikle değerlendirin."
           )
         }
       }.navigationTitle("AI ayarları")
         .onAppear { endpointDraft = relayEndpoint }
     }.tabItem { Label("AI", systemImage: "sparkles") }
   }
-  private func prepareAction(_ operation: ActionOperation) {
+  private func executeOwnerCommand(_ operation: ActionOperation) {
     perform {
-      let request = ActionRequest(operation: operation)
-      let challenge = try await permissions.prepare(request)
-      actionRequest = request
-      pendingAction = challenge
-      showActionApproval = true
+      guard let store else { return }
+      try await runOwnerAction(operation, using: store)
     }
   }
-  private func approveAction() {
-    guard let challenge = pendingAction, let request = actionRequest, let store else { return }
-    pendingAction = nil
-    actionRequest = nil
-    perform {
-      let authorization = try await permissions.approve(challenge)
-      let result = try await ActionExecutor(store: store, permissions: permissions).execute(
-        request, authorization: authorization)
-      if request.operation == .deleteAllMemory && result.succeeded {
-        try await activityJournal?.erase()
-        try await refreshActivity()
-      } else if result.succeeded {
-        observe(.actionSucceeded)
-      }
-      if let data = result.exportedData {
-        document = ExportDocument(data: data)
-        exporting = true
-      }
-      reply = result.message
-      activeReply = nil
-      if !result.succeeded || result.auditWriteFailed { errorText = result.message }
+  /// Only a direct owner UI event can call this action pathway.
+  private func runOwnerAction(_ operation: ActionOperation, using store: MemoryStore) async throws {
+    let request = ActionRequest(operation: operation, origin: .userInterface)
+    let grant = try await permissions.authorizeOwnerCommand(request)
+    let result = try await ActionExecutor(store: store, permissions: permissions).execute(
+      request, authorization: grant)
+    if operation == .deleteAllMemory && result.succeeded {
+      try await activityJournal?.erase()
+      try await refreshActivity()
+    } else if result.succeeded {
+      observe(.actionSucceeded)
     }
+    if let data = result.exportedData {
+      document = ExportDocument(data: data)
+      exporting = true
+    }
+    reply = result.message
+    activeReply = nil
+    if !result.succeeded || result.auditWriteFailed { errorText = result.message }
   }
   private func open() async {
     guard store == nil else { return }
@@ -500,7 +464,7 @@ struct RootView: View {
     guard let journal = activityJournal else { return }
     let snapshot = try await journal.read()
     activityEnabled = snapshot.enabled
-    recentActivity = Array(snapshot.observations.suffix(15).reversed())
+    recentActivity = Array(snapshot.observations.reversed())
     activityInsights = try await journal.insights()
   }
 
@@ -559,11 +523,7 @@ struct RootView: View {
       } catch let error as AssistantError { errorText = error.userMessage } catch let error
         as ActionPermissionError
       {
-        switch error {
-        case .biometricUnavailable: errorText = "Cihaz biyometrisi kullanılamıyor. İşlem yapılmadı."
-        case .biometricRejected: errorText = "Biyometrik doğrulama tamamlanmadı. İşlem yapılmadı."
-        default: errorText = "İşlem yetkisi geçersiz veya süresi dolmuş. Yeniden onaylayın."
-        }
+        errorText = "Kullanıcı komutu doğrulanamadı veya işlem yetkisi geçersiz: \(error)."
       } catch { errorText = "İşlem kaydedilemedi. Lütfen yeniden deneyin." }
     }
   }
@@ -574,8 +534,10 @@ struct RootView: View {
       provenance: .init(
         sourceID: "kullanıcı-önerisi", explanation: "Kullanıcı tarafından yazılan tercih"))
     perform {
-      try await store?.proposeLearning(record)
-      observe(.learningProposed)
+      guard let store else { return }
+      try await store.proposeLearning(record)
+      try await store.confirmLearning(id: record.id, expectedText: record.text)
+      observe(.learningConfirmed)
       learningKey = ""
       learningText = ""
     }
@@ -591,11 +553,8 @@ struct RootView: View {
       let normalized = command.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(
         with: Locale(identifier: "tr_TR"))
       if normalized.hasPrefix("unut "), let id = UUID(uuidString: String(normalized.dropFirst(5))) {
-        let request = ActionRequest(operation: .deleteMemory(id))
-        let challenge = try await permissions.prepare(request)
-        actionRequest = request
-        pendingAction = challenge
-        showActionApproval = true
+        try await runOwnerAction(.deleteMemory(id), using: store)
+        input = ""
         return
       }
       let provider: any AIProvider

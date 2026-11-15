@@ -13,7 +13,7 @@ Her açık düzeltme önceki revizyonun metin, kaynak, zaman, geçerlilik, güve
 `LearningEngine` saf durum dönüşümleri üretir; `MemoryStore` sonucu şifreli dosyaya kaydetmeden başarı bildirmez. Eski doğrudan `hatırla ki` kişisel hafızası korunur. Export ve toplu silme hem kişisel hem öğrenme koleksiyonlarını kapsar. Arama indeksi yoktur; aktif kayıtlar doğrudan filtrelenir.
 
 ## Onay, çelişki ve düzeltme
-Bütün öneriler güven puanından bağımsız olarak onay bekler. Kullanıcı `Onayla` ile mevcut kalıcı metni kabul eder; metni değiştirmişse `Düzelt ve onayla` kullanır. `MemoryStore` beklenen metni kontrol eder ve eski bir önerinin başka görünen metin adına onaylanmasını engeller.
+Model kaynaklı öneriler kullanıcı onayı bekler. Kullanıcının doğrudan "Öğret ve kaydet" komutuyla yazdığı bilgi, ayrıca onay penceresi açılmadan onaylanır. Kullanıcı daha sonra `Düzelt ve onayla` ile değişiklik yapabilir. `MemoryStore` beklenen metni kontrol eder ve eski bir önerinin başka görünen metin adına onaylanmasını engeller.
 
 Konu anahtarları Türkçe küçük harfe dönüştürülür. Aynı anahtardaki farklı aktif iddialar normal onayla kabul edilmez; açık kullanıcı düzeltmesi önceki iddiaları devre dışı bırakır. Bu, konu anahtarına dayalı çelişki denetimidir; her doğal dil çelişkisini çözen bir semantik doğrulayıcı olduğu iddia edilmez. Sonraki retrieval, onaylı ve geçerli son kullanıcı düzeltmesini seçer. Düzeltme silindiğinde eski bilgi yeniden etkinleşmez.
 
@@ -22,7 +22,7 @@ Konu anahtarları Türkçe küçük harfe dönüştürülür. Aynı anahtardaki 
 ## Silme ve saklama
 Bir kayıt silindiğinde revizyon arşivi de gider. O kaydın yerine geçtiği eski iddialar ters `supersededBy` zincirinde kaldırılır; eski sürümler yeniden aramaya dönmez. Kayıtla bağlantılı görev düzeltme audit satırları da kaldırılır; silinen öğrenmenin kopyası görev sonucunda bırakılmaz. Bağımsız ve yeni bir doğru düzeltme, eski reddedilmiş bir iddia tek başına silindi diye kaldırılmaz.
 
-Konuşmalar tam 90 gün, uygun cevap önbelleği en fazla 30 gün saklanır. Görev deneyimi geçmişi tam 90 günde temizlenir; bu geçmişten kullanıcının ayrıca onayladığı kişisel tercih/kural kendiliğinden sona ermez. Kaynaklı dış bilgi URL ve geçerlilik tarihi ister; süre kaynak alınma zamanından en fazla 30 gündür. Dinamik veriye daha kısa süreyi sağlayıcı vermelidir. Süreli kayıtların revizyonları da kayıt kaldırılınca gider. Kalıcı tercihler/kurallar kullanıcı silene kadar kalır.
+Konuşma geçmişi, cevap arşivi, görev deneyimi ve öğrenme kayıtları kullanıcı açıkça silene kadar saklanır; otomatik 90/30 günlük veri temizliği yapılmaz. Yanıtların tekrar kullanılmasında kaynak güncelliği ayrı olarak değerlendirilir. Eski bilgi korunması, güncel bilgi olduğunun kanıtı değildir.
 
 ## Hassas veri ve AI bağlamı
 `secret` işaretli öneriler ve bilinen credential desenleri reddedilir. `CredentialFilter`, API key, Bearer/JWT, özel anahtar, açık parola/OTP ataması ve bazı imzalı URL kalıplarını yakalar; eşleşen içeriği loglamaz. Aynı kontrol yeni düzeltme ve görev audit alanlarında da uygulanır. Bu filtre genel PII tespiti veya içeriğin güvenli olduğunun kanıtı değildir; sınıflandırılamayan hassas bilgiler kullanıcıya aittir ve açık paylaşım onayı gerekir.

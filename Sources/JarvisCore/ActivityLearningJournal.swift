@@ -48,8 +48,7 @@ public struct ActivityInsight: Equatable, Identifiable, Sendable {
 
 public enum ActivityInsights {
     public static func infer(from observations: [ActivityObservation], now: Date = Date()) -> [ActivityInsight] {
-        let recent = observations.filter { now.timeIntervalSince($0.recordedAt) >= 0 &&
-            now.timeIntervalSince($0.recordedAt) < 30 * 86400 }
+        let recent = observations.filter { $0.recordedAt <= now }
         let voice = recent.filter { $0.kind == .voiceInputFinished }.count
         let typed = recent.filter { $0.kind == .typedCommand }.count
         if voice >= 5, voice >= 2 * max(1, typed) {
@@ -69,8 +68,7 @@ public enum ActivityInsights {
 /// Records only allowlisted events from inside JARVIS. No screen recording,
 /// keyboard interception, other-app monitoring, network request or background watcher.
 public actor ActivityLearningJournal {
-    public static let retentionDays = 30
-    public static let maxObservations = 1_000
+    // User-enabled observations persist until explicitly erased; no automatic count or age cut-off.
 
     private let storage: any SnapshotStorage
     private var snapshot: ActivityJournalSnapshot
@@ -87,11 +85,7 @@ public actor ActivityLearningJournal {
     }
 
     private static func purge(_ state: inout ActivityJournalSnapshot, now: Date) {
-        state.observations.removeAll { now.timeIntervalSince($0.recordedAt) >=
-            Double(retentionDays) * 86400 || $0.recordedAt > now }
-        if state.observations.count > maxObservations {
-            state.observations.removeFirst(state.observations.count - maxObservations)
-        }
+        state.observations.removeAll { $0.recordedAt > now }
     }
 
     private func commit(_ updated: ActivityJournalSnapshot) throws {
