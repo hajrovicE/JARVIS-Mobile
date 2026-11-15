@@ -30,6 +30,10 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild -project ios/JarvisMobile.xcodeproj -scheme JarvisMobile -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build CODE_SIGNING_ALLOWED=NO build 2>&1 | tee simulator-build.log
+      - name: Build iPhone device SDK (unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild -project ios/JarvisMobile.xcodeproj -scheme JarvisMobile -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build-device CODE_SIGNING_ALLOWED=NO build 2>&1 | tee iphone-build.log
       - name: Select an available iPhone simulator
         run: |
           python3 - <<'PY'
@@ -45,8 +49,10 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild -project ios/JarvisMobile.xcodeproj -scheme JarvisMobile -sdk iphonesimulator -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -derivedDataPath build -resultBundlePath TestResults.xcresult -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=NO test 2>&1 | tee ios-tests.log
-      - name: Collect simulator app
-        run: ditto -c -k --sequesterRsrc --keepParent build/Build/Products/Debug-iphonesimulator/JarvisMobile.app JarvisMobile-simulator.zip
+      - name: Collect simulator and unsigned device apps
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent build/Build/Products/Debug-iphonesimulator/JarvisMobile.app JarvisMobile-simulator.zip
+          ditto -c -k --sequesterRsrc --keepParent build-device/Build/Products/Debug-iphoneos/JarvisMobile.app JarvisMobile-iphone-unsigned.zip
       - name: Upload test evidence and simulator app
         if: always()
         uses: actions/upload-artifact@v4
@@ -55,7 +61,9 @@ jobs:
           path: |
             core-tests.log
             simulator-build.log
+            iphone-build.log
             ios-tests.log
             TestResults.xcresult
             JarvisMobile-simulator.zip
+            JarvisMobile-iphone-unsigned.zip
           retention-days: 14

@@ -232,7 +232,7 @@ struct RootView: View {
           }
         }
 
-      }.disabled(store == nil || busy).navigationTitle("Kişisel hafıza")
+      }.buttonStyle(.borderless).disabled(store == nil || busy).navigationTitle("Kişisel hafıza")
     }.tabItem { Label("Hafıza", systemImage: "brain") }
   }
   private var historyTab: some View {
