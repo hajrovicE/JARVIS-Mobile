@@ -130,7 +130,7 @@ struct RootView: View {
             Text(
               "Güncellik: \(answer.response.freshness == .verifiedStatic ? "kaynak metadata'sı doğrulanmış" : "doğrulanmadı")"
             ).font(.caption)
-            Text("Bu yanıt görev çalıştırmaz; işlem sonuçları ayrı onay akışında gösterilir.").font(
+            Text("Bu yanıt otomatik işlem başlatmaz; yalnızca gönderdiğiniz komutlar çalışır.").font(
               .caption)
             ForEach(answer.response.sources) { source in
               Link(source.title, destination: source.url)
@@ -339,7 +339,7 @@ struct RootView: View {
           )
           Toggle("Sorularımı bu AI sunucusuna göndermeyi kabul ediyorum", isOn: $aiAllowed)
           Toggle("Kişisel hafızamı da paylaş", isOn: $aiSharePersonal).disabled(!aiAllowed)
-          Toggle("Onaylı, hassas olmayan öğrenme kayıtlarımı paylaş", isOn: $aiShareLearning)
+          Toggle("Öğrenme kayıtlarımı bu AI sunucusuyla paylaş", isOn: $aiShareLearning)
             .disabled(!aiAllowed)
           Toggle("Son konuşmalarımı da paylaş", isOn: $aiShareHistory).disabled(!aiAllowed)
           Text(
@@ -449,8 +449,8 @@ struct RootView: View {
     perform {
       let normalized = command.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(
         with: Locale(identifier: "tr_TR"))
-      if normalized.hasPrefix("unut "), let id = UUID(uuidString: String(normalized.dropFirst(5))) {
-        try await runOwnerAction(.deleteMemory(id), using: store)
+      if let operation = CommandRouter.ownerAction(for: command) {
+        try await runOwnerAction(operation, using: store)
         input = ""
         return
       }
