@@ -11,7 +11,7 @@ concurrency:
 jobs:
   test:
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - name: Toolchain versions
@@ -30,6 +30,10 @@ jobs:
           swift test -Xswiftc -swift-version -Xswiftc 6 2>&1 | tee core-tests.log
       - name: Install XcodeGen
         run: brew install xcodegen
+      - name: Stage required real GGUF fixture
+        run: |
+          curl --fail --location --retry 3 --output ios/JarvisMobileTests/Fixtures/model.gguf 'https://huggingface.co/ggml-org/Qwen3-0.6B-GGUF/resolve/afe8ad3577aa22500b3cd1c880f153b3b0e1cae8/Qwen3-0.6B-Q4_0.gguf'
+          printf '%s\n' 'Real inference is required for this CI run.' > ios/JarvisMobileTests/Fixtures/real-inference-required.txt
       - name: Generate iPhone project
         run: cd ios && xcodegen generate
       - name: Build simulator app
@@ -53,10 +57,10 @@ jobs:
           PY
       - name: Boot iPhone simulator
         run: xcrun simctl bootstatus "$SIMULATOR_ID" -b
-      - name: iOS encrypted storage, permissions and launch tests
+      - name: iOS storage migration, real inference, permissions and UI tests
         run: |
           set -o pipefail
-          xcodebuild -project ios/JarvisMobile.xcodeproj -scheme JarvisMobile -sdk iphonesimulator -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -derivedDataPath build -resultBundlePath TestResults.xcresult -parallel-testing-enabled NO -test-timeouts-enabled YES -default-test-execution-time-allowance 180 -maximum-test-execution-time-allowance 180 CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES test 2>&1 | tee ios-tests.log
+          xcodebuild -project ios/JarvisMobile.xcodeproj -scheme JarvisMobile -sdk iphonesimulator -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -derivedDataPath build -resultBundlePath TestResults.xcresult -parallel-testing-enabled NO -test-timeouts-enabled YES -default-test-execution-time-allowance 180 -maximum-test-execution-time-allowance 180 CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES SWIFT_ACTIVE_COMPILATION_CONDITIONS='$(inherited) JARVIS_REAL_INFERENCE_REQUIRED' test 2>&1 | tee ios-tests.log
       - name: Collect simulator and unsigned device apps
         run: |
           ditto -c -k --sequesterRsrc --keepParent build/Build/Products/Debug-iphonesimulator/JarvisMobile.app JarvisMobile-simulator.zip
@@ -74,4 +78,24 @@ jobs:
             TestResults.xcresult
             JarvisMobile-simulator.zip
             JarvisMobile-iphone-unsigned.zip
+          retention-days: 14
+
+  real-local-inference:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.0.3"
+      - name: Build the pinned native runtime and run real local inference
+        run: |
+          set -o pipefail
+          scripts/model/verify_runtime.sh "$RUNNER_TEMP/native" 2>&1 | tee real-local-inference.log
+      - name: Upload real inference evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-local-inference-${{ github.sha }}
+          path: real-local-inference.log
           retention-days: 14

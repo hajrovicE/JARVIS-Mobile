@@ -1,3 +1,7 @@
+# Güncel yerel model denetimi
+
+En son `main` referansı `e0e710f714dd31b40f49354b6ca23fa89e86f45b` için [15 Kasım 2026 kapsamlı denetim raporu](VALIDATION_LOCAL_MODEL_2026_11_15.md) esas alınır. Aşağıdaki sonuçlar eski Alpha 0.3 kaynağına aittir; güncel iOS/Metal derlemesinin geçtiği anlamına gelmez.
+
 # Alpha 0.3 doğrulama — 15 Kasım 2026
 
 Doğrulanan kaynak: `8afab2a78d2ea0306616f8bae2ab13257fe2d96b`.

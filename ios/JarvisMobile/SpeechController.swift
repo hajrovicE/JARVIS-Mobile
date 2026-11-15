@@ -162,8 +162,8 @@ final class SpeechController: ObservableObject {
       try AVAudioSession.sharedInstance().setActive(true)
       if synthesizer == nil {
         let output = AVSpeechSynthesizer()
-        let delegate = SpeechOutputDelegate { @Sendable [weak self] utteranceID in
-          Task { @MainActor [weak self] in self?.completeOutput(utteranceID) }
+        let delegate = SpeechOutputDelegate { @Sendable [weak self] utteranceID, finished in
+          Task { @MainActor [weak self] in self?.completeOutput(utteranceID, finished: finished) }
         }
         output.delegate = delegate
         synthesizer = output
@@ -186,14 +186,16 @@ final class SpeechController: ObservableObject {
     speaking = false
     synthesizer?.stopSpeaking(at: .immediate)
   }
-  private func completeOutput(_ id: ObjectIdentifier) {
+  private func completeOutput(_ id: ObjectIdentifier, finished: Bool) {
     guard activeUtteranceID == id else { return }
     activeUtteranceID = nil
     speaking = false
     if !recording && !finishing {
       try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
-    status = "Sesli cevap tamamlandı. Yazarak veya konuşarak devam edebilirsiniz."
+    status = finished
+      ? "Sesli cevap tamamlandı. Yazarak veya konuşarak devam edebilirsiniz."
+      : "Sesli cevap durduruldu. Cevabı okuyabilir veya yeniden dinleyebilirsiniz."
   }
 
   private func authorize() async -> Bool {
@@ -293,18 +295,18 @@ private final class AudioRequestSink: @unchecked Sendable {
 
 /// AVFoundation may call these delegate methods away from the main actor. Only an
 /// immutable utterance identity crosses that boundary; session state stays on the actor.
-private final class SpeechOutputDelegate: NSObject, AVSpeechSynthesizerDelegate {
-  private let stopped: @Sendable (ObjectIdentifier) -> Void
-  init(stopped: @escaping @Sendable (ObjectIdentifier) -> Void) { self.stopped = stopped }
+final class SpeechOutputDelegate: NSObject, AVSpeechSynthesizerDelegate {
+  private let stopped: @Sendable (ObjectIdentifier, Bool) -> Void
+  init(stopped: @escaping @Sendable (ObjectIdentifier, Bool) -> Void) { self.stopped = stopped }
   nonisolated func speechSynthesizer(
     _ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance
   ) {
-    stopped(ObjectIdentifier(utterance))
+    stopped(ObjectIdentifier(utterance), true)
   }
   nonisolated func speechSynthesizer(
     _ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance
   ) {
-    stopped(ObjectIdentifier(utterance))
+    stopped(ObjectIdentifier(utterance), false)
   }
 }
 

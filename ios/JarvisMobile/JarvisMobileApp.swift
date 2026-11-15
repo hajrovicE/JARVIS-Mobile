@@ -395,29 +395,23 @@ struct RootView: View {
         for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true
       ).appendingPathComponent("Jarvis", isDirectory: true)
       let jsonURL = directory.appendingPathComponent("memory.json")
-      let plainStorage = try PlainFileStorage(url: jsonURL)
-      // Legacy encrypted snapshots are read at most once when upgrading.
-      // Future writes use only the owner's plaintext JSON file.
       let legacyURL = directory.appendingPathComponent("memory.aes")
-      if !FileManager.default.fileExists(atPath: jsonURL.path),
-         FileManager.default.fileExists(atPath: legacyURL.path) {
-        let legacyStorage = try EncryptedFileStorage(
-          url: legacyURL, keychainAccount: "primary")
-        if let old = try legacyStorage.load() {
-          try plainStorage.save(old)
-        }
+      let plainStorage = try PlainFileStorage.migratingLegacySnapshot(
+        to: jsonURL, legacyURL: legacyURL
+      ) {
+        try EncryptedFileStorage(url: legacyURL, keychainAccount: "primary").load()
       }
       store = try MemoryStore(storage: plainStorage)
       if let manifest = try? selectedModelManifest(),
          let modelURL = try? localModelDirectory().appendingPathComponent(manifest.identifier + ".gguf"),
          FileManager.default.fileExists(atPath: modelURL.path) {
-        localModelStatus = "Kurulu model: " + manifest.identifier + ". İlk sorguda SHA-256 doğrulanacak."
+        localModelStatus = "Kurulu model: " + manifest.identifier + ". GGUF çıkarımı ilk sohbet isteğinde çalıştırılacak."
       } else {
         localModelStatus = "Yerel model kurulmadı. GGUF dosyasını Dosyalar'dan yükleyin."
       }
       try await refresh()
     } catch {
-      errorText = "Şifreli hafıza açılamadı. Cihazın kilidini açıp uygulamayı yeniden başlatın."
+      errorText = "Hafıza açılamadı veya eski kayıtlar taşınamadı. Kayıtlar korunmuştur; uygulamayı yeniden başlatıp tekrar deneyin."
     }
   }
   private func refresh() async throws {
@@ -463,11 +457,17 @@ struct RootView: View {
           errorText = "Yerel JARVIS modeli kurulu değil veya çıkarım motoru kullanılamıyor."
         case .invalidFile:
           errorText = "Dosya yerel GGUF motoruyla açılamadı."
+        case .invalidSettings:
+          errorText = "Model ayarları geçersiz. Bağlam, yanıt uzunluğu ve örnekleme değerlerini kontrol edin."
+        case .contextExceeded:
+          errorText = "İstek modelin seçilen bağlamına sığmıyor. Bağlamı artırın veya isteği kısaltın."
+        case .unsupportedTemplate:
+          errorText = "Bu modelin sohbet şablonu yerel motor tarafından desteklenmiyor."
         default:
           errorText = "Yerel model kurulumu veya çalıştırılması başarısız."
         }
       } catch let error as AIProviderError {
-        connectionStatus = error.userMessage
+        localModelStatus = error.userMessage
         errorText = error.userMessage
       } catch let error as AssistantError { errorText = error.userMessage } catch let error
         as ActionPermissionError
@@ -525,10 +525,13 @@ struct RootView: View {
       } else {
         let manifest = try selectedModelManifest()
         let manager = try OnDeviceModelManager(directory: localModelDirectory())
+        guard let contextTokens = Int32(exactly: modelContextTokens) else {
+          throw LocalModelError.invalidSettings
+        }
         provider = LocalAIProvider(manager: manager, manifest: manifest,
             runtime: GGUFInferenceRuntime(
                 maxNewTokens: modelMaxNewTokens,
-                contextLength: Int32(clamping: modelContextTokens),
+                contextLength: contextTokens,
                 ownerInstructions: ownerInstructions,
                 temperature: Float(modelTemperature),
                 topP: Float(modelTopP),

@@ -1,3 +1,5 @@
+> Güncel sahip kararı (AGENTS.md): tamamen yerel GGUF sohbeti, kullanıcı silene kadar JSON geçmişi, ek biyometri/yetki süresi/hash sabitlemesi yok. Aşağıdaki ilk Alpha planı tarihsel bağlamdır; güncel kapsam ve gerçek test durumu [kapsamlı denetim raporundadır](VALIDATION_LOCAL_MODEL_2026_11_15.md).
+
 # Yol haritası
 1. P0: yerel hafıza, tam TTL, şifreli kalıcılık, Türkçe komutlar ve izin akışı. Yerel metin akışı simulator üzerinde yeniden açma/silme testiyle doğrulandı; fiziksel iPhone kabulü gerekir.
 2. macOS CI tamamlandı: Xcode simulator/iPhone SDK derlemeleri ve otomatik testler geçti (docs/VALIDATION.md). Kalan gerçek cihaz kabulü: yeniden başlatma, kilitli cihaz, izin reddi, Türkçe Speech kullanılabilirliği, VoiceOver ve dışa aktarma. Başarılı kontrol olmadan sürüm yayımlanmaz.

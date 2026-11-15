@@ -46,7 +46,9 @@ public actor ActionExecutor {
         self.ownerActionHandler = ownerActionHandler
     }
     public func execute(_ request: ActionRequest, authorization: ActionAuthorization) async throws -> ActionExecutionResult {
+        try Task.checkCancellation()
         let descriptor = try await permissions.consume(authorization, for: request)
+        try Task.checkCancellation()
         let outcome: ActionExecutionOutcome
         var exportedData: Data?
         do {
