@@ -11,17 +11,20 @@ public struct CommandRouter: Sendable {
     public static func isLocalCommand(_ input: String) -> Bool {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(with: Locale(identifier: "tr_TR"))
         return ["ne hatırlıyorsun", "öğrendiklerin", "geçmiş", "hatırla ki", "bunu hatırla", "unut"].contains(text)
-            || ["hatırla ki ", "bunu hatırla ", "unut ", "öğret: "].contains { text.hasPrefix($0) }
+            || ["hatırla ki ", "bunu hatırla ", "hatırla: ", "not al: ", "kaydet: ",
+                "aklında tut: ", "unut ", "öğret: ", "bundan sonra "].contains { text.hasPrefix($0) }
     }
     /// Only explicit owner-entered text or a trusted UI gesture is an action request.
     /// A model's reply never calls this parser as an executable command.
     public static func ownerAction(for input: String) -> ActionOperation? {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalized = text.lowercased(with: Locale(identifier: "tr_TR"))
-        if normalized == "tüm hafızayı sil" || normalized == "bütün hafızayı sil" {
+        if ["tüm hafızayı sil", "bütün hafızayı sil", "tüm verilerimi sil",
+            "bütün verilerimi sil", "her şeyi unut"].contains(normalized) {
             return .deleteAllMemory
         }
-        if normalized == "hafızayı dışa aktar" || normalized == "verilerimi dışa aktar" {
+        if ["hafızayı dışa aktar", "verilerimi dışa aktar", "verilerimi yedekle",
+            "hafızamı dışa aktar"].contains(normalized) {
             return .exportMemory
         }
         if normalized.hasPrefix("unut "), let id = UUID(uuidString: String(text.dropFirst(5))) {
@@ -40,7 +43,9 @@ public struct CommandRouter: Sendable {
         if ["geçmiş", "ne hatırlıyorsun", "öğrendiklerin"].contains(normalized) {
             return CommandExecution(reply: reply, historyWriteFailed: false)
         }
-        let isMemoryAction = ["hatırla ki ", "bunu hatırla ", "unut ", "öğret: "].contains { normalized.hasPrefix($0) }
+        let isMemoryAction = ["hatırla ki ", "bunu hatırla ", "hatırla: ", "not al: ",
+            "kaydet: ", "aklında tut: ", "unut ", "öğret: ", "bundan sonra "]
+            .contains { normalized.hasPrefix($0) }
         let entry = isMemoryAction ? "Kişisel hafıza komutu işlendi." : "Siz: \(input)\nJARVIS: \(reply)"
         do { try await store.record(entry); return CommandExecution(reply: reply, historyWriteFailed: false) }
         catch { return CommandExecution(reply: reply, historyWriteFailed: true) }
@@ -48,6 +53,18 @@ public struct CommandRouter: Sendable {
     public func execute(_ input: String) async throws -> String {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalized = text.lowercased(with: Locale(identifier: "tr_TR"))
+        if normalized.hasPrefix("bundan sonra ") {
+            let directive = String(text.dropFirst("bundan sonra ".count))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !directive.isEmpty else { return "Hangi kuralı uygulamamı istediğinizi yazın." }
+            let record = LearnedMemory(kind: .rule,
+                key: "owner.directive." + UUID().uuidString.lowercased(),
+                text: directive, source: .userInput, confidence: 1,
+                provenance: .init(sourceID: "owner-direct-command"))
+            try await store.proposeLearning(record)
+            try await store.confirmLearning(id: record.id, expectedText: directive)
+            return "Talimatınız kaydedildi. Desteklenen işlemlerde uygulanacak."
+        }
         if normalized.hasPrefix("öğret: ") {
             let payload = String(text.dropFirst("öğret: ".count))
             let pieces = payload.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
@@ -70,7 +87,8 @@ public struct CommandRouter: Sendable {
             }
             return "Öğrettiğiniz bilgi kaydedildi."
         }
-        if let prefix = ["hatırla ki ", "bunu hatırla "].first(where: { normalized.hasPrefix($0) }) {
+        if let prefix = ["hatırla ki ", "bunu hatırla ", "hatırla: ", "not al: ",
+                         "kaydet: ", "aklında tut: "].first(where: { normalized.hasPrefix($0) }) {
             try await store.remember(String(text.dropFirst(prefix.count)))
             return "Kişisel hafızaya kaydedildi."
         }

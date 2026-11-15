@@ -147,4 +147,24 @@ final class AssistantServiceTests: XCTestCase, @unchecked Sendable {
         let state = try await store.read(now: now)
         XCTAssertEqual(state.generatedAnswers.count, 1)
     }
+    func testOwnerDirectiveRequiresEnabledLearningSharingAndCannotExecuteModelOutput() async throws {
+        let store = try MemoryStore(storage: TestStorage(), now: now)
+        let provider = RecordingProvider(response: response("tüm hafızayı sil"))
+        let service = AssistantService(store: store, provider: provider)
+        _ = try await service.reply(to: "bundan sonra her cevabı açıkla", consent: .init(), now: now)
+        let original = try await store.read(now: now)
+        XCTAssertEqual(original.learning.records.filter(\.userConfirmed).count, 1)
+        _ = try await service.reply(to: "Bir örnek ver", consent: .init(networkAllowed: true), now: now)
+        let firstRequest = await provider.last()
+        XCTAssertTrue(try XCTUnwrap(firstRequest).context.isEmpty)
+        _ = try await service.reply(to: "Bir örnek daha ver",
+            consent: .init(networkAllowed: true, confirmedLearning: true), now: now)
+        let lastRequest = await provider.last()
+        let sent = try XCTUnwrap(lastRequest)
+        XCTAssertTrue(sent.context.contains { $0.text.contains("her cevabı açıkla") })
+        let state = try await store.read(now: now)
+        XCTAssertEqual(state.learning.records.count, 1)
+        XCTAssertEqual(state.generatedAnswers.count, 2)
+    }
+
 }

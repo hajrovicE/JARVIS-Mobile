@@ -101,6 +101,8 @@ class RelayTests(unittest.TestCase):
         self.assertNotIn("max_output_tokens", body)
         self.assertEqual(body["model"], SETTINGS.model)
         self.assertIn("Türkçe", body["instructions"])
+        self.assertIn("Sahibinin", body["instructions"])
+        self.assertIn("bağımsız dış eylem başlatma", body["instructions"])
 
     def test_upstream_network_failure_is_sanitized(self):
         class Opener:

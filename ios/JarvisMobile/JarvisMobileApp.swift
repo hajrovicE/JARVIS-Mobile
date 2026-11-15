@@ -227,10 +227,10 @@ struct RootView: View {
           .accessibilityIdentifier(
             "memory.deleteAll")
         Section("Öğrenme önerileri") {
-          Text("Öneriler onaylamadan kullanılmaz. Parola, API anahtarı veya başka sırlar girmeyin.")
+          Text("Buradan doğrudan öğrettiğiniz bilgiler kaydedilir. Modelin önerileri ayrı değerlendirilir.")
           TextField("Konu (ör. içecek tercihi)", text: $learningKey)
           TextField("Tercih önerisi", text: $learningText)
-          Button("Onaya sun") { proposeLearning() }
+          Button("Doğrudan öğret ve kaydet") { proposeLearning() }
             .disabled(
               learningKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 || learningText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -290,7 +290,7 @@ struct RootView: View {
           "status.speakerIdentity")
         Text(aiAllowed ? connectionStatus : "Bulut AI kapalı; yerel hafıza kullanılabilir.")
         Text("Web arama ve telefon kontrolü: bağlı değil.")
-        Text("Hassas işlemler: açık onay + Face ID/Touch ID. Konuşmacı sesi yetki vermez.")
+        Text("İşlemler yalnızca doğrudan kullanıcı komutuyla başlar; ikinci onay gerekmez.")
         Text("Alpha 0.3 · TestFlight yüklemesi yapılmadı.")
       }.navigationTitle("Yetenek durumu")
     }.tabItem { Label("Durum", systemImage: "info.circle") }
@@ -437,9 +437,13 @@ struct RootView: View {
       provenance: .init(
         sourceID: "kullanıcı-önerisi", explanation: "Kullanıcı tarafından yazılan tercih"))
     perform {
-      try await store?.proposeLearning(record)
+      guard let store else { return }
+      try await store.proposeLearning(record)
+      // This is already a direct owner gesture; a second confirmation is unnecessary.
+      try await store.confirmLearning(id: record.id, expectedText: record.text)
       learningKey = ""
       learningText = ""
+      reply = "Öğrettiğiniz bilgi kaydedildi."
     }
   }
   private func submit() {
