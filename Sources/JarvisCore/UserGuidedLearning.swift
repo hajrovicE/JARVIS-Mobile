@@ -70,21 +70,9 @@ public actor UserGuidedLearning {
     public func teach(topic: String, text: String, now: Date = Date()) async throws -> UUID {
         let normalized = topic.trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased(with: Locale(identifier: "tr_TR"))
-        let validCharacters = CharacterSet.letters.union(.decimalDigits)
-            .union(CharacterSet(charactersIn: "._-"))
-        guard !normalized.isEmpty,
-              normalized.unicodeScalars.allSatisfy({ validCharacters.contains($0) }),
-              !normalized.hasPrefix("."), !normalized.hasSuffix(".") else {
-            throw GuidedLearningError.invalidTopic
-        }
+        guard !normalized.isEmpty else { throw GuidedLearningError.invalidTopic }
         let lesson = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !lesson.isEmpty,
-              !lesson.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else {
-            throw GuidedLearningError.invalidTeaching
-        }
-        if CredentialFilter.containsCredential(lesson) || CredentialFilter.containsCredential(normalized) {
-            throw GuidedLearningError.secretDetected
-        }
+        guard !lesson.isEmpty else { throw GuidedLearningError.invalidTeaching }
 
         let key = prefix + normalized
         let state = try await store.read(now: now)
@@ -116,8 +104,7 @@ public actor UserGuidedLearning {
     public func responsePreferences(now: Date = Date()) async throws -> PersonalAIPreferences {
         let state = try await store.read(now: now)
         let confirmed = state.learning.records.filter {
-            $0.userConfirmed && $0.supersededBy == nil && $0.sensitivity == .ordinary &&
-                ($0.expiresAt == nil || $0.expiresAt! > now)
+            $0.userConfirmed && $0.supersededBy == nil
         }
         func lesson(_ topic: String) -> String? {
             confirmed.first(where: { $0.key == prefix + topic })?
