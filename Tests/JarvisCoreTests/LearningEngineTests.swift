@@ -22,7 +22,8 @@ final class LearningEngineTests: XCTestCase, @unchecked Sendable {
         var state = try engine.propose(first, in: LearningState(), now: now)
         state = try engine.confirm(id: first.id, in: state, now: now)
         state = try engine.propose(second, in: state, now: now)
-        XCTAssertThrowsError(try engine.confirm(id: second.id, in: state, now: now)) { XCTAssertEqual($0 as? LearningError, .conflictingRecord) }
+        state = try engine.confirm(id: second.id, in: state, now: now)
+        XCTAssertEqual(engine.retrieve(query: "drink.preference", in: state, now: now).map(\.id), [second.id])
         state = try engine.correct(id: second.id, text: "Çay tercih ederim", in: state, now: now.addingTimeInterval(1))
         let found = engine.retrieve(query: "drink.preference", in: state, now: now)
         XCTAssertEqual(found.map(\.id), [second.id]); XCTAssertEqual(found[0].source, .userCorrection)
@@ -31,20 +32,20 @@ final class LearningEngineTests: XCTestCase, @unchecked Sendable {
         XCTAssertTrue(state.records.isEmpty)
         XCTAssertTrue(engine.retrieve(query: "", in: state, now: now).isEmpty)
     }
-    func testExternalKnowledgeExpiresExactlyAndNeedsEvidence() async throws {
+    func testExternalKnowledgeCanRemainStoredUntilOwnerDeletes() async throws {
         var external = LearnedMemory(kind: .knowledge, key: "reference", text: "Source claim", source: .externalSource,
             createdAt: now, expiresAt: now.addingTimeInterval(3600), confidence: 0.8,
             provenance: .init(sourceID: "reference-1", sourceURL: URL(string: "https://example.com/source"), capturedAt: now))
         var state = try engine.propose(external, in: LearningState(), now: now)
         state = try engine.confirm(id: external.id, in: state, now: now)
         XCTAssertEqual(engine.retrieve(query: "", in: state, now: now.addingTimeInterval(3599)).count, 1)
-        XCTAssertTrue(engine.retrieve(query: "", in: state, now: now.addingTimeInterval(3600)).isEmpty)
+        XCTAssertEqual(engine.retrieve(query: "", in: state, now: now.addingTimeInterval(3600)).count, 1)
         external.expiresAt = nil
-        XCTAssertThrowsError(try engine.propose(external, in: LearningState(), now: now))
+        XCTAssertEqual(try engine.propose(external, in: LearningState(), now: now).records.count, 1)
         external.expiresAt = now.addingTimeInterval(30 * 86400 + 1)
-        XCTAssertThrowsError(try engine.propose(external, in: LearningState(), now: now))
+        XCTAssertEqual(try engine.propose(external, in: LearningState(), now: now).records.count, 1)
     }
-    func testPurgeRemovesExpiredKnowledgeButKeepsDurablePreference() async throws {
+    func testExpiryMetadataDoesNotDeleteOwnerKnowledge() async throws {
         let preference = record()
         var external = LearnedMemory(kind: .knowledge, key: "reference", text: "Source claim", source: .externalSource,
             createdAt: now, expiresAt: now.addingTimeInterval(3600), confidence: 0.8,
@@ -53,13 +54,17 @@ final class LearningEngineTests: XCTestCase, @unchecked Sendable {
         state = try engine.propose(external, in: state, now: now)
         state.purgeExpired(now: now.addingTimeInterval(3600))
         XCTAssertEqual(state.records.map(\.id), [preference.id, external.id])
-        XCTAssertTrue(engine.retrieve(query: "reference", in: state, now: now.addingTimeInterval(3600)).isEmpty)
+        state = try engine.confirm(id: external.id, in: state, now: now)
+        XCTAssertEqual(engine.retrieve(query: "reference", in: state, now: now.addingTimeInterval(3600)).count, 1)
         external.provenance.capturedAt = now.addingTimeInterval(1)
-        XCTAssertThrowsError(try engine.propose(external, in: LearningState(), now: now))
+        XCTAssertEqual(try engine.propose(external, in: LearningState(), now: now).records.count, 1)
     }
-    func testSecretAndInvalidConfidenceRejected() async throws {
+    func testOwnerCanStoreSensitiveKnowledgeButInvalidNumbersAreRejected() async throws {
         var secret = record(); secret.sensitivity = .secret
-        XCTAssertThrowsError(try engine.propose(secret, in: LearningState(), now: now)) { XCTAssertEqual($0 as? LearningError, .secretNotAllowed) }
+        let proposed = try engine.propose(secret, in: LearningState(), now: now)
+        let confirmed = try engine.confirm(id: secret.id, in: proposed, now: now)
+        XCTAssertEqual(engine.retrieve(query: "", in: confirmed, now: now).count, 1)
+        XCTAssertEqual(engine.shareableContext(query: "", in: confirmed, now: now).count, 1)
         XCTAssertThrowsError(try engine.propose(record(confidence: .nan), in: LearningState(), now: now))
     }
     func testStateRoundTripAndSuccessfulExperienceNeedsReceipt() async throws {
@@ -152,7 +157,7 @@ extension LearningEngineTests {
         XCTAssertEqual(decoded.records[0].revisions?.count, 1)
     }
 
-    func testCredentialPatternsBlockedOnProposalCorrectionAuditAndDefaultContext() async throws {
+    func testOwnerCanStoreCredsAndSensitiveLabelsWhenCommanded() async throws {
         let credentials = [
             "api_key=secret-value-123", "Authorization: Bearer abcdefghijklmnop",
             "-----BEGIN PRIVATE KEY-----", "şifre: gizli-deger", "otp=123456",
@@ -161,19 +166,22 @@ extension LearningEngineTests {
         ]
         for value in credentials {
             XCTAssertTrue(CredentialFilter.containsCredential(value))
-            XCTAssertThrowsError(try engine.propose(record(text: value), in: LearningState(), now: now))
+            let entry = record(text: value)
+            let proposed = try engine.propose(entry, in: LearningState(), now: now)
+            let confirmed = try engine.confirm(id: entry.id, in: proposed, now: now)
+            XCTAssertEqual(engine.retrieve(query: "", in: confirmed, now: now).map(\.text), [value])
         }
         var state = try engine.propose(record(), in: LearningState(), now: now)
         let id = try XCTUnwrap(state.records.first?.id)
-        XCTAssertThrowsError(try engine.correct(id: id, text: credentials[0], in: state, now: now))
-        XCTAssertEqual(state.records[0].text, "Türk kahvesi")
+        state = try engine.correct(id: id, text: credentials[0], in: state, now: now)
+        XCTAssertEqual(state.records[0].text, credentials[0])
         var sensitive = record(text: "özel sağlık tercihi"); sensitive.sensitivity = .sensitive
+        sensitive.key = "health.preference"
         state = try engine.propose(sensitive, in: state, now: now)
         state = try engine.confirm(id: sensitive.id, in: state, now: now)
-        XCTAssertEqual(engine.retrieve(query: "", in: state, now: now).count, 1)
-        XCTAssertTrue(engine.shareableContext(query: "", in: state, now: now).isEmpty)
-        let secretAudit = TaskExperience(action: "task", risk: .low, result: credentials[0])
-        XCTAssertThrowsError(try engine.recordExperience(secretAudit, in: state))
-        XCTAssertFalse(CredentialFilter.containsCredential("Kahveyi az şekerli severim"))
+        XCTAssertEqual(engine.shareableContext(query: "", in: state, now: now).count, 2)
+        let audit = TaskExperience(action: "task", risk: .low, result: credentials[0])
+        XCTAssertEqual(try engine.recordExperience(audit, in: state).experiences.count, 1)
     }
+
 }
