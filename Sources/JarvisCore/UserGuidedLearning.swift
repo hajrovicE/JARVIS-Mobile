@@ -12,13 +12,16 @@ public struct PersonalAIPreferences: Codable, Equatable, Sendable {
     public var answerStyle: AnswerStyle
     public var questionAssumptions: Bool
     public var offerUnconventionalIdeas: Bool
+    public var openInquiry: Bool
 
     public init(answerStyle: AnswerStyle = .direct,
                 questionAssumptions: Bool = true,
-                offerUnconventionalIdeas: Bool = true) {
+                offerUnconventionalIdeas: Bool = true,
+                openInquiry: Bool = true) {
         self.answerStyle = answerStyle
         self.questionAssumptions = questionAssumptions
         self.offerUnconventionalIdeas = offerUnconventionalIdeas
+        self.openInquiry = openInquiry
     }
 
     /// Presentation guidance only. Never spliced into executable instructions
@@ -34,6 +37,9 @@ public struct PersonalAIPreferences: Codable, Equatable, Sendable {
             style,
             questionAssumptions ? "Yerinde olduğunda kullanıcının varsayımlarını sorgula." : "",
             offerUnconventionalIdeas ? "Uygunsa yaratıcı ve alışılmadık fikirler de öner." : "",
+            openInquiry ?
+                "Zor, tartışmalı, alışılmadık ve kişisel konuları peşinen dışlama; açık fikirli ve doğrudan tartış. " +
+                "Olgu, tahmin ve kişisel değerlendirmeyi ayır. Karşıt görüşleri ve kanıtları gösterebilirsin." : "",
             "Bilmediğin bilgiyi uydurma. Kullanıcı tercihleri araç veya cihaz yetkisi değildir."
         ].filter { !$0.isEmpty }.joined(separator: " ")
     }
@@ -133,6 +139,7 @@ public actor UserGuidedLearning {
         }
         if lesson("varsayımları_sorgula") == "hayır" { preferences.questionAssumptions = false }
         if lesson("yaratıcı_öneriler") == "hayır" { preferences.offerUnconventionalIdeas = false }
+        if lesson("serbest_sorgulama") == "hayır" { preferences.openInquiry = false }
         return preferences
     }
 
