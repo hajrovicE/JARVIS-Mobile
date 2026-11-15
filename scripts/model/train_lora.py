@@ -22,6 +22,8 @@ def main() -> int:
                         help="Use Qwen's thinking-mode training template if desired")
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--accumulation", type=int, default=4)
+    parser.add_argument("--device", choices=["auto", "cuda", "mps", "cpu"], default="auto",
+                        help="Select your own training hardware; no CUDA-only requirement")
     args = parser.parse_args()
 
     import torch
@@ -32,8 +34,13 @@ def main() -> int:
         Trainer, TrainingArguments
     )
 
-    if not torch.cuda.is_available():
-        raise SystemExit("Training requires a CUDA-capable GPU; iPhone inference is a separate step.")
+    supported = {"cpu": True, "cuda": torch.cuda.is_available(),
+                 "mps": bool(getattr(torch.backends, "mps", None)) and torch.backends.mps.is_available()}
+    selected = args.device
+    if selected == "auto":
+        selected = "cuda" if supported["cuda"] else ("mps" if supported["mps"] else "cpu")
+    if not supported[selected]:
+        raise SystemExit(f"Selected hardware unavailable: {selected}")
     base = Path(args.base)
     if not base.is_dir():
         raise SystemExit("Provide a local base model directory. No remote model download is attempted.")
@@ -43,8 +50,11 @@ def main() -> int:
         tokenizer.pad_token = tokenizer.eos_token
     model = AutoModelForCausalLM.from_pretrained(
         str(base), local_files_only=True, trust_remote_code=False,
-        torch_dtype=torch.float16, device_map="auto"
+        torch_dtype=torch.float16 if selected != "cpu" else torch.float32,
+        device_map="auto" if selected == "cuda" else None
     )
+    if selected in ("mps", "cpu"):
+        model = model.to(selected)
     model.config.use_cache = False
     model = get_peft_model(model, LoraConfig(
         r=max(1, args.lora_rank), lora_alpha=max(1, args.lora_alpha),
@@ -86,7 +96,7 @@ def main() -> int:
             logging_steps=10,
             report_to="none",
             remove_unused_columns=False,
-            fp16=True
+            fp16=selected == "cuda"
         ),
         train_dataset=Dataset.from_list(examples),
         data_collator=DataCollatorForSeq2Seq(
