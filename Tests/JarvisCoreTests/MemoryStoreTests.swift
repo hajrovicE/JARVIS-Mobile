@@ -13,7 +13,7 @@ final class TestStorage: SnapshotStorage, @unchecked Sendable {
 }
 final class MemoryStoreTests: XCTestCase, @unchecked Sendable {
     let now = Date(timeIntervalSince1970: 2_000_000_000)
-    func testAllOwnerHistoryPersistsUntilDeleted() async throws {
+    func testExactRetentionAndPermanentMemory() async throws {
         let disk = TestStorage(); let store = try MemoryStore(storage: disk, now: now)
         try await store.record("old", now: now.addingTimeInterval(-90 * 86400))
         try await store.record("alive", now: now.addingTimeInterval(-90 * 86400 + 1))
@@ -21,11 +21,11 @@ final class MemoryStoreTests: XCTestCase, @unchecked Sendable {
         try await store.cache(question: "old", answer: "expired", timeSensitive: false, now: now.addingTimeInterval(-30 * 86400))
         try await store.cache(question: "new", answer: "alive", timeSensitive: false, now: now.addingTimeInterval(-30 * 86400 + 1))
         let state = try await store.read(now: now)
-        XCTAssertEqual(state.conversations.map(\.text), ["old", "alive"])
-        XCTAssertEqual(state.answers.map(\.question), ["old", "new"])
+        XCTAssertEqual(state.conversations.map(\.text), ["alive"])
+        XCTAssertEqual(state.answers.map(\.question), ["new"])
         XCTAssertEqual(state.personal.map(\.text), ["permanent"])
         let later = try await store.read(now: now.addingTimeInterval(86400))
-        XCTAssertEqual(later.conversations.count, 2); XCTAssertEqual(later.answers.count, 2)
+        XCTAssertTrue(later.conversations.isEmpty); XCTAssertTrue(later.answers.isEmpty)
         XCTAssertEqual(later.personal.count, 1)
     }
     func testRestartEditDeleteExport() async throws {
@@ -69,7 +69,7 @@ final class MemoryStoreTests: XCTestCase, @unchecked Sendable {
         try disk.save(JSONEncoder().encode(legacy))
         let store = try MemoryStore(storage: disk, now: now)
         let migrated = try await store.read(now: now)
-        XCTAssertEqual(migrated.version, 3); XCTAssertEqual(migrated.conversations.count, 1); XCTAssertEqual(migrated.personal.count, 1)
+        XCTAssertEqual(migrated.version, 3); XCTAssertTrue(migrated.conversations.isEmpty); XCTAssertEqual(migrated.personal.count, 1)
         legacy.version = 99; try disk.save(JSONEncoder().encode(legacy))
         XCTAssertThrowsError(try MemoryStore(storage: disk, now: now))
     }
