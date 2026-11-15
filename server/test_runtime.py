@@ -176,8 +176,15 @@ class RuntimeTests(unittest.TestCase):
                 with socket.create_connection(server.server_address, timeout=3) as connection:
                     connection.sendall(raw); response = connection.recv(4096)
                 self.assertIn(b"413", response.split(b"\r\n", 1)[0])
-            status, _, _ = self.http(server, headers={"Authorization": AUTH, "Content-Type": "application/json", "Transfer-Encoding": "chunked"})
-            self.assertEqual(status, 411)
+            # Python 3.15 urllib may send another chunk after the relay's early 411,
+            # producing BrokenPipe before the response can be examined. Use raw headers
+            # to assert rejection without client-library transport races.
+            raw = ("POST /v1/chat HTTP/1.1\r\nHost: localhost\r\nAuthorization: " + AUTH +
+                   "\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\n\r\n").encode()
+            with socket.create_connection(server.server_address, timeout=3) as connection:
+                connection.sendall(raw)
+                response = connection.recv(4096)
+            self.assertIn(b"411", response.split(b"\r\n", 1)[0])
 
     def test_production_logs_omit_input_headers_ip_and_exception_messages(self):
         output = io.StringIO(); logger = SafeEventLogger(output)
