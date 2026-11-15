@@ -17,11 +17,22 @@ public struct AnswerCache: Codable, Equatable, Sendable {
     }
 }
 public struct MemorySnapshot: Codable, Equatable, Sendable {
-    public var version = 1
+    public var version = 2
     public var conversations: [MemoryItem] = []
     public var answers: [AnswerCache] = []
     public var personal: [MemoryItem] = []
+    public var learning = LearningState()
     public init() {}
+    private enum CodingKeys: String, CodingKey { case version, conversations, answers, personal, learning }
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        version = try values.decode(Int.self, forKey: .version)
+        conversations = try values.decode([MemoryItem].self, forKey: .conversations)
+        answers = try values.decode([AnswerCache].self, forKey: .answers)
+        personal = try values.decode([MemoryItem].self, forKey: .personal)
+        // v0/v1 did not contain learning state. Do not hide malformed v2 payloads.
+        learning = version < 2 ? LearningState() : try values.decode(LearningState.self, forKey: .learning)
+    }
 }
 public protocol SnapshotStorage: Sendable {
     func load() throws -> Data?
@@ -33,17 +44,20 @@ public enum MemoryError: Error { case unsupportedVersion, missingMemory, emptyTe
 public actor MemoryStore {
     private let storage: any SnapshotStorage
     private var snapshot: MemorySnapshot
-    public init(storage: any SnapshotStorage, now: Date = Date()) throws {
+    private let learningEngine: any LearningEngine
+    public init(storage: any SnapshotStorage, now: Date = Date(), learningEngine: any LearningEngine = LocalLearningEngine()) throws {
         self.storage = storage
+        self.learningEngine = learningEngine
         var loaded = try storage.load().map { try JSONDecoder().decode(MemorySnapshot.self, from: $0) } ?? MemorySnapshot()
         // v0 used the same payload, without retention enforcement. Upgrade before exposing data.
-        guard (0...1).contains(loaded.version) else { throw MemoryError.unsupportedVersion }
-        loaded.version = 1
+        guard (0...2).contains(loaded.version) else { throw MemoryError.unsupportedVersion }
+        loaded.version = 2
         Self.purge(&loaded, now: now)
         try storage.save(JSONEncoder().encode(loaded))
         self.snapshot = loaded
     }
     private static func purge(_ state: inout MemorySnapshot, now: Date) {
+        state.learning.purgeExpired(now: now)
         state.conversations.removeAll { now.timeIntervalSince($0.createdAt) >= 90 * 86400 }
         state.answers.removeAll { now.timeIntervalSince($0.createdAt) >= 30 * 86400 }
     }
@@ -83,5 +97,34 @@ public actor MemoryStore {
     }
     /// Explicit plaintext export, only for a user-initiated share action.
     public func export(now: Date = Date()) throws -> Data { try JSONEncoder().encode(read(now: now)) }
+    public func proposeLearning(_ record: LearnedMemory, now: Date = Date()) throws {
+        var next = try read(now: now)
+        next.learning = try learningEngine.propose(record, in: next.learning, now: now)
+        try commit(next)
+    }
+    public func confirmLearning(id: UUID, now: Date = Date()) throws {
+        var next = try read(now: now)
+        next.learning = try learningEngine.confirm(id: id, in: next.learning, now: now)
+        try commit(next)
+    }
+    public func correctLearning(id: UUID, text: String, now: Date = Date()) throws {
+        var next = try read(now: now)
+        next.learning = try learningEngine.correct(id: id, text: text, in: next.learning, now: now)
+        try commit(next)
+    }
+    public func deleteLearning(id: UUID, now: Date = Date()) throws {
+        var next = try read(now: now)
+        next.learning = try learningEngine.delete(id: id, in: next.learning)
+        try commit(next)
+    }
+    public func learnedMemories(query: String, now: Date = Date()) throws -> [LearnedMemory] {
+        let state = try read(now: now)
+        return learningEngine.retrieve(query: query, in: state.learning, now: now)
+    }
+    public func recordExperience(_ experience: TaskExperience, now: Date = Date()) throws {
+        var next = try read(now: now)
+        next.learning = try learningEngine.recordExperience(experience, in: next.learning)
+        try commit(next)
+    }
     public func deleteAll() throws { try commit(MemorySnapshot()) }
 }

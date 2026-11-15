@@ -6,8 +6,8 @@ public struct CommandRouter: Sendable {
     public func execute(_ input: String) async throws -> String {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalized = text.lowercased(with: Locale(identifier: "tr_TR"))
-        if normalized.hasPrefix("hatırla ki ") {
-            try await store.remember(String(text.dropFirst("hatırla ki ".count)))
+        if let prefix = ["hatırla ki ", "bunu hatırla "].first(where: { normalized.hasPrefix($0) }) {
+            try await store.remember(String(text.dropFirst(prefix.count)))
             return "Kişisel hafızaya kaydedildi."
         }
         if normalized == "ne hatırlıyorsun" {
@@ -17,6 +17,10 @@ public struct CommandRouter: Sendable {
         if normalized.hasPrefix("unut ") {
             guard let id = UUID(uuidString: String(text.dropFirst(5))) else { return "Silmek için hafıza kimliğini kullanın veya Hafıza sekmesini açın." }
             try await store.forget(id: id); return "Kayıt silindi."
+        }
+        if normalized == "öğrendiklerin" {
+            let records = try await store.learnedMemories(query: "")
+            return records.isEmpty ? "Onaylanmış öğrenme kaydı yok." : records.map { "\($0.key): \($0.text)" }.joined(separator: "\n")
         }
         if normalized == "geçmiş" {
             let items = try await store.read().conversations

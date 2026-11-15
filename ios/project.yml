@@ -6,6 +6,11 @@ options:
 packages:
   JarvisCore:
     path: ..
+settings:
+  base:
+    SWIFT_VERSION: '6.0'
+    MARKETING_VERSION: '0.2.0'
+    CURRENT_PROJECT_VERSION: '2'
 targets:
   JarvisMobile:
     type: application
@@ -15,7 +20,6 @@ targets:
       - package: JarvisCore
     settings:
       base:
-        SWIFT_VERSION: '6.0'
         PRODUCT_BUNDLE_IDENTIFIER: com.jarvis.mobile
         TARGETED_DEVICE_FAMILY: '1'
         CODE_SIGN_STYLE: Automatic
@@ -24,8 +28,42 @@ targets:
       properties:
         CFBundleDisplayName: JARVIS
         CFBundleDevelopmentRegion: tr
+        CFBundleLocalizations: [tr]
         UILaunchScreen: {}
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
-        NSMicrophoneUsageDescription: Türkçe sesli komutunuzu almak için mikrofon erişimi gerekir.
-        NSSpeechRecognitionUsageDescription: Sesinizi Türkçe komut metnine dönüştürmek için izin gerekir.
+        NSMicrophoneUsageDescription: Türkçe sesli komutunuzu almak için mikrofon erişimi gerekir. İzin vermeden yazarak devam edebilirsiniz.
+        NSSpeechRecognitionUsageDescription: Sesinizi cihaz üzerinde Türkçe komut metnine dönüştürmek için izin gerekir. Destek yoksa yazarak devam edebilirsiniz.
+  JarvisMobileTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - ../Tests/JarvisCoreTests
+      - JarvisMobileTests
+    dependencies:
+      - target: JarvisMobile
+      - package: JarvisCore
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.jarvis.mobile.tests
+  JarvisMobileUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [JarvisMobileUITests]
+    dependencies:
+      - target: JarvisMobile
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.jarvis.mobile.uitests
+schemes:
+  JarvisMobile:
+    build:
+      targets:
+        JarvisMobile: all
+    test:
+      gatherCoverageData: true
+      targets:
+        - JarvisMobileTests
+        - JarvisMobileUITests

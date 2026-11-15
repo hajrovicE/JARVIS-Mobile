@@ -1,6 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 import JarvisCore
+import UIKit
 
 @main
 struct JarvisMobileApp: App {
@@ -23,10 +24,14 @@ struct RootView: View {
     @State private var reply = ""
     @State private var memories: [MemoryItem] = []
     @State private var history: [MemoryItem] = []
+    @State private var learningRecords: [LearnedMemory] = []
+    @State private var learningKey = ""
+    @State private var learningText = ""
     @State private var errorText: String?
     @State private var exporting = false
     @State private var document = ExportDocument(data: Data())
     @State private var deleting = false
+    @State private var confirmingExport = false
     @State private var busy = false
     @Environment(\.scenePhase) private var scenePhase
     var body: some View {
@@ -36,15 +41,21 @@ struct RootView: View {
                     Text("JARVIS'e hoş geldiniz").font(.largeTitle)
                     Text("Konuşmalar 90 gün, uygun cevap önbelleği en fazla 30 gün saklanır. Kişisel hafıza siz silene kadar kalır. Veriler cihazda şifrelenir.")
                     Text("Ses isteğe bağlıdır. İlk kullanımda mikrofon ve konuşma izni istenir. Yazarak da kullanabilirsiniz. Konuşmacı kimlik doğrulaması etkin değildir.")
-                    Button("Başla") { onboarded = true }
+                    Button("Başla") { onboarded = true }.accessibilityIdentifier("onboarding.start")
                 }.padding()
             } else {
                 TabView {
                     NavigationStack {
                         ScrollView { VStack(alignment: .leading, spacing: 16) {
-                            Text(reply).textSelection(.enabled)
-                            TextField("Hatırla ki …", text: $input, axis: .vertical).textFieldStyle(.roundedBorder)
-                            Button("Gönder") { submit() }.disabled(store == nil || busy || input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            Text(reply).textSelection(.enabled).accessibilityIdentifier("chat.reply")
+                            TextField("Hatırla ki …", text: $input, axis: .vertical).textFieldStyle(.roundedBorder).accessibilityIdentifier("chat.input")
+                            Button("Gönder") { submit() }.accessibilityIdentifier("chat.send").disabled(store == nil || busy || input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            Text("Sesli giriş isteğe bağlıdır. Tanıma cihazda yapılır; yazarak devam edebilirsiniz.")
+                            Button("Ses izinlerini ver") { Task { await speech.requestPermissions() } }
+                                .disabled(speech.requestingPermissions || speech.recording || speech.finishing)
+                            if speech.needsSettings, let settings = URL(string: UIApplication.openSettingsURLString) {
+                                Link("Ses izinleri için Ayarlar'ı aç", destination: settings)
+                            }
                             Text(speech.status)
                             Text(speech.recording ? "Dinleniyor…" : "Konuşmak için basılı tutun")
                                 .padding().background(.blue.opacity(0.15)).cornerRadius(12)
@@ -53,6 +64,7 @@ struct RootView: View {
                             Button(speech.recording ? "Kaydı bitir" : "Ses kaydını başlat") {
                                 if speech.recording { speech.stop(); input = speech.transcript } else { Task { await speech.begin() } }
                             }
+                            .disabled(speech.requestingPermissions || speech.finishing)
                             Toggle("Cevapları sesli oku", isOn: $tts)
                         }.padding() }.navigationTitle("JARVIS")
                     }.tabItem { Label("Sohbet", systemImage: "bubble.left") }
@@ -61,12 +73,33 @@ struct RootView: View {
                             ForEach(memories) { memory in
                                 VStack(alignment: .leading) {
                                     TextField("Kişisel hafıza", text: Binding(get: { memories.first { $0.id == memory.id }?.text ?? "" }, set: { text in if let index = memories.firstIndex(where: { $0.id == memory.id }) { memories[index].text = text } }))
+                                        .accessibilityIdentifier("memory.text.\(memory.id)")
                                     Button("Değişikliği kaydet") { perform { try await store?.edit(id: memory.id, text: memories.first { $0.id == memory.id }?.text ?? "") } }
-                                    Button("Sil", role: .destructive) { perform { try await store?.forget(id: memory.id) } }
+                                    Button("Sil", role: .destructive) { perform { try await store?.forget(id: memory.id) } }.accessibilityIdentifier("memory.delete.\(memory.id)")
                                 }
                             }
-                            Button("Verilerimi dışa aktar") { perform { if let data = try await store?.export() { document = ExportDocument(data: data); exporting = true } } }
-                            Button("Tüm verileri sil", role: .destructive) { deleting = true }
+                            Section("Öğrenme önerileri") {
+                                Text("Öneriler onaylamadan kullanılmaz. Parola, API anahtarı veya başka sırlar girmeyin.")
+                                TextField("Konu (ör. içecek tercihi)", text: $learningKey)
+                                TextField("Tercih önerisi", text: $learningText)
+                                Button("Onaya sun") { proposeLearning() }
+                                    .disabled(learningKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || learningText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                                ForEach(learningRecords.filter { $0.supersededBy == nil }) { record in
+                                    VStack(alignment: .leading) {
+                                        Text(record.key).font(.headline)
+                                        TextField("Öğrenilen bilgi", text: Binding(get: { learningRecords.first { $0.id == record.id }?.text ?? "" }, set: { value in if let index = learningRecords.firstIndex(where: { $0.id == record.id }) { learningRecords[index].text = value } }))
+                                        Text(record.userConfirmed ? "Kullanıcı onaylı · sürüm \(record.revision)" : "Onay bekliyor")
+                                        Text("Kaynak: \(record.provenance.sourceID) · güven: \(record.confidence, format: .number.precision(.fractionLength(2)))")
+                                        if !record.userConfirmed {
+                                            Button("Onayla") { perform { try await store?.confirmLearning(id: record.id) } }
+                                        }
+                                        Button("Düzelt ve onayla") { perform { try await store?.correctLearning(id: record.id, text: learningRecords.first { $0.id == record.id }?.text ?? "") } }
+                                        Button("Öneriyi sil", role: .destructive) { perform { try await store?.deleteLearning(id: record.id) } }
+                                    }
+                                }
+                            }
+                            Button("Verilerimi dışa aktar") { confirmingExport = true }
+                            Button("Tüm verileri sil", role: .destructive) { deleting = true }.accessibilityIdentifier("memory.deleteAll")
                         }.disabled(store == nil || busy).navigationTitle("Kişisel hafıza")
                     }.tabItem { Label("Hafıza", systemImage: "brain") }
                     NavigationStack { List(history) { Text($0.text) }.navigationTitle("Son 90 gün") }
@@ -74,7 +107,7 @@ struct RootView: View {
                     NavigationStack { List {
                         Text("Yerel komutlar ve şifreli hafıza kullanılabilir.")
                         Text("Türkçe ses: cihazın çevrimdışı desteğine ve izinlere bağlı.")
-                        Text("Konuşmacı kimlik doğrulaması: ETKİN DEĞİL.")
+                        Text("Konuşmacı kimlik doğrulaması: ETKİN DEĞİL.").accessibilityIdentifier("status.speakerIdentity")
                         Text("Bulut AI, web arama ve telefon kontrolü: bağlı değil.")
                         Text("Önbellek altyapısı hazır; dış cevap sağlayıcısı henüz yok.")
                     }.navigationTitle("Yetenek durumu") }.tabItem { Label("Durum", systemImage: "info.circle") }
@@ -82,10 +115,19 @@ struct RootView: View {
             }
         }
         .task { await open() }
-        .onChange(of: scenePhase) { _, phase in if phase != .active { speech.stop() } else { perform { try await refresh() } } }
+        .onChange(of: speech.transcript) { _, text in input = text }
+        .onChange(of: tts) { _, enabled in if !enabled { speech.cancel() } }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { speech.cancel() }
+            else { Task { if store == nil { await open() } else { perform { try await refresh() } } } }
+        }
+        .onDisappear { speech.cancel() }
         .alert("İşlem tamamlanamadı", isPresented: Binding(get: { errorText != nil }, set: { if !$0 { errorText = nil } })) { Button("Tamam") { errorText = nil } } message: { Text(errorText ?? "") }
-        .confirmationDialog("Tüm konuşmalar, önbellek ve kişisel hafıza silinsin mi?", isPresented: $deleting, titleVisibility: .visible) {
-            Button("Tümünü sil", role: .destructive) { perform { try await store?.deleteAll(); reply = "Tüm kayıtlar silindi." } }
+        .confirmationDialog("Tüm konuşmalar, önbellek, kişisel hafıza ve öğrenme kayıtları silinsin mi?", isPresented: $deleting, titleVisibility: .visible) {
+            Button("Tümünü sil", role: .destructive) { perform { try await store?.deleteAll(); reply = "Tüm kayıtlar silindi." } }.accessibilityIdentifier("memory.confirmDeleteAll")
+        }
+        .confirmationDialog("Dışa aktarılan JSON kişisel verilerinizi içerir ve şifreli değildir. Devam edilsin mi?", isPresented: $confirmingExport, titleVisibility: .visible) {
+            Button("JSON dışa aktar") { perform { if let data = try await store?.export() { document = ExportDocument(data: data); exporting = true } } }
         }
         .fileExporter(isPresented: $exporting, document: document, contentType: .json, defaultFilename: "jarvis-verilerim") { result in
             if case .failure = result { errorText = "Dışa aktarma tamamlanamadı." }
@@ -101,11 +143,17 @@ struct RootView: View {
         } catch { errorText = "Şifreli hafıza açılamadı. Cihazın kilidini açıp uygulamayı yeniden başlatın." }
     }
     private func refresh() async throws {
-        if let state = try await store?.read() { memories = state.personal; history = state.conversations }
+        if let state = try await store?.read() { memories = state.personal; history = state.conversations; learningRecords = state.learning.records }
     }
     private func perform(_ operation: @escaping @MainActor () async throws -> Void) {
         guard !busy else { return }; busy = true
         Task { defer { busy = false }; do { try await operation(); try await refresh() } catch { errorText = "İşlem kaydedilemedi. Lütfen yeniden deneyin." } }
+    }
+    private func proposeLearning() {
+        let record = LearnedMemory(kind: .preference, key: learningKey, text: learningText,
+            source: .userInput, confidence: 1,
+            provenance: .init(sourceID: "kullanıcı-önerisi", explanation: "Kullanıcı tarafından yazılan tercih"))
+        perform { try await store?.proposeLearning(record); learningKey = ""; learningText = "" }
     }
     private func submit() {
         guard let store else { return }; let command = input

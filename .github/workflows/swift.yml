@@ -1,15 +1,61 @@
 name: Swift and iOS
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: swift-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   test:
     runs-on: macos-15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - name: Core tests
-        run: swift test
+      - name: Toolchain versions
+        run: |
+          xcodebuild -version
+          swift --version
+      - name: Core tests (Swift 6)
+        run: |
+          set -o pipefail
+          swift test -Xswiftc -swift-version -Xswiftc 6 2>&1 | tee core-tests.log
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Generate iPhone project
         run: cd ios && xcodegen generate
       - name: Build simulator app
-        run: xcodebuild -project ios/JarvisMobile.xcodeproj -scheme JarvisMobile -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+        run: |
+          set -o pipefail
+          xcodebuild -project ios/JarvisMobile.xcodeproj -scheme JarvisMobile -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build CODE_SIGNING_ALLOWED=NO build 2>&1 | tee simulator-build.log
+      - name: Select an available iPhone simulator
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess
+          devices = json.loads(subprocess.check_output(['xcrun', 'simctl', 'list', 'devices', 'available', '-j']))['devices']
+          phones = [d for runtime, values in devices.items() if 'iOS' in runtime for d in values if d['name'].startswith('iPhone')]
+          if not phones:
+              raise SystemExit('No available iPhone simulator')
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              env.write('SIMULATOR_ID=' + phones[0]['udid'] + '\n')
+          PY
+      - name: iOS encrypted storage, permissions and launch tests
+        run: |
+          set -o pipefail
+          xcodebuild -project ios/JarvisMobile.xcodeproj -scheme JarvisMobile -sdk iphonesimulator -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -derivedDataPath build -resultBundlePath TestResults.xcresult -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=NO test 2>&1 | tee ios-tests.log
+      - name: Collect simulator app
+        run: ditto -c -k --sequesterRsrc --keepParent build/Build/Products/Debug-iphonesimulator/JarvisMobile.app JarvisMobile-simulator.zip
+      - name: Upload test evidence and simulator app
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-validation-${{ github.sha }}
+          path: |
+            core-tests.log
+            simulator-build.log
+            ios-tests.log
+            TestResults.xcresult
+            JarvisMobile-simulator.zip
+          retention-days: 14

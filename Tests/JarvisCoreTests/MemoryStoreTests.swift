@@ -11,7 +11,7 @@ final class TestStorage: SnapshotStorage, @unchecked Sendable {
         if fail { throw CocoaError(.fileWriteUnknown) }; data = value
     }
 }
-final class MemoryStoreTests: XCTestCase {
+final class MemoryStoreTests: XCTestCase, @unchecked Sendable {
     let now = Date(timeIntervalSince1970: 2_000_000_000)
     func testExactRetentionAndPermanentMemory() async throws {
         let disk = TestStorage(); let store = try MemoryStore(storage: disk, now: now)
@@ -69,7 +69,7 @@ final class MemoryStoreTests: XCTestCase {
         try disk.save(JSONEncoder().encode(legacy))
         let store = try MemoryStore(storage: disk, now: now)
         let migrated = try await store.read(now: now)
-        XCTAssertEqual(migrated.version, 1); XCTAssertTrue(migrated.conversations.isEmpty); XCTAssertEqual(migrated.personal.count, 1)
+        XCTAssertEqual(migrated.version, 2); XCTAssertTrue(migrated.conversations.isEmpty); XCTAssertEqual(migrated.personal.count, 1)
         legacy.version = 99; try disk.save(JSONEncoder().encode(legacy))
         XCTAssertThrowsError(try MemoryStore(storage: disk, now: now))
     }
@@ -87,7 +87,7 @@ final class MemoryStoreTests: XCTestCase {
     }
 }
 #if canImport(CryptoKit) && canImport(Security)
-final class EncryptionTests: XCTestCase {
+final class EncryptionTests: XCTestCase, @unchecked Sendable {
     func testEncryptedRestartAndTamperFailure() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
