@@ -2,11 +2,6 @@ import Foundation
 import XCTest
 @testable import JarvisCore
 
-private struct FixedDigest: LocalModelDigestChecking {
-    let digest: String
-    func sha256(of fileURL: URL) throws -> String { digest }
-}
-
 private actor OfflineStubRuntime: OnDeviceInferenceRuntime {
     private var count = 0
     let result: String
@@ -34,7 +29,7 @@ final class LocalAIProviderTests: XCTestCase, @unchecked Sendable {
     func testUninstalledModelFailsClosedWithoutCallingRuntime() async throws {
         let (root, _) = try files()
         defer { try? FileManager.default.removeItem(at: root) }
-        let manager = try OnDeviceModelManager(directory: root.appendingPathComponent("private"), digester: FixedDigest(digest: digest))
+        let manager = try OnDeviceModelManager(directory: root.appendingPathComponent("private"))
         let runtime = OfflineStubRuntime()
         let provider = LocalAIProvider(manager: manager, manifest: try manifest(), runtime: runtime)
         do { _ = try await provider.respond(to: AIRequest(prompt: "Merhaba")); XCTFail("Model missing") }
@@ -44,7 +39,7 @@ final class LocalAIProviderTests: XCTestCase, @unchecked Sendable {
     func testLocalModelImportAndOfflineProviderContract() async throws {
         let (root, source) = try files()
         defer { try? FileManager.default.removeItem(at: root) }
-        let manager = try OnDeviceModelManager(directory: root.appendingPathComponent("private"), digester: FixedDigest(digest: digest))
+        let manager = try OnDeviceModelManager(directory: root.appendingPathComponent("private"))
         let m = try manifest()
         _ = try await manager.importModel(from: source, manifest: m)
         let runtime = OfflineStubRuntime()
@@ -61,18 +56,15 @@ final class LocalAIProviderTests: XCTestCase, @unchecked Sendable {
         do { _ = try await provider.respond(to: AIRequest(prompt: "Merhaba")); XCTFail("Deleted model") }
         catch { XCTAssertEqual(error as? AIProviderError, .notConfigured) }
     }
-    func testBadSizeOrDigestNeverInstallsModel() async throws {
+    func testOwnerModelDoesNotRequirePinnedHashOrSize() async throws {
         let (root, source) = try files()
         defer { try? FileManager.default.removeItem(at: root) }
-        let manager = try OnDeviceModelManager(directory: root.appendingPathComponent("private"), digester: FixedDigest(digest: digest))
-        do { _ = try await manager.importModel(from: source, manifest: manifest(100)); XCTFail("Invalid size") }
-        catch { XCTAssertEqual(error as? LocalModelError, .mismatchedSize) }
-        let wrong = try LocalModelManifest(identifier: "wrong-hash", revision: "r1", licenseIdentifier: "Apache-2.0",
-                                           byteCount: 8, sha256: String(repeating: "b", count: 64))
-        do { _ = try await manager.importModel(from: source, manifest: wrong); XCTFail("Invalid hash") }
-        catch { XCTAssertEqual(error as? LocalModelError, .mismatchedDigest) }
-        do { _ = try await manager.installedModelURL(for: wrong); XCTFail("Must not install") }
-        catch { XCTAssertEqual(error as? LocalModelError, .notInstalled) }
+        let manager = try OnDeviceModelManager(directory: root.appendingPathComponent("private"))
+        let metadata = try LocalModelManifest(
+            identifier: "owner-model", revision: "my-version", licenseIdentifier: "owner",
+            byteCount: 0, sha256: "")
+        let installed = try await manager.importModel(from: source, manifest: metadata)
+        XCTAssertEqual(try await manager.installedModelURL(for: metadata), installed)
     }
     func testOwnerModelIsAcceptedByContentNotFileExtension() async throws {
         let (root, source) = try files()
@@ -105,7 +97,7 @@ final class LocalAIProviderTests: XCTestCase, @unchecked Sendable {
     func testEmptyPromptAndUnavailableRuntimeCannotFabricateAnswer() async throws {
         let (root, source) = try files()
         defer { try? FileManager.default.removeItem(at: root) }
-        let manager = try OnDeviceModelManager(directory: root.appendingPathComponent("private"), digester: FixedDigest(digest: digest))
+        let manager = try OnDeviceModelManager(directory: root.appendingPathComponent("private"))
         let m = try manifest()
         _ = try await manager.importModel(from: source, manifest: m)
         let provider = LocalAIProvider(manager: manager, manifest: m)
@@ -114,13 +106,4 @@ final class LocalAIProviderTests: XCTestCase, @unchecked Sendable {
         do { _ = try await provider.respond(to: AIRequest(prompt: "Merhaba")); XCTFail("No inference engine") }
         catch { XCTAssertEqual(error as? AIProviderError, .notConfigured) }
     }
-    #if canImport(CryptoKit)
-    func testRealSHA256IncrementalDigest() throws {
-        let (root, source) = try files()
-        defer { try? FileManager.default.removeItem(at: root) }
-        try Data("abc".utf8).write(to: source)
-        XCTAssertEqual(try PlatformSHA256Checker().sha256(of: source),
-                       "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
-    }
-    #endif
 }
