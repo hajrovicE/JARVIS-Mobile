@@ -25,3 +25,6 @@ AI varsayılan kapalı; sağlayıcı API anahtarı yalnızca sunucuda, aracı se
 Yalnızca iPhone sahibi kullanıcı için: GitHub Actions → **iOS Release preparation** → `build-only`. Bu işlem imzasız Release paketi üretir; iPhone'a kurulamaz. Ücretli üyelik/Secrets olmadan TestFlight yüklemesi denenmez. [Manuel hesap ve dağıtım hazırlığı](docs/IPHONE_DISTRIBUTION.md).
 
 Ayrıntılar: [mimari](docs/ARCHITECTURE.md), [gereksinimler](docs/PRD.md), [yol haritası](docs/ROADMAP.md), [test planı](docs/TEST_PLAN.md), [konuşmacı güvenliği](docs/SPEAKER_SECURITY.md), [doğrulama raporu](docs/VALIDATION.md).
+
+## Cihaz içinde JARVIS modeli
+JARVIS'in iPhone sohbeti artık harici API yerine yerel GGUF çıkarımını hedefler. Başlangıç ağırlıklarını kullanabilir veya sahibinin eğittiği Qwen3-uyumlu GGUF dosyasını seçebilirsiniz. Kurulum, sınırlamalar ve eğitim süreci: [docs/JARVIS_OWN_MODEL.md](docs/JARVIS_OWN_MODEL.md). Model kurulmadığında uygulama sahte cevap üretmez.

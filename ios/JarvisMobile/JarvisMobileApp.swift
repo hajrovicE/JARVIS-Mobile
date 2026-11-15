@@ -41,14 +41,9 @@ struct RootView: View {
   @State private var activeReply: StoredAIAnswer?
   @State private var experiences: [TaskExperience] = []
   @State private var correctionText = ""
-  @AppStorage("aiAllowed") private var aiAllowed = false
-  @AppStorage("aiSharePersonal") private var aiSharePersonal = false
-  @AppStorage("aiShareLearning") private var aiShareLearning = false
-  @AppStorage("aiShareHistory") private var aiShareHistory = false
-  @AppStorage("relayEndpoint") private var relayEndpoint = ""
-  @State private var endpointDraft = ""
-  @State private var tokenDraft = ""
-  @State private var connectionStatus = "Gerçek model bağlantısı henüz doğrulanmadı."
+  @State private var importingLocalModel = false
+  @State private var localModelStatus = "Yerel JARVIS modeli henüz kurulmadı."
+  @AppStorage("activeLocalModelManifest") private var activeLocalModelManifest = ""
   @State private var busy = false
   @Environment(\.scenePhase) private var scenePhase
   var body: some View {
@@ -61,21 +56,17 @@ struct RootView: View {
           memoryTab
           historyTab
           statusTab
-          aiSettingsTab
+          localModelTab
         }
       }
     }
     .task { await open() }
     .onChange(of: speech.transcript) { _, text in input = text }
-    .onChange(of: aiAllowed) { _, allowed in
-      if !allowed {
-        runningOperation?.cancel()
-        Task { await store?.invalidatePendingAI() }
-      }
-    }
     .onChange(of: tts) { _, enabled in if !enabled { speech.cancel() } }
     .onChange(of: scenePhase) { _, phase in
       if phase != .active {
+        // A submitted owner's inference request may not run unattended.
+        runningOperation?.cancel()
         holdStartTask?.cancel()
         holdStartTask = nil
         speech.cancel()
@@ -104,6 +95,39 @@ struct RootView: View {
     ) { result in
       if case .failure = result { errorText = "Dışa aktarma tamamlanamadı." }
       document = ExportDocument(data: Data())
+    }
+    .fileImporter(
+      isPresented: $importingLocalModel,
+      allowedContentTypes: [UTType(filenameExtension: "gguf") ?? .data, .data]
+    ) { result in
+      switch result {
+      case .success(let url):
+        perform {
+          let scoped = url.startAccessingSecurityScopedResource()
+          defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+          guard url.pathExtension.lowercased() == "gguf",
+                let size = try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber,
+                size.int64Value > 0 else { throw LocalModelError.invalidFile }
+          // Official seed uses a pinned digest. Owner-generated Qwen3 GGUF files
+          // are identified by their own digest, never silently relabeled as official.
+          let digest = try PlatformSHA256Checker().sha256(of: url)
+          let official = digest == Self.seedSHA256
+          let manifest = try LocalModelManifest(
+            identifier: official ? Self.seedID : "jarvis-owner-" + String(digest.prefix(16)),
+            revision: official ? "daeb8e2" : "owner-" + String(digest.prefix(12)),
+            licenseIdentifier: official ? "Apache-2.0" : "owner-provided",
+            byteCount: size.int64Value, sha256: digest)
+          let manager = try OnDeviceModelManager(directory: localModelDirectory())
+          _ = try await manager.importModel(from: url, manifest: manifest)
+          activeLocalModelManifest = String(
+            decoding: try JSONEncoder().encode(manifest), as: UTF8.self)
+          localModelStatus = official
+            ? "Qwen3 başlangıç modeli doğrulandı. Çıkarım testi bekleniyor."
+            : "Sahibin Qwen3-uyumlu modeli kaydedildi. Uyumluluk testi bekleniyor."
+        }
+      case .failure:
+        errorText = "Model dosyası seçilemedi."
+      }
     }
   }
   private var onboardingView: some View {
@@ -284,72 +308,41 @@ struct RootView: View {
   private var statusTab: some View {
     NavigationStack {
       List {
-        Text("Yerel komutlar ve şifreli hafıza kullanılabilir.")
+        Text("JARVIS modeli: cihazda çalışacak; bulut sağlayıcısı bağlı değil.")
+        Text(localModelStatus)
+        Text("Kişisel hafıza ve öğrenme verileri cihazda saklanır.")
         Text("Türkçe ses: cihazın çevrimdışı desteğine ve izinlere bağlı.")
-        Text("Konuşmacı kimlik doğrulaması: ETKİN DEĞİL.").accessibilityIdentifier(
-          "status.speakerIdentity")
-        Text(aiAllowed ? connectionStatus : "Bulut AI kapalı; yerel hafıza kullanılabilir.")
+        Text("Konuşmacı kimlik doğrulaması: ETKİN DEĞİL.")
+          .accessibilityIdentifier("status.speakerIdentity")
         Text("Web arama ve telefon kontrolü: bağlı değil.")
-        Text("İşlemler yalnızca doğrudan kullanıcı komutuyla başlar; ikinci onay gerekmez.")
-        Text("Alpha 0.3 · TestFlight yüklemesi yapılmadı.")
+        Text("Dış işlemler yalnızca doğrudan kullanıcı komutuyla başlatılır.")
+        Text("Gerçek cihaz performans testi ve TestFlight yüklemesi henüz doğrulanmadı.")
       }.navigationTitle("Yetenek durumu")
     }.tabItem { Label("Durum", systemImage: "info.circle") }
   }
-  private var aiSettingsTab: some View {
+
+  private var localModelTab: some View {
     NavigationStack {
       Form {
-        Section("Gerçek model bağlantısı") {
-          Text(
-            "Sağlayıcı API anahtarı yalnızca sunucuda kalır. Buraya yöneticinizin verdiği süreli aracı servis erişim bilgisini girin."
-          )
-          TextField("HTTPS sunucu adresi (…/v1/chat)", text: $endpointDraft)
-            .textInputAutocapitalization(.never).autocorrectionDisabled()
-          SecureField("Aracı servis erişim bilgisi", text: $tokenDraft).textInputAutocapitalization(
-            .never
-          ).autocorrectionDisabled()
-          Button("Bağlantı ayarlarını kaydet") {
-            do {
-              guard let endpoint = URL(string: endpointDraft) else {
-                throw AIProviderError.invalidConfiguration
-              }
-              _ = try HTTPRelayAIProvider(endpoint: endpoint, accessToken: tokenDraft)
-              try RelayCredentials.save(tokenDraft)
-              relayEndpoint = endpoint.absoluteString
-              tokenDraft = ""
-              aiAllowed = false
-              aiSharePersonal = false
-              aiShareLearning = false
-              aiShareHistory = false
-              connectionStatus = "Ayarlar kaydedildi; gerçek model bağlantısı henüz denenmedi."
-            } catch { errorText = "HTTPS adresi veya erişim bilgisi kaydedilemedi." }
-          }
-          Button("Erişim bilgisini kaldır", role: .destructive) {
-            do {
-              try RelayCredentials.delete()
-              aiAllowed = false
-              tokenDraft = ""
-              connectionStatus = "Model bağlantısı kaldırıldı."
-            } catch { errorText = "Erişim bilgisi silinemedi." }
-          }
-          Text(connectionStatus)
+        Section("JARVIS kendi yerel AI çekirdeği") {
+          Text("Sohbet, modeli yükledikten sonra iPhone üzerinde çalışır. API anahtarı, model sağlayıcı hesabı veya bulut bağlantısı kullanılmaz.")
+          Text("Başlangıç ağırlıkları: Qwen3 1.7B Q4_K_M (Apache-2.0). Bu, henüz JARVIS'e özel eğitilmiş bir ağırlık değildir.")
+          Link("GGUF başlangıç modelini indir",
+            destination: URL(string: "https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF/blob/daeb8e2/Qwen3-1.7B-Q4_K_M.gguf")!)
+          Button("Qwen3 veya kendi GGUF modelimi yükle") { importingLocalModel = true }
+          Text(localModelStatus)
+          Text("Kendi eğitilmiş modelinizi de yükleyebilirsiniz: Qwen3 tokenizer ve sohbet şablonuyla uyumlu GGUF olmalı. Her dosyanın SHA-256 özeti saklanır ve yeniden doğrulanır.")
+          Text("Hazır başlangıç modeli yaklaşık 1,28 GB; telefonda çalışma belleği ayrıca gerekir.")
         }
-        Section("Veri paylaşım onayı") {
-          Text(
-            "AI açıldığında yazdığınız sorular yapılandırdığınız sunucuya ve model sağlayıcısına gönderilir. Yerel kayıtlar yalnızca aşağıdaki ayrı seçimlerle paylaşılır. Herkese açık olmayan bir sunucu kullanın."
-          )
-          Toggle("Sorularımı bu AI sunucusuna göndermeyi kabul ediyorum", isOn: $aiAllowed)
-          Toggle("Kişisel hafızamı da paylaş", isOn: $aiSharePersonal).disabled(!aiAllowed)
-          Toggle("Öğrenme kayıtlarımı bu AI sunucusuyla paylaş", isOn: $aiShareLearning)
-            .disabled(!aiAllowed)
-          Toggle("Son konuşmalarımı da paylaş", isOn: $aiShareHistory).disabled(!aiAllowed)
-          Text(
-            "Parola ve erişim anahtarları göndermeyin. Otomatik filtre bütün kişisel verileri tespit edemez. İnternet yokken yerel hafıza çalışır."
-          )
+        Section("Çalışma biçimi") {
+          Text("İnternetsiz varsayılan: JARVIS yalnızca kurulu modeli kullanır. Model yoksa hata verir, uzaktaki sağlayıcıya geçmez.")
+          Text("Sahibinin açık komutu olmadan işlem başlatılmaz. Model yanıtı telefon eylemi değildir.")
+          Text("Kendi eğittiğiniz uyumlu GGUF ağırlıklarını Dosyalar'dan seçerek başlangıç modelini değiştirebilirsiniz. Eğitim işlemi telefonda otomatik yapılmaz.")
         }
-      }.navigationTitle("AI ayarları")
-        .onAppear { endpointDraft = relayEndpoint }
-    }.tabItem { Label("AI", systemImage: "sparkles") }
+      }.navigationTitle("Yerel yapay zekâ")
+    }.tabItem { Label("AI", systemImage: "cpu") }
   }
+
   private func executeOwnerCommand(_ operation: ActionOperation) {
     perform {
       guard let store else { return }
@@ -378,6 +371,13 @@ struct RootView: View {
         for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true
       ).appendingPathComponent("Jarvis/memory.aes")
       store = try MemoryStore(storage: EncryptedFileStorage(url: url, keychainAccount: "primary"))
+      if let manifest = try? selectedModelManifest(),
+         let modelURL = try? localModelDirectory().appendingPathComponent(manifest.identifier + ".gguf"),
+         FileManager.default.fileExists(atPath: modelURL.path) {
+        localModelStatus = "Kurulu model: " + manifest.identifier + ". İlk sorguda SHA-256 doğrulanacak."
+      } else {
+        localModelStatus = "Yerel model kurulmadı. GGUF dosyasını Dosyalar'dan yükleyin."
+      }
       try await refresh()
     } catch {
       errorText = "Şifreli hafıza açılamadı. Cihazın kilidini açıp uygulamayı yeniden başlatın."
@@ -420,6 +420,15 @@ struct RootView: View {
       } catch LearningError.conflictingRecord {
         errorText =
           "Aynı konuda farklı bir bilgi var. Tercihinizi değiştirmek için Düzelt ve onayla seçeneğini kullanın."
+      } catch let error as LocalModelError {
+        switch error {
+        case .notInstalled, .runtimeUnavailable:
+          errorText = "Yerel JARVIS modeli kurulu değil veya çıkarım motoru kullanılamıyor."
+        case .mismatchedDigest, .mismatchedSize, .invalidFile:
+          errorText = "Model dosyası doğrulanamadı. Yalnızca belirtilen GGUF sürümünü yükleyin."
+        default:
+          errorText = "Yerel model kurulumu veya çalıştırılması başarısız."
+        }
       } catch let error as AIProviderError {
         connectionStatus = error.userMessage
         errorText = error.userMessage
@@ -446,38 +455,57 @@ struct RootView: View {
       reply = "Öğrettiğiniz bilgi kaydedildi."
     }
   }
+  private static let seedID = "qwen3-1-7b-q4km"
+  private static let seedSHA256 = "d2387ca2dbfee2ffabce7120d3770dadca0b293052bc2f0e138fdc940d9bc7b5"
+
+  private func localModelDirectory() throws -> URL {
+    try FileManager.default.url(
+      for: .applicationSupportDirectory, in: .userDomainMask,
+      appropriateFor: nil, create: true)
+      .appendingPathComponent("Jarvis/models", isDirectory: true)
+  }
+
+  private func selectedModelManifest() throws -> LocalModelManifest {
+    guard !activeLocalModelManifest.isEmpty,
+          let bytes = activeLocalModelManifest.data(using: .utf8),
+          let manifest = try? JSONDecoder().decode(LocalModelManifest.self, from: bytes)
+    else { throw LocalModelError.notInstalled }
+    return manifest
+  }
+
   private func submit() {
     guard let store else { return }
     let command = input
     chatFocused = false
     perform {
-      let normalized = command.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(
-        with: Locale(identifier: "tr_TR"))
       if let operation = CommandRouter.ownerAction(for: command) {
         try await runOwnerAction(operation, using: store)
         input = ""
         return
       }
       let provider: any AIProvider
-      if !CommandRouter.isLocalCommand(command), aiAllowed,
-        let endpoint = URL(string: relayEndpoint), let credential = try RelayCredentials.load()
-      {
-        provider = try HTTPRelayAIProvider(endpoint: endpoint, accessToken: credential)
-      } else {
+      var scope = "local-command"
+      if CommandRouter.isLocalCommand(command) {
         provider = UnavailableAIProvider()
+      } else {
+        let manifest = try selectedModelManifest()
+        let manager = try OnDeviceModelManager(directory: localModelDirectory())
+        provider = LocalAIProvider(manager: manager, manifest: manifest,
+            runtime: GGUFInferenceRuntime())
+        scope = "local:" + manifest.identifier + ":" + manifest.sha256
       }
       let result = try await AssistantService(
-        store: store, provider: provider, providerScope: relayEndpoint
+        store: store, provider: provider, providerScope: scope,
+        processingMode: .onDevice
       ).reply(
         to: command,
-        consent: AISharingConsent(
-          networkAllowed: aiAllowed, personalMemory: aiSharePersonal,
-          confirmedLearning: aiShareLearning, recentHistory: aiShareHistory))
+        consent: AISharingConsent(networkAllowed: false,
+            personalMemory: true, confirmedLearning: true, recentHistory: true))
       try Task.checkCancellation()
       reply = result.text
       activeReply = result.generated
       input = ""
-      if result.generated != nil { connectionStatus = "Son gerçek model yanıtı alındı." }
+      if result.generated != nil { localModelStatus = "Son yanıt cihaz içindeki modelden üretildi." }
       if result.historyWriteFailed {
         errorText = "Komut tamamlandı ancak konuşma geçmişi kaydedilemedi."
       }
