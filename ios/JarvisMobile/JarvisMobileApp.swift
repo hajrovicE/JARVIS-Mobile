@@ -43,6 +43,12 @@ struct RootView: View {
   @State private var holdStartTask: Task<Void, Never>?
   @State private var activeReply: StoredAIAnswer?
   @State private var experiences: [TaskExperience] = []
+  @State private var activityJournal: ActivityLearningJournal?
+  @State private var activityEnabled = false
+  @State private var recentActivity: [ActivityObservation] = []
+  @State private var activityInsights: [ActivityInsight] = []
+  @State private var confirmEraseActivity = false
+  @State private var lastInputWasVoice = false
   @State private var correctionText = ""
   @AppStorage("aiAllowed") private var aiAllowed = false
   @AppStorage("aiSharePersonal") private var aiSharePersonal = false
@@ -70,7 +76,10 @@ struct RootView: View {
       }
     }
     .task { await open() }
-    .onChange(of: speech.transcript) { _, text in input = text }
+    .onChange(of: speech.transcript) { _, text in
+      input = text
+      if !text.isEmpty { lastInputWasVoice = true }
+    }
     .onChange(of: aiAllowed) { _, allowed in
       if !allowed {
         runningOperation?.cancel()
@@ -117,6 +126,18 @@ struct RootView: View {
       }
     } message: {
       Text("Bu işlem yalnızca onayınız ve başarılı cihaz biyometrisiyle yapılır.")
+    }
+    .confirmationDialog(
+      "JARVIS'in yerel etkinlik kayıtları silinsin ve etkinlik gözlemi kapatılsın mı?",
+      isPresented: $confirmEraseActivity, titleVisibility: .visible
+    ) {
+      Button("Etkinlik kayıtlarını sil", role: .destructive) {
+        perform {
+          try await activityJournal?.erase()
+          try await refreshActivity()
+        }
+      }
+      Button("İptal", role: .cancel) {}
     }
     .confirmationDialog(
       "Dışa aktarılan JSON kişisel verilerinizi içerir ve şifreli değildir. Devam edilsin mi?",
@@ -180,7 +201,10 @@ struct RootView: View {
             .padding().background(.blue.opacity(0.15)).cornerRadius(12)
             .gesture(
               DragGesture(minimumDistance: 0).onChanged { _ in
-                if holdStartTask == nil { holdStartTask = Task { await speech.begin() } }
+                if holdStartTask == nil {
+                  observe(.voiceInputStarted)
+                  holdStartTask = Task { await speech.begin() }
+                }
               }
               .onEnded { _ in
                 holdStartTask?.cancel()
@@ -197,6 +221,7 @@ struct RootView: View {
               speech.stop()
               input = speech.transcript
             } else {
+              observe(.voiceInputStarted)
               holdStartTask = Task { await speech.begin() }
             }
           }
@@ -210,6 +235,43 @@ struct RootView: View {
   private var memoryTab: some View {
     NavigationStack {
       List {
+        Section("Yerel etkinliklerden öğrenme") {
+          Text("Yalnızca JARVIS içindeki seçili eylem türleri kaydedilir. Diğer uygulamaların ekranları, tuşları, şifreleri ve içerikleri izlenmez.")
+          Text(activityEnabled ? "Gözlem açık · veriler şifreli ve yalnızca cihazda" : "Gözlem kapalı")
+          Button(activityEnabled ? "Etkinlik gözlemini kapat" : "Etkinlik gözlemini aç") {
+            perform {
+              try await activityJournal?.setEnabled(!activityEnabled)
+              try await refreshActivity()
+            }
+          }
+          Text("Kayıtlar en fazla 30 gün saklanır. Hafıza önerilerini yalnızca sen onaylayabilirsin.")
+          ForEach(activityInsights) { insight in
+            VStack(alignment: .leading, spacing: 4) {
+              Text(insight.title).font(.headline)
+              Text(insight.explanation)
+              Text("Gözlem sayısı: \(insight.evidenceCount)")
+              Button("Hafıza önerisi oluştur") {
+                let record = LearnedMemory(
+                  kind: .preference, key: "interaction.preference",
+                  text: insight.title, source: .userInput,
+                  confidence: 0.5,
+                  provenance: .init(sourceID: "local-activity-summary",
+                                    explanation: "Kullanıcı tarafından açılan yerel etkinlik özeti"))
+                perform { try await store?.proposeLearning(record) }
+              }
+            }
+          }
+          ForEach(recentActivity) { item in
+            HStack {
+              Text(item.kind.rawValue).font(.caption)
+              Spacer()
+              Text(item.recordedAt, style: .date).font(.caption)
+            }
+          }
+          Button("Etkinlik kayıtlarını ve izlemeyi sil", role: .destructive) {
+            confirmEraseActivity = true
+          }
+        }
         ForEach(memories) { memory in
           VStack(alignment: .leading) {
             TextField(
@@ -227,6 +289,7 @@ struct RootView: View {
               perform {
                 try await store?.edit(
                   id: memory.id, text: memories.first { $0.id == memory.id }?.text ?? "")
+                observe(.memoryEdited)
               }
             }
             Button("Sil", role: .destructive) { prepareAction(.deleteMemory(memory.id)) }
@@ -286,6 +349,7 @@ struct RootView: View {
                     try await store?.confirmLearning(
                       id: record.id,
                       expectedText: learningRecords.first { $0.id == record.id }?.text ?? "")
+                    observe(.learningConfirmed)
                   }
                 }
               }
@@ -313,6 +377,8 @@ struct RootView: View {
     NavigationStack {
       List {
         Text("Yerel komutlar ve şifreli hafıza kullanılabilir.")
+        Text("Etkinlikten öğrenme: \(activityEnabled ? "JARVIS içi gözlem açık" : "kapalı").")
+        Text("Tüm iPhone ve üçüncü taraf uygulamaları kesintisiz izleme: iOS tarafından desteklenmez.")
         Text("Türkçe ses: cihazın çevrimdışı desteğine ve izinlere bağlı.")
         Text("Konuşmacı kimlik doğrulaması: ETKİN DEĞİL.").accessibilityIdentifier(
           "status.speakerIdentity")
@@ -395,6 +461,12 @@ struct RootView: View {
       let authorization = try await permissions.approve(challenge)
       let result = try await ActionExecutor(store: store, permissions: permissions).execute(
         request, authorization: authorization)
+      if request.operation == .deleteAllMemory && result.succeeded {
+        try await activityJournal?.erase()
+        try await refreshActivity()
+      } else if result.succeeded {
+        observe(.actionSucceeded)
+      }
       if let data = result.exportedData {
         document = ExportDocument(data: data)
         exporting = true
@@ -412,10 +484,38 @@ struct RootView: View {
       ).appendingPathComponent("Jarvis/memory.aes")
       store = try MemoryStore(storage: EncryptedFileStorage(url: url, keychainAccount: "primary"))
       try await refresh()
+      do {
+        let journalURL = url.deletingLastPathComponent().appendingPathComponent("activity.aes")
+        activityJournal = try ActivityLearningJournal(
+          storage: EncryptedFileStorage(url: journalURL, keychainAccount: "activity-journal"))
+        try await refreshActivity()
+      } catch {
+        errorText = "Yerel etkinlik günlüğü açılamadı. Gözlem kapalı; hafıza kullanılabilir."
+      }
     } catch {
       errorText = "Şifreli hafıza açılamadı. Cihazın kilidini açıp uygulamayı yeniden başlatın."
     }
   }
+  private func refreshActivity() async throws {
+    guard let journal = activityJournal else { return }
+    let snapshot = try await journal.read()
+    activityEnabled = snapshot.enabled
+    recentActivity = Array(snapshot.observations.suffix(15).reversed())
+    activityInsights = try await journal.insights()
+  }
+
+  private func observe(_ kind: ActivityKind) {
+    guard activityEnabled, let journal = activityJournal else { return }
+    Task { @MainActor in
+      do {
+        try await journal.record(kind)
+        try await refreshActivity()
+      } catch {
+        errorText = "Etkinlik kaydı şifreli depolamaya yazılamadı."
+      }
+    }
+  }
+
   private func refresh() async throws {
     if let state = try await store?.read() {
       memories = state.personal
@@ -475,6 +575,7 @@ struct RootView: View {
         sourceID: "kullanıcı-önerisi", explanation: "Kullanıcı tarafından yazılan tercih"))
     perform {
       try await store?.proposeLearning(record)
+      observe(.learningProposed)
       learningKey = ""
       learningText = ""
     }
@@ -482,6 +583,9 @@ struct RootView: View {
   private func submit() {
     guard let store else { return }
     let command = input
+    if lastInputWasVoice { observe(.voiceInputFinished) }
+    else { observe(.typedCommand) }
+    lastInputWasVoice = false
     chatFocused = false
     perform {
       let normalized = command.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(
