@@ -59,12 +59,19 @@ public enum AnswerFreshnessPolicy {
 }
 
 /// Local commands always run first. Model output is display data, never an ActionRequest.
+public enum AIProcessingMode: Sendable { case remote, onDevice }
+
 public struct AssistantService: Sendable {
     private let store: MemoryStore
     private let provider: any AIProvider
     private let providerScope: String
-    public init(store: MemoryStore, provider: any AIProvider = UnavailableAIProvider(), providerScope: String = "unconfigured") {
-        self.store = store; self.provider = provider; self.providerScope = providerScope
+    private let processingMode: AIProcessingMode
+    public init(store: MemoryStore, provider: any AIProvider = UnavailableAIProvider(),
+                providerScope: String = "unconfigured", processingMode: AIProcessingMode = .remote) {
+        self.store = store
+        self.provider = provider
+        self.providerScope = providerScope
+        self.processingMode = processingMode
     }
     public func reply(to prompt: String, consent: AISharingConsent, now: Date = Date()) async throws -> AssistantReply {
         try Task.checkCancellation()
@@ -73,7 +80,10 @@ public struct AssistantService: Sendable {
             let result = try await router.executeWithHistory(prompt)
             return AssistantReply(text: result.reply, generated: nil, fromCache: false, historyWriteFailed: result.historyWriteFailed)
         }
-        guard consent.networkAllowed else { throw AssistantError.consentRequired }
+        // Local inference never needs network consent or a cloud token.
+        guard processingMode == .onDevice || consent.networkAllowed else {
+            throw AssistantError.consentRequired
+        }
         let (state, epoch) = try await store.aiContextSnapshot(now: now)
         let scope = providerScope + "|" + consent.cacheScope
         if !consent.recentHistory, !AnswerFreshnessPolicy.isDynamic(prompt), let cached = state.generatedAnswers.last(where: {
