@@ -74,6 +74,25 @@ final class LocalAIProviderTests: XCTestCase, @unchecked Sendable {
         do { _ = try await manager.installedModelURL(for: wrong); XCTFail("Must not install") }
         catch { XCTAssertEqual(error as? LocalModelError, .notInstalled) }
     }
+    func testOwnerModelIsAcceptedByContentNotFileExtension() async throws {
+        let (root, source) = try files()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let renamed = root.appendingPathComponent("my-private-model.weights")
+        try FileManager.default.moveItem(at: source, to: renamed)
+        let manager = try OnDeviceModelManager(directory: root.appendingPathComponent("private"),
+                                                digester: FixedDigest(digest: digest))
+        let result = try await manager.importModel(from: renamed, manifest: manifest())
+        XCTAssertTrue(FileManager.default.fileExists(atPath: result.path))
+    }
+    func testRejectsNonGGUFContentEvenWhenNamedGGUF() async throws {
+        let (root, source) = try files()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try Data("NOT_A_MODEL".utf8).write(to: source)
+        let manager = try OnDeviceModelManager(directory: root.appendingPathComponent("private"),
+                                                digester: FixedDigest(digest: digest))
+        do { _ = try await manager.importModel(from: source, manifest: manifest(11)); XCTFail("Not GGUF") }
+        catch { XCTAssertEqual(error as? LocalModelError, .invalidFile) }
+    }
     func testManifestValidationAndCodableTraversalRejected() throws {
         XCTAssertThrowsError(try LocalModelManifest(identifier: "../outside", revision: "r1", licenseIdentifier: "Apache-2.0", byteCount: 8, sha256: digest))
         XCTAssertThrowsError(try LocalModelManifest(identifier: "valid", revision: "r1", licenseIdentifier: "Apache-2.0", byteCount: -1, sha256: digest))
