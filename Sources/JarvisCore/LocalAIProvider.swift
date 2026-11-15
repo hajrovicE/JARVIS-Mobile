@@ -175,9 +175,7 @@ public struct LocalAIProvider: AIProvider {
     public func respond(to request: AIRequest) async throws -> AIResponse {
         guard !Task.isCancelled else { throw AIProviderError.cancelled }
         guard !request.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              request.prompt.count <= 2_000, request.context.count <= 5,
-              request.context.allSatisfy({ !$0.id.isEmpty && $0.id.count <= 128 &&
-                  !$0.text.isEmpty && $0.text.count <= 400 }) else {
+              request.context.allSatisfy({ !$0.id.isEmpty && !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
             throw AIProviderError.invalidRequest
         }
         let file: URL
