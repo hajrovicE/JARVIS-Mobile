@@ -18,6 +18,10 @@ Xcode'da imzalama takımını seçip iPhone'da çalıştırın. Speech desteği 
 
 Hafıza sekmesindeki öğrenme önerileri ayrı onay bekler; kullanıcı düzeltmesi çelişkili eski kayda üstün gelir. [Learning Engine temeli ve kapsamı](docs/LEARNING_ENGINE.md).
 
-Konuşmacı doğrulaması, bulut AI, web kaynakları ve telefon kontrolü etkin değildir. Önbellek altyapısı API düzeyindedir; harici cevap sağlayıcısı henüz bağlı değildir. Süresi dolan veriler erişimde/açılışta temizlenir; uygulama kapalıyken kesin zamanlı arka plan silme garantisi yoktur.
+Alpha 0.3, modüler AIProvider + gerçek OpenAI API aracı servis kodu, açık paylaşım onayı, kaynak/zaman metadata'sı, öğrenme revizyonları ve güvenli yerel ActionExecutor içerir. **Canlı model bağlantısı bu geliştirmede kurulmadı**; yapılandırma yoksa sahte cevap yerine açık hata gösterilir. [Alpha 0.3 kapsamı](docs/ALPHA_0_3.md), [AI sunucusu kurulumu](docs/AI_RELAY_SERVER.md).
+
+AI varsayılan kapalı; sağlayıcı API anahtarı yalnızca sunucuda, aracı servis erişim bilgisi Keychain'dedir. Yerel hafıza internet olmadan çalışır. Silme ve dışa aktarma kullanıcı onayı + cihaz biyometrisi ister; cihaz biyometrisi kullanılamıyorsa işlem reddedilir. Gerçek konuşmacı tanıma, web arama, telefon kontrolü ve imzalı beceri yükleme etkin değildir.
+
+Yalnızca iPhone sahibi kullanıcı için: GitHub Actions → **iOS Release preparation** → `build-only`. Bu işlem imzasız Release paketi üretir; iPhone'a kurulamaz. Ücretli üyelik/Secrets olmadan TestFlight yüklemesi denenmez. [Manuel hesap ve dağıtım hazırlığı](docs/IPHONE_DISTRIBUTION.md).
 
 Ayrıntılar: [mimari](docs/ARCHITECTURE.md), [gereksinimler](docs/PRD.md), [yol haritası](docs/ROADMAP.md), [test planı](docs/TEST_PLAN.md), [konuşmacı güvenliği](docs/SPEAKER_SECURITY.md), [doğrulama raporu](docs/VALIDATION.md).

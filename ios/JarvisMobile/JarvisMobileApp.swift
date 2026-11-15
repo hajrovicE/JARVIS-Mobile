@@ -369,7 +369,7 @@ struct RootView: View {
           Toggle("Kişisel hafızamı da paylaş", isOn: $aiSharePersonal).disabled(!aiAllowed)
           Toggle("Onaylı, hassas olmayan öğrenme kayıtlarımı paylaş", isOn: $aiShareLearning)
             .disabled(!aiAllowed)
-          Toggle("Son yerel konuşmalarımı paylaş", isOn: $aiShareHistory).disabled(!aiAllowed)
+          Toggle("Son konuşmalarımı da paylaş", isOn: $aiShareHistory).disabled(!aiAllowed)
           Text(
             "Parola ve erişim anahtarları göndermeyin. Otomatik filtre bütün kişisel verileri tespit edemez. İnternet yokken yerel hafıza çalışır."
           )

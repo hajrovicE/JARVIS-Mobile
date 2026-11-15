@@ -100,6 +100,33 @@ final class AssistantServiceTests: XCTestCase, @unchecked Sendable {
         catch { XCTAssertEqual(error as? AssistantError, .contextChanged) }
         let empty = try await store.read(now: now); XCTAssertEqual(empty, MemorySnapshot())
     }
+    func testConsentedConversationContinuityAndNoAutomaticHistorySharing() async throws {
+        let store = try MemoryStore(storage: TestStorage(), now: now)
+        let provider = RecordingProvider(response: response("Birinci adım: planı oluştur"))
+        let service = AssistantService(store: store, provider: provider)
+        _ = try await service.reply(to: "Bir plan yap", consent: .init(networkAllowed: true), now: now)
+        _ = try await service.reply(to: "İkinci adımı açıkla", consent: .init(networkAllowed: true, recentHistory: true), now: now.addingTimeInterval(1))
+        let second = await provider.last()
+        XCTAssertTrue(try XCTUnwrap(second).context.contains { $0.id.hasPrefix("answer:") && $0.text.contains("Birinci adım") })
+        _ = try await service.reply(to: "Başka bir soru", consent: .init(networkAllowed: true), now: now.addingTimeInterval(2))
+        let privateRequest = await provider.last()
+        XCTAssertTrue(try XCTUnwrap(privateRequest).context.isEmpty)
+    }
+    func testRevokedMemoryCategoryIsNotResharedThroughConversationHistory() async throws {
+        let store = try MemoryStore(storage: TestStorage(), now: now)
+        try await store.remember("private preference", now: now)
+        let provider = RecordingProvider(response: response())
+        let service = AssistantService(store: store, provider: provider)
+        let first = try await service.reply(to: "Bir öneri", consent: .init(networkAllowed: true, personalMemory: true), now: now)
+        let firstID = try XCTUnwrap(first.generated?.id)
+        let second = try await service.reply(to: "Devam et", consent: .init(networkAllowed: true, personalMemory: true, recentHistory: true), now: now.addingTimeInterval(1))
+        let secondID = try XCTUnwrap(second.generated?.id)
+        _ = try await service.reply(to: "Hafızamı paylaşmadan devam et", consent: .init(networkAllowed: true, recentHistory: true), now: now.addingTimeInterval(2))
+        let last = await provider.last()
+        let ids = try XCTUnwrap(last).context.map(\.id)
+        XCTAssertFalse(ids.contains("answer:\(firstID)")); XCTAssertFalse(ids.contains("answer:\(secondID)"))
+        XCTAssertTrue(ids.isEmpty)
+    }
     func testOldCacheEpochCannotBeUsedAfterDeletion() async throws {
         let store = try MemoryStore(storage: TestStorage(), now: now)
         let (_, epoch) = try await store.aiContextSnapshot(now: now)

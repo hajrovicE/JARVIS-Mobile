@@ -77,7 +77,7 @@ public struct AssistantService: Sendable {
         guard !CredentialFilter.containsCredential(prompt) else { throw AssistantError.credentialDetected }
         let (state, epoch) = try await store.aiContextSnapshot(now: now)
         let scope = providerScope + "|" + consent.cacheScope
-        if !AnswerFreshnessPolicy.isDynamic(prompt), let cached = state.generatedAnswers.last(where: {
+        if !consent.recentHistory, !AnswerFreshnessPolicy.isDynamic(prompt), let cached = state.generatedAnswers.last(where: {
             $0.question == prompt && $0.cacheScope == scope && ($0.cacheUntil ?? .distantPast) > now
         }) {
             try await store.validateAIContext(expectedEpoch: epoch)
@@ -85,6 +85,7 @@ public struct AssistantService: Sendable {
             return AssistantReply(text: cached.response.text, generated: cached, fromCache: true, historyWriteFailed: false)
         }
         var context: [AIContextEntry] = []
+        var historyCategories: Set<String> = []
         if consent.confirmedLearning {
             let memories = LocalLearningEngine().shareableContext(query: "", in: state.learning, now: now)
             context += memories.prefix(10).map { AIContextEntry(id: "learning:\($0.id)", text: String("\($0.key): \($0.text)".prefix(1800))) }
@@ -94,15 +95,26 @@ public struct AssistantService: Sendable {
                 .map { AIContextEntry(id: "personal:\($0.id)", text: String($0.text.prefix(1800))) }
         }
         if consent.recentHistory {
-            context += state.conversations.suffix(4).filter { !CredentialFilter.containsCredential($0.text) }
-                .map { AIContextEntry(id: "conversation:\($0.id)", text: String($0.text.prefix(1800))) }
+            let local = state.conversations.map { ($0.createdAt, "conversation:\($0.id)", $0.text, Set<String>()) }
+            let generated = state.generatedAnswers.compactMap { answer -> (Date, String, String, Set<String>)? in
+                var categories: Set<String> = []
+                if answer.contextIDs.contains(where: { $0.hasPrefix("personal:") || $0 == "derived:personal" }) { categories.insert("derived:personal") }
+                if answer.contextIDs.contains(where: { $0.hasPrefix("learning:") || $0 == "derived:learning" }) { categories.insert("derived:learning") }
+                guard (!categories.contains("derived:personal") || consent.personalMemory),
+                      (!categories.contains("derived:learning") || consent.confirmedLearning) else { return nil }
+                return (answer.savedAt, "answer:\(answer.id)", "Kullanıcı: \(answer.question)\nAI: \(answer.response.text)", categories)
+            }
+            let history = (local + generated).sorted { $0.0 < $1.0 }
+                .filter { !CredentialFilter.containsCredential($0.2) }.suffix(4)
+            context += history.map { AIContextEntry(id: $0.1, text: String($0.2.prefix(1800))) }
+            history.forEach { historyCategories.formUnion($0.3) }
         }
         try Task.checkCancellation()
         let response = try await provider.respond(to: AIRequest(prompt: prompt, context: context))
         try Task.checkCancellation()
         let answer = StoredAIAnswer(question: prompt, response: response, savedAt: now,
-            cacheUntil: AnswerFreshnessPolicy.cacheUntil(question: prompt, response: response, now: now),
-            cacheScope: scope, contextIDs: context.map(\.id))
+            cacheUntil: consent.recentHistory ? nil : AnswerFreshnessPolicy.cacheUntil(question: prompt, response: response, now: now),
+            cacheScope: scope, contextIDs: context.map(\.id) + historyCategories.sorted())
         try await store.recordGeneratedAnswer(answer, expectedEpoch: epoch)
         try Task.checkCancellation()
         return AssistantReply(text: response.text, generated: answer, fromCache: false, historyWriteFailed: false)
