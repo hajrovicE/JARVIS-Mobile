@@ -70,8 +70,9 @@ final class UserExperienceReviewerTests: XCTestCase, @unchecked Sendable {
                        .sensitive)
         let shareable = LocalLearningEngine().shareableContext(
             query: "", in: state.learning, now: now)
-        XCTAssertEqual(shareable.count, 3)
-        XCTAssertTrue(shareable.contains { $0.id == privateID })
+        XCTAssertEqual(shareable.count, 2)
+        XCTAssertFalse(shareable.contains { $0.id == privateID })
+        XCTAssertTrue(state.learning.records.contains { $0.id == privateID })
         // A review has no ActionAuthorization, and it does not execute a task.
         let reopened = try MemoryStore(storage: disk, now: now)
         let saved = try await reopened.read(now: now)
