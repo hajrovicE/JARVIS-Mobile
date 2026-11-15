@@ -113,7 +113,7 @@ struct RootView: View {
           let digest = try PlatformSHA256Checker().sha256(of: url)
           let official = digest == Self.seedSHA256
           let manifest = try LocalModelManifest(
-            identifier: official ? Self.seedID : "jarvis-owner-qwen3",
+            identifier: official ? Self.seedID : "jarvis-owner-" + String(digest.prefix(16)),
             revision: official ? "daeb8e2" : "owner-" + String(digest.prefix(12)),
             licenseIdentifier: official ? "Apache-2.0" : "owner-provided",
             byteCount: size.int64Value, sha256: digest)
