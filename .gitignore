@@ -5,3 +5,14 @@ DerivedData/
 ios/*.xcodeproj/
 ios/Info.plist
 *.xcuserstate
+
+# Owner-only AI weights and locally curated training data (never commit)
+*.gguf
+*.safetensors
+*.ckpt
+*.pt
+owner-examples.jsonl
+local-dataset/
+jarvis-model/
+training-data/
+model-output/
