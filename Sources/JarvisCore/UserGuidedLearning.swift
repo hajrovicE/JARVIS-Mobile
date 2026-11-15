@@ -70,14 +70,11 @@ public actor UserGuidedLearning {
     public func teach(topic: String, text: String, now: Date = Date()) async throws -> UUID {
         let normalized = topic.trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased(with: Locale(identifier: "tr_TR"))
-        guard !normalized.isEmpty else { throw GuidedLearningError.invalidTopic }
-        let lesson = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !lesson.isEmpty else { throw GuidedLearningError.invalidTeaching }
-
         let key = prefix + normalized
         let state = try await store.read(now: now)
         let matching = state.learning.records.filter {
-            $0.key == key && $0.userConfirmed && $0.supersededBy == nil
+            $0.key == key && $0.userConfirmed && $0.supersededBy == nil && $0.sensitivity == .ordinary &&
+                ($0.expiresAt == nil || $0.expiresAt! > now)
         }
         guard matching.count <= 1 else { throw GuidedLearningError.ambiguousTopic }
         if let existing = matching.first {
