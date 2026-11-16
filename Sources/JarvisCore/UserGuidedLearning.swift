@@ -70,6 +70,22 @@ public actor UserGuidedLearning {
     public func teach(topic: String, text: String, now: Date = Date()) async throws -> UUID {
         let normalized = topic.trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased(with: Locale(identifier: "tr_TR"))
+        guard !normalized.isEmpty,
+              normalized.count <= 80,
+              normalized.unicodeScalars.allSatisfy({
+                  CharacterSet.letters.contains($0) ||
+                  CharacterSet.decimalDigits.contains($0) ||
+                  $0 == "_"
+              }) else { throw GuidedLearningError.invalidTopic }
+        let lesson = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !lesson.isEmpty, lesson.count <= 1000 else {
+            throw GuidedLearningError.invalidTeaching
+        }
+        let lower = lesson.lowercased(with: Locale(identifier: "en_US_POSIX"))
+        let credentialMarkers = ["api key:", "api_key=", "password:", "password=", "secret:", "secret=", "bearer ", "sk-"]
+        guard !credentialMarkers.contains(where: { lower.contains($0) }) else {
+            throw GuidedLearningError.secretDetected
+        }
         let key = prefix + normalized
         let state = try await store.read(now: now)
         let matching = state.learning.records.filter {
