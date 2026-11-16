@@ -26,6 +26,14 @@ final class SpeechController: ObservableObject {
   private lazy var recognizer = SFSpeechRecognizer(locale: Locale(identifier: "tr-TR"))
   private var synthesizer: AVSpeechSynthesizer?
   private var outputDelegate: SpeechOutputDelegate?
+  // Prefer an installed enhanced Turkish voice, while keeping the device's
+  // default Turkish voice as a reliable offline fallback.
+  private lazy var turkishVoice: AVSpeechSynthesisVoice? = {
+    AVSpeechSynthesisVoice.speechVoices()
+      .filter { $0.language == "tr-TR" }
+      .sorted { $0.quality.rawValue > $1.quality.rawValue }
+      .first ?? AVSpeechSynthesisVoice(language: "tr-TR")
+  }()
   private var activeUtteranceID: ObjectIdentifier?
   private var request: SFSpeechAudioBufferRecognitionRequest?
   private var task: SFSpeechRecognitionTask?
@@ -196,7 +204,7 @@ final class SpeechController: ObservableObject {
     cancel()
     let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !value.isEmpty else { return }
-    guard let voice = AVSpeechSynthesisVoice(language: "tr-TR") else {
+    guard let voice = turkishVoice else {
       status = "Türkçe sesli cevap bu cihazda kullanılamıyor. Cevabı okuyabilirsiniz."
       return
     }
