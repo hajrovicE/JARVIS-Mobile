@@ -30,10 +30,20 @@ jobs:
         run: swift test -Xswiftc -swift-version -Xswiftc 6
   build-ipa:
     needs: core-tests
-    runs-on: macos-15
-    timeout-minutes: 30
+    # GitHub's macOS arm64 pool is often saturated ("job was not acquired by Runner");
+    # the same build is offered to several runner types and any one success is enough.
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-15-intel, macos-14]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+      - name: Select Xcode 16
+        run: |
+          XCODE="$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1 || true)"
+          if [ -n "$XCODE" ]; then sudo xcode-select -s "$XCODE"; fi
       - name: Toolchain versions
         run: |
           xcodebuild -version
@@ -68,7 +78,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: jarvis-sideload-${{ github.sha }}
+          name: jarvis-sideload-${{ matrix.runner }}-${{ github.sha }}
           path: |
             JARVIS-unsigned.ipa
             JARVIS-unsigned.ipa.sha256
@@ -80,7 +90,12 @@ jobs:
         run: |
           set -euo pipefail
           TAG="sideload-${GITHUB_RUN_NUMBER}"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already published by another runner; nothing to do."
+            exit 0
+          fi
           gh release create "$TAG" JARVIS-unsigned.ipa JARVIS-unsigned.ipa.sha256 \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
             --title "JARVIS sideload build ${GITHUB_RUN_NUMBER}" \
-            --notes "Unsigned IPA for personal sideloading with your own Apple ID. Not uploaded to Apple. See docs/SIDELOAD.md."
+            --notes "Unsigned IPA for personal sideloading with your own Apple ID. Not uploaded to Apple. See docs/SIDELOAD.md." \
+            || gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
