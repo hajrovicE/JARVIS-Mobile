@@ -31,6 +31,7 @@ struct RootView: View {
   @AppStorage("jarvis.voice.speechRate") private var speechRate = 0.53
   @State private var previousVoiceTurnID: UUID?
   @State private var responseSeconds: Double?
+  @State private var localRuntimeMetrics: LocalRuntimeMetrics?
   @State private var store: MemoryStore?
   @State private var input = ""
   @FocusState private var chatFocused: Bool
@@ -229,6 +230,12 @@ struct RootView: View {
           Toggle("Cevapları sesli oku", isOn: $tts)
           if let responseSeconds {
             Text("Son yanıt: \(responseSeconds, format: .number.precision(.fractionLength(1))) saniye")
+              .font(.caption).foregroundStyle(.secondary)
+          }
+          if let localRuntimeMetrics {
+            Text("İlk token: \(localRuntimeMetrics.firstTokenSeconds, format: .number.precision(.fractionLength(2))) sn · " +
+                 "Hız: \(localRuntimeMetrics.tokensPerSecond, format: .number.precision(.fractionLength(1))) token/sn · " +
+                 (localRuntimeMetrics.warmModel ? "Hazır model" : "İlk yükleme"))
               .font(.caption).foregroundStyle(.secondary)
           }
           if speech.speaking { Button("Sesli cevabı durdur") { speech.cancel() } }
@@ -597,6 +604,7 @@ struct RootView: View {
             personalMemory: true, confirmedLearning: true, recentHistory: true))
       try Task.checkCancellation()
       responseSeconds = Date().timeIntervalSince(answerStart)
+      if result.generated != nil { localRuntimeMetrics = await inferenceRuntime.metrics }
       reply = result.text
       activeReply = result.generated
       input = ""
