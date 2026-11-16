@@ -27,6 +27,16 @@ private final class ResidentGGUFModel {
     deinit { llama_model_free(pointer) }
 }
 
+/// Ephemeral performance counters. No prompt text, user data, or speech is stored.
+struct LocalRuntimeMetrics: Equatable, Sendable {
+    let warmModel: Bool
+    let modelLoadSeconds: Double
+    let firstTokenSeconds: Double
+    let totalSeconds: Double
+    let outputTokens: Int
+    let tokensPerSecond: Double
+}
+
 actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
     private var maxNewTokens: Int
     private var contextLength: Int32
@@ -35,6 +45,7 @@ actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
     private var topP: Float
     private var cpuThreads: Int
     private var resident: ResidentGGUFModel?
+    private(set) var metrics: LocalRuntimeMetrics?
 
     /// These are user-controlled generation settings, not content moderation rules.
     /// A real context window and finite per-request generation budget are required by llama.cpp.
@@ -63,6 +74,7 @@ actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
     /// Explicitly free weights on backgrounding or when the app changes models.
     func unload() {
         resident = nil
+        metrics = nil
     }
 
     private func model(for url: URL) throws -> OpaquePointer {
@@ -92,8 +104,12 @@ actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
         try Task.checkCancellation()
         guard modelURL.isFileURL, !prompt.isEmpty else { throw LocalModelError.invalidSource }
         _ = GGUFBackend.ready
-
+        metrics = nil
+        let started = Date()
+        let wasWarm = resident?.path == modelURL.path &&
+            FileManager.default.fileExists(atPath: modelURL.path)
         let model = try model(for: modelURL)
+        let modelLoadSeconds = Date().timeIntervalSince(started)
 
         var contextParameters = llama_context_default_params()
         contextParameters.n_ctx = UInt32(contextLength)
@@ -179,11 +195,17 @@ actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
         var bytes = [UInt8]()
         bytes.reserveCapacity(min(32_768, maxNewTokens) * 5)
         var position = Int32(tokens.count)
+        var firstTokenSeconds: Double?
+        var sampledTokens = 0
 
         for _ in 0..<generationBudget {
             try Task.checkCancellation()
             let token = llama_sampler_sample(sampler, context, -1)
             if llama_vocab_is_eog(vocabulary, token) { break }
+            if firstTokenSeconds == nil {
+                firstTokenSeconds = Date().timeIntervalSince(started)
+            }
+            sampledTokens += 1
 
             var piece = [CChar](repeating: 0, count: 64)
             var written = llama_token_to_piece(vocabulary, token, &piece,
@@ -218,6 +240,17 @@ actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
         let answer = String(decoding: bytes, as: UTF8.self)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !answer.isEmpty else { throw LocalModelError.emptyOutput }
+        let totalSeconds = Date().timeIntervalSince(started)
+        let initialSeconds = firstTokenSeconds ?? totalSeconds
+        metrics = LocalRuntimeMetrics(
+            warmModel: wasWarm && modelLoadSeconds < 0.5,
+            modelLoadSeconds: modelLoadSeconds,
+            firstTokenSeconds: initialSeconds,
+            totalSeconds: totalSeconds,
+            outputTokens: sampledTokens,
+            tokensPerSecond: Double(sampledTokens) /
+                max(0.001, totalSeconds - initialSeconds)
+        )
         return answer
     }
 }
