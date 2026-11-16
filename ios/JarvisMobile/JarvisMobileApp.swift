@@ -25,6 +25,8 @@ struct RootView: View {
   @StateObject private var speech = SpeechController()
   @State private var inferenceRuntime = GGUFInferenceRuntime()
   @AppStorage("jarvis.voice.autoSend") private var voiceAutoSend = true
+  @AppStorage("jarvis.voice.handsFree") private var handsFreeVoice = false
+  @State private var voiceConversationActive = false
   @AppStorage("jarvis.conversation.quickMode") private var quickMode = true
   @AppStorage("jarvis.voice.speechRate") private var speechRate = 0.53
   @State private var previousVoiceTurnID: UUID?
@@ -79,7 +81,13 @@ struct RootView: View {
             id == turn.id, previousVoiceTurnID != id, !busy, store != nil else { return }
       previousVoiceTurnID = id
       input = turn.text
-      submit()
+      submit(fromVoice: true)
+    }
+    .onChange(of: speech.naturallyFinishedOutputID) { _, id in
+      guard id != nil, handsFreeVoice, tts, voiceConversationActive,
+            scenePhase == .active, !busy else { return }
+      holdStartTask?.cancel()
+      holdStartTask = Task { await speech.begin(autoStopOnSilence: true) }
     }
     .onChange(of: tts) { _, enabled in if !enabled { speech.cancel() } }
     .onChange(of: scenePhase) { _, phase in
@@ -88,6 +96,7 @@ struct RootView: View {
         runningOperation?.cancel()
         holdStartTask?.cancel()
         holdStartTask = nil
+        voiceConversationActive = false
         speech.cancel()
         if phase == .background {
           Task {
@@ -207,12 +216,16 @@ struct RootView: View {
               speech.stop()
               input = speech.transcript
             } else {
-              holdStartTask = Task { await speech.begin() }
+              holdStartTask = Task { await speech.begin(autoStopOnSilence: handsFreeVoice) }
             }
           }
           .disabled(speech.requestingPermissions || speech.finishing)
           Toggle("Akıcı sohbet · kısa ve hızlı yanıt", isOn: $quickMode)
           Toggle("Konuşmam bitince otomatik yanıtla", isOn: $voiceAutoSend)
+          Toggle("Ön planda kesintisiz sesli sohbet", isOn: $handsFreeVoice)
+            .disabled(!tts || !voiceAutoSend)
+          Text("Kesintisiz sohbet yalnızca uygulama açıkken ve ilk sesli komutu başlattığınızda dinler. Başka uygulamaları veya arka planı izlemez.")
+            .font(.caption).foregroundStyle(.secondary)
           Toggle("Cevapları sesli oku", isOn: $tts)
           if let responseSeconds {
             Text("Son yanıt: \(responseSeconds, format: .number.precision(.fractionLength(1))) saniye")
@@ -530,8 +543,9 @@ struct RootView: View {
     return manifest
   }
 
-  private func submit() {
+  private func submit(fromVoice: Bool = false) {
     guard let store else { return }
+    voiceConversationActive = fromVoice && handsFreeVoice && tts && voiceAutoSend
     let command = input
     chatFocused = false
     perform {
