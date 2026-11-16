@@ -16,3 +16,6 @@ local-dataset/
 jarvis-model/
 training-data/
 model-output/
+
+__pycache__/
+*.pyc
