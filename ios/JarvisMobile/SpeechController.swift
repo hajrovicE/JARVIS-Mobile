@@ -221,13 +221,21 @@ final class SpeechController: ObservableObject {
         synthesizer = output
         outputDelegate = delegate
       }
-      let utterance = AVSpeechUtterance(string: value)
-      utterance.voice = voice
-      utterance.rate = min(0.58, max(0.44, rate))
-      activeUtteranceID = ObjectIdentifier(utterance)
+      let chunks = TurkishSpeechChunker.chunks(value)
+      guard !chunks.isEmpty else { return }
+      let utterances = chunks.map { chunk -> AVSpeechUtterance in
+        let utterance = AVSpeechUtterance(string: chunk)
+        utterance.voice = voice
+        utterance.rate = min(0.58, max(0.44, rate))
+        utterance.postUtteranceDelay = 0.07
+        return utterance
+      }
+      // Only the LAST queued utterance completes the spoken turn. No early
+      // microphone restart in the gap between individual sentences.
+      activeUtteranceID = utterances.last.map(ObjectIdentifier.init)
       speaking = true
       status = "Cevap seslendiriliyor…"
-      synthesizer?.speak(utterance)
+      for utterance in utterances { synthesizer?.speak(utterance) }
     } catch {
       cancel()
       status = "Sesli cevap başlatılamadı. Cevabı okuyabilirsiniz."
