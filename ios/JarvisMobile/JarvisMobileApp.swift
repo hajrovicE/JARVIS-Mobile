@@ -561,12 +561,19 @@ struct RootView: View {
       } else {
         let manifest = try selectedModelManifest()
         let manager = try OnDeviceModelManager(directory: localModelDirectory())
-        let outputLimit = quickMode ? min(320, modelMaxNewTokens) : modelMaxNewTokens
-        let contextLimit = quickMode ? min(4096, modelContextTokens) : modelContextTokens
+        let budget = LocalTurnBudget.select(
+            prompt: command, fastConversation: quickMode,
+            ownerMaxNewTokens: modelMaxNewTokens,
+            ownerContextTokens: modelContextTokens)
+        let conversationGuidance = quickMode ?
+          "Türkçe, doğal bir sohbet ritmiyle konuş; gereksiz tekrar ve uzun giriş yapma. " +
+          "İsteniyorsa ayrıntıyı koru. Doğrulayamadığın bilgiyi kesinmiş gibi söyleme." : ""
+        let instructions = [ownerInstructions, conversationGuidance]
+            .filter { !$0.isEmpty }.joined(separator: "\n")
         await inferenceRuntime.configure(
-            maxNewTokens: outputLimit,
-            contextLength: Int32(clamping: contextLimit),
-            ownerInstructions: ownerInstructions,
+            maxNewTokens: budget.maxNewTokens,
+            contextLength: Int32(clamping: budget.contextTokens),
+            ownerInstructions: instructions,
             temperature: Float(modelTemperature),
             topP: Float(modelTopP),
             cpuThreads: modelCPUThreads)
