@@ -77,13 +77,13 @@ actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
         metrics = nil
     }
 
-    private func model(for url: URL) throws -> OpaquePointer {
+    private func model(for url: URL) throws -> (OpaquePointer, Bool) {
         let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
         let bytes = (attrs[.size] as? NSNumber)?.uint64Value ?? 0
         let modified = attrs[.modificationDate] as? Date
         if let resident, resident.path == url.path,
            resident.bytes == bytes, resident.modifiedAt == modified {
-            return resident.pointer
+            return (resident.pointer, true)
         }
         resident = nil
         var parameters = llama_model_default_params()
@@ -97,7 +97,7 @@ actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
         }
         resident = ResidentGGUFModel(pointer: pointer, path: url.path,
                                       bytes: bytes, modifiedAt: modified)
-        return pointer
+        return (pointer, false)
     }
 
     func generate(prompt: String, modelURL: URL) async throws -> String {
@@ -106,9 +106,7 @@ actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
         _ = GGUFBackend.ready
         metrics = nil
         let started = Date()
-        let wasWarm = resident?.path == modelURL.path &&
-            FileManager.default.fileExists(atPath: modelURL.path)
-        let model = try model(for: modelURL)
+        let (model, wasWarm) = try model(for: modelURL)
         let modelLoadSeconds = Date().timeIntervalSince(started)
 
         var contextParameters = llama_context_default_params()
@@ -243,7 +241,7 @@ actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
         let totalSeconds = Date().timeIntervalSince(started)
         let initialSeconds = firstTokenSeconds ?? totalSeconds
         metrics = LocalRuntimeMetrics(
-            warmModel: wasWarm && modelLoadSeconds < 0.5,
+            warmModel: wasWarm,
             modelLoadSeconds: modelLoadSeconds,
             firstTokenSeconds: initialSeconds,
             totalSeconds: totalSeconds,
