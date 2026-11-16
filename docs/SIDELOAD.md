@@ -3,7 +3,7 @@
 Bu yol **App Store, TestFlight, App Review veya ücretli Apple Developer üyeliği gerektirmez**. Uygulama Apple'a gönderilmez. iOS yine de her uygulamanın imzalı olmasını ister; imzayı kendi (ücretsiz) Apple ID'nizle, kendi cihazınız için siz atarsınız. Bu, Apple'ın kişisel geliştirme için sunduğu normal "ücretsiz imzalama" yoludur; bir iOS kısıtını aşmaz.
 
 ## 1. İmzasız IPA'yı üretin
-GitHub → **Actions → iPhone sideload IPA → Run workflow**. İş bitince:
+GitHub → **Actions → iPhone sideload IPA → Run workflow** (iş akışı `main`'e birleştirildikten sonra bu düğme görünür; `claude/**` dallarına yapılan uygulama değişiklikleri ve `v*` etiketleri derlemeyi kendiliğinden başlatır). İş bitince:
 - **Releases** altında `sideload-<numara>` ön sürümünde `JARVIS-unsigned.ipa` bulunur (iPhone Safari'den de indirilebilir), ayrıca
 - koşunun **Artifacts** bölümünde aynı dosya ve derleme logu durur.
 
@@ -38,5 +38,5 @@ Kurulumdan sonra iPhone'da:
 Bellek: 1,7B Q4 model + 4096 token bağlam kabaca 2 GB çalışma belleği ister. 4 GB RAM'li eski iPhone'larda iOS uygulamayı kapatabilir; AI sekmesinden bağlam penceresini küçültün veya daha küçük bir GGUF seçin.
 
 ## Neler doğrulandı, neler doğrulanmadı
-- Doğrulandı (Linux, Swift 6.0): `swift test` — JarvisCore testlerinin tamamı; `GGUFInferenceRuntime.swift` dosyası llama.cpp `b10549` başlığına (`llama.swift 2.10549.0`'ın sarmaladığı sürüm) karşı Swift 6 modunda derlendi.
+- Doğrulandı (Linux, Swift 6.0): `swift test` — JarvisCore testlerinin tamamı; `GGUFInferenceRuntime.swift` dosyası llama.cpp `b10549` başlığına (`llama.swift 2.10549.0`'ın sarmaladığı sürüm) karşı Swift 6 modunda derlendi. `JarvisMobileApp.swift`, SwiftUI yerine konan sahte bir arayüz katmanına karşı Swift 6 modunda tip denetiminden geçti: bu, uygulama mantığını ve çekirdek API kullanımını doğrular, gerçek SwiftUI API uyumunu doğrulamaz. Python testleri (sunucu, sürüm politikası, model betikleri) geçti.
 - **Doğrulanmadı:** Xcode/iOS derlemesi, SwiftUI arayüzü, IPA paketleme iş akışı ve gerçek iPhone'da çıkarım hızı/bellek davranışı. GitHub Actions hesabı ödeme/kota nedeniyle koşu başlatmadığı için bu adımlar çalıştırılamadı. Kota açıldığında ilk koşunun sonucuna göre düzeltme gerekebilir.

@@ -6,6 +6,14 @@ on:
   workflow_dispatch:
   push:
     tags: ['v*']
+    # Work branches build an installable IPA too, so a fix can be tried on the
+    # phone before it is merged. Docs-only pushes do not spend macOS minutes.
+    branches: ['claude/**']
+    paths:
+      - 'ios/**'
+      - 'Sources/**'
+      - 'Package.swift'
+      - '.github/workflows/sideload.yml'
 permissions:
   contents: write
 concurrency:
