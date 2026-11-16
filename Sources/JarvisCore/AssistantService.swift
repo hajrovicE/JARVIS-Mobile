@@ -95,6 +95,10 @@ public struct AssistantService: Sendable {
         }
         var context: [AIContextEntry] = []
         var historyCategories: Set<String> = []
+        if processingMode == .onDevice {
+            context = LocalConversationContext.select(
+                state: state, query: prompt, consent: consent, now: now)
+        } else {
         if consent.confirmedLearning {
             let memories = LocalLearningEngine().shareableContext(query: "", in: state.learning, now: now)
             context += memories.map { AIContextEntry(id: "learning:\($0.id)", text: "\($0.key): \($0.text)") }
@@ -116,6 +120,7 @@ public struct AssistantService: Sendable {
             let history = (local + generated).sorted { $0.0 < $1.0 }
             context += history.map { AIContextEntry(id: $0.1, text: $0.2) }
             history.forEach { historyCategories.formUnion($0.3) }
+        }
         }
         try Task.checkCancellation()
         let response = try await provider.respond(to: AIRequest(prompt: prompt, context: context))
