@@ -8,6 +8,7 @@ TASK_WORK=$(cd "$TASK_WORK" && pwd)
 CMAKE=${CMAKE:-cmake}
 SWIFT=${SWIFT:-swift}
 NINJA=${NINJA:-ninja}
+MODEL_FILE="$TASK_WORK/qwen3-1.7b-q4_k_m.gguf"
 if [[ ! -d "$TASK_WORK/llama.cpp/.git" ]]; then
   git clone --depth 1 --branch b10549 https://github.com/ggml-org/llama.cpp.git "$TASK_WORK/llama.cpp"
 fi
@@ -18,11 +19,11 @@ fi
   -DLLAMA_CURL=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_TOOLS=OFF \
   -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_SERVER=OFF
 "$CMAKE" --build "$TASK_WORK/llama-build" --target llama --parallel 2
-if [[ ! -f "$TASK_WORK/model.gguf" ]]; then
+if [[ ! -f "$MODEL_FILE" ]]; then
   curl --fail --location --retry 3 \
-    'https://huggingface.co/ggml-org/Qwen3-0.6B-GGUF/resolve/afe8ad3577aa22500b3cd1c880f153b3b0e1cae8/Qwen3-0.6B-Q4_0.gguf' \
-    --output "$TASK_WORK/model.partial"
-  mv "$TASK_WORK/model.partial" "$TASK_WORK/model.gguf"
+    'https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF/resolve/daeb8e2d528a760970442092f6bf1e55c3b659eb/Qwen3-1.7B-Q4_K_M.gguf' \
+    --output "$MODEL_FILE.partial"
+  mv "$MODEL_FILE.partial" "$MODEL_FILE"
 fi
 mkdir -p "$TASK_WORK/harness/CLlama" "$TASK_WORK/harness/Sources/RuntimeProof"
 # Paths are inserted as JSON/Swift quoted strings, never evaluated by a shell.
@@ -46,4 +47,4 @@ cmp "$ROOT/ios/JarvisMobile/GGUFInferenceRuntime.swift" "$TASK_WORK/harness/Sour
   --cache-path "$TASK_WORK/swift-cache" --config-path "$TASK_WORK/swift-config" --security-path "$TASK_WORK/swift-security" \
   -Xcc "-I$TASK_WORK/llama.cpp/ggml/include" \
   -Xlinker "-L$TASK_WORK/llama-build/bin" -Xlinker -rpath -Xlinker "$TASK_WORK/llama-build/bin"
-"$TASK_WORK/harness/.build/debug/RuntimeProof" "$TASK_WORK/model.gguf"
+"$TASK_WORK/harness/.build/debug/RuntimeProof" "$MODEL_FILE"

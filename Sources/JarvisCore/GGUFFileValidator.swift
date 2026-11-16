@@ -37,8 +37,10 @@ public enum GGUFFileValidator {
             // GGML_MAX_DIMS is four in the linked llama.cpp format.
             guard dimensions <= 4 else { throw LocalModelError.invalidFile }
             var elements: UInt64 = 1
-            for _ in 0..<dimensions {
+            var rowElements: UInt64 = 1
+            for index in 0..<dimensions {
                 let dimension = try reader.u64()
+                if index == 0 { rowElements = dimension }
                 guard dimension > 0 else { throw LocalModelError.invalidFile }
                 let multiplied = elements.multipliedReportingOverflow(by: dimension)
                 guard !multiplied.overflow else { throw LocalModelError.invalidFile }
@@ -46,22 +48,20 @@ public enum GGUFFileValidator {
             }
             let type = try reader.u32(), offset = try reader.u64()
             guard offset % alignment == 0 else { throw LocalModelError.invalidFile }
-            // Raw scalar representations have exact sizes. Unknown/new quantizations are
-            // left to the runtime rather than rejected by an app-owned format allowlist.
-            let scalarBytes: UInt64?
-            switch type {
-            case 0, 26: scalarBytes = 4       // f32, i32
-            case 1, 25, 30: scalarBytes = 2   // f16, i16, bf16
-            case 24: scalarBytes = 1          // i8
-            case 27, 28: scalarBytes = 8      // i64, f64
-            default: scalarBytes = nil
-            }
             let minimum: UInt64
-            if let scalarBytes {
-                let multiplied = elements.multipliedReportingOverflow(by: scalarBytes)
+            if let layout = tensorLayout(type: type) {
+                // ggml_row_size requires each row (ne[0]), not merely the entire
+                // tensor, to contain a whole number of quantization blocks.
+                guard rowElements % layout.elements == 0 else { throw LocalModelError.invalidFile }
+                let blocks = elements / layout.elements
+                let multiplied = blocks.multipliedReportingOverflow(by: layout.bytes)
                 guard !multiplied.overflow else { throw LocalModelError.invalidFile }
                 minimum = multiplied.partialValue
-            } else { minimum = 1 }
+            } else {
+                // Unknown/new types are delegated to the native runtime rather
+                // than rejected by an app-owned type or architecture allowlist.
+                minimum = 1
+            }
             let end = offset.addingReportingOverflow(minimum)
             guard !end.overflow else { throw LocalModelError.invalidFile }
             requiredPayload = max(requiredPayload, end.partialValue)
@@ -70,6 +70,30 @@ public enum GGUFFileValidator {
         let padding = remainder == 0 ? 0 : alignment - remainder
         try reader.skip(padding)
         guard requiredPayload <= reader.remaining else { throw LocalModelError.invalidFile }
+    }
+
+    /// Wire sizes from ggml-common.h static assertions and ggml.c type_traits
+    /// at pinned llama.cpp b10549. These are format bounds, not supported-model gates.
+    private static func tensorLayout(type: UInt32) -> (elements: UInt64, bytes: UInt64)? {
+        switch type {
+        case 0, 26: return (1, 4)        // f32, i32
+        case 1, 25, 30: return (1, 2)    // f16, i16, bf16
+        case 24: return (1, 1)           // i8
+        case 27, 28: return (1, 8)       // i64, f64
+        case 2: return (32, 18)          // q4_0: half scale + 16 packed quants
+        case 3: return (32, 20)          // q4_1
+        case 6: return (32, 22)          // q5_0
+        case 7: return (32, 24)          // q5_1
+        case 8: return (32, 34)          // q8_0
+        case 9: return (32, 36)          // q8_1
+        case 10: return (256, 84)        // q2_K
+        case 11: return (256, 110)       // q3_K
+        case 12: return (256, 144)       // q4_K
+        case 13: return (256, 176)       // q5_K
+        case 14: return (256, 210)       // q6_K
+        case 15: return (256, 292)       // q8_K
+        default: return nil
+        }
     }
 
     private final class Reader {

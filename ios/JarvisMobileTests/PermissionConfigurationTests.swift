@@ -16,6 +16,28 @@ final class PermissionConfigurationTests: XCTestCase {
     }
 
     @MainActor
+    func testControllerCancellationImmediatelyReportsStoppedOutput() throws {
+        let controller = SpeechController()
+        // Exercise the production controller and real synthesizer without opening
+        // the microphone, requesting Speech permission, or faking completion.
+        controller.speak(String(repeating: "Türkçe sesli yanıt iptal testi. ", count: 100))
+        defer { controller.cancel() }
+        guard controller.speaking else {
+            throw XCTSkip("Turkish speech synthesis could not start on this host; real controller output cancellation is NOT verified")
+        }
+        XCTAssertTrue(controller.status.contains("seslendiriliyor"))
+        controller.cancel()
+        XCTAssertFalse(controller.speaking)
+        XCTAssertTrue(controller.status.contains("durduruldu"))
+        XCTAssertFalse(controller.status.contains("tamamlandı"))
+        // A duplicate stop must not change the honest terminal state back to
+        // recording/speaking or claim the interrupted utterance completed.
+        let stoppedStatus = controller.status
+        controller.cancel()
+        XCTAssertEqual(controller.status, stoppedStatus)
+    }
+
+    @MainActor
     func testSpeechOutputDelegateDistinguishesCompletionFromCancellation() {
         let events = SpeechOutputEvents()
         let delegate = SpeechOutputDelegate { id, finished in events.record(id, finished: finished) }

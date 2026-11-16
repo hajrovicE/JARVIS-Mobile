@@ -32,7 +32,7 @@ jobs:
         run: brew install xcodegen
       - name: Stage required real GGUF fixture
         run: |
-          curl --fail --location --retry 3 --output ios/JarvisMobileTests/Fixtures/model.gguf 'https://huggingface.co/ggml-org/Qwen3-0.6B-GGUF/resolve/afe8ad3577aa22500b3cd1c880f153b3b0e1cae8/Qwen3-0.6B-Q4_0.gguf'
+          curl --fail --location --retry 3 --output ios/JarvisMobileTests/Fixtures/model.gguf 'https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF/resolve/daeb8e2d528a760970442092f6bf1e55c3b659eb/Qwen3-1.7B-Q4_K_M.gguf'
           printf '%s\n' 'Real inference is required for this CI run.' > ios/JarvisMobileTests/Fixtures/real-inference-required.txt
       - name: Generate iPhone project
         run: cd ios && xcodegen generate

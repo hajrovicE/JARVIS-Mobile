@@ -1,5 +1,5 @@
 # JARVIS Mobile
-Türkçe, iPhone öncelikli SwiftUI asistanı. Güncel sahip tercihi: cihaz içinde GGUF/llama.cpp sohbeti, kullanıcı silene kadar JSON hafıza ve konuşma geçmişi, yerel komutlar ve isteğe bağlı cihaz içi Türkçe sesli giriş/TTS. Önbelleğin 30 günlük tazelik sınırı arşiv kayıtlarını silmez. [Güncel kapsamlı doğrulama ve sınırlar](docs/VALIDATION_LOCAL_MODEL_2026_11_15.md).
+Türkçe, iPhone öncelikli SwiftUI asistanı. Güncel sahip tercihi: cihaz içinde GGUF/llama.cpp sohbeti, kullanıcı silene kadar JSON hafıza ve konuşma geçmişi, yerel komutlar ve isteğe bağlı cihaz içi Türkçe sesli giriş/TTS. Önbelleğin 30 günlük tazelik sınırı arşiv kayıtlarını silmez. [Güncel kapsamlı doğrulama ve sınırlar](docs/VALIDATION.md).
 
 ## Çalıştırma
 Swift 6.0+ ile `swift test`. iOS uygulaması için macOS, Xcode 16.4+ ve XcodeGen gerekir:

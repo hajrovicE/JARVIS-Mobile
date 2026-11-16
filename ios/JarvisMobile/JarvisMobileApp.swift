@@ -24,7 +24,7 @@ struct RootView: View {
   @AppStorage("ttsEnabled") private var tts = false
   @StateObject private var speech = SpeechController()
   @State private var store: MemoryStore?
-  @State private var input = ""
+  @State private var draft = ChatDraft()
   @FocusState private var chatFocused: Bool
   @State private var reply = ""
   @State private var memories: [MemoryItem] = []
@@ -67,7 +67,9 @@ struct RootView: View {
       }
     }
     .task { await open() }
-    .onChange(of: speech.transcript) { _, text in input = text }
+    .onChange(of: speech.transcript) { _, text in
+      if !text.isEmpty { draft.edit(text) }
+    }
     .onChange(of: tts) { _, enabled in if !enabled { speech.cancel() } }
     .onChange(of: scenePhase) { _, phase in
       if phase != .active {
@@ -159,10 +161,11 @@ struct RootView: View {
               Text(source.retrievedAt, style: .date).font(.caption)
             }
           }
-          TextField("Hatırla ki …", text: $input, axis: .vertical).textFieldStyle(.roundedBorder)
+          TextField("Hatırla ki …", text: Binding(
+            get: { draft.text }, set: { draft.edit($0) }), axis: .vertical).textFieldStyle(.roundedBorder)
             .accessibilityIdentifier("chat.input").focused($chatFocused)
           Button("Gönder") { submit() }.accessibilityIdentifier("chat.send").disabled(
-            store == nil || busy || input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            store == nil || busy || draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
           Text("Sesli giriş isteğe bağlıdır. Tanıma cihazda yapılır; yazarak devam edebilirsiniz.")
           Button("Ses izinlerini ver") { Task { await speech.requestPermissions() } }
             .disabled(speech.requestingPermissions || speech.recording || speech.finishing)
@@ -180,7 +183,6 @@ struct RootView: View {
                 holdStartTask?.cancel()
                 holdStartTask = nil
                 speech.stop()
-                input = speech.transcript
               }
             )
             .accessibilityAddTraits(.isButton)
@@ -189,7 +191,6 @@ struct RootView: View {
               holdStartTask?.cancel()
               holdStartTask = nil
               speech.stop()
-              input = speech.transcript
             } else {
               holdStartTask = Task { await speech.begin() }
             }
@@ -510,12 +511,13 @@ struct RootView: View {
 
   private func submit() {
     guard let store else { return }
-    let command = input
+    let submission = draft.submission()
+    let command = submission.text
     chatFocused = false
     perform {
       if let operation = CommandRouter.ownerAction(for: command) {
         try await runOwnerAction(operation, using: store)
-        input = ""
+        draft.complete(submission)
         return
       }
       let provider: any AIProvider
@@ -548,7 +550,7 @@ struct RootView: View {
       try Task.checkCancellation()
       reply = result.text
       activeReply = result.generated
-      input = ""
+      draft.complete(submission)
       if result.generated != nil { localModelStatus = "Son yanıt cihaz içindeki modelden üretildi." }
       if result.historyWriteFailed {
         errorText = "Komut tamamlandı ancak konuşma geçmişi kaydedilemedi."

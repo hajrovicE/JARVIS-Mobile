@@ -1,5 +1,10 @@
 import Foundation
 import JarvisCore
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
 
 /// Executes the app's exact runtime source, never a mocked model response.
 @main struct RuntimeProof {
@@ -7,7 +12,15 @@ import JarvisCore
         if !condition() { throw ProofFailure.failed(message) }
     }
     enum ProofFailure: Error { case failed(String) }
-    static func main() async throws {
+    static func main() async {
+        do { try await verify() }
+        catch {
+            let error = "VALIDATION_FAILED: \(error)\n"
+            FileHandle.standardError.write(Data(error.utf8))
+            exit(1)
+        }
+    }
+    static func verify() async throws {
         guard CommandLine.arguments.count == 2 else { throw ProofFailure.failed("Expected GGUF path") }
         let model = URL(fileURLWithPath: CommandLine.arguments[1])
         try GGUFFileValidator.validate(at: model)
@@ -21,7 +34,8 @@ import JarvisCore
         print("PASS real Turkish inference transport: \(result.text.replacingOccurrences(of: "\n", with: " "))")
         // Functional inference does not establish factual accuracy. Keep this
         // independent observation explicit, including when the small fixture is wrong.
-        print(result.text.contains("Ankara")
+        let qualityPassed = result.text.contains("Ankara")
+        print(qualityPassed
             ? "MODEL_QUALITY_PASS capital question"
             : "MODEL_QUALITY_FAIL capital question: expected Ankara; no factual reliability claim")
         print("PASS exact multi-line owner prompt; prompt=\(result.promptTokens) output=\(result.generatedTokens) context=\(result.effectiveContext) gpu=\(result.gpuOffloadRequested)")
@@ -100,6 +114,10 @@ import JarvisCore
         let saved = try await reopened.read()
         try require(!saved.personal.isEmpty && saved.generatedAnswers.count == 1, "Local chat not persisted")
         print("PASS AssistantService + real LocalAIProvider + personal context + JSON restart: \(reply.text.replacingOccurrences(of: "\n", with: " "))")
+        print("REAL_RUNTIME_FUNCTIONAL_CHECKS_PASSED")
+        // A visible quality failure must also fail CI; functional transport alone
+        // must not produce an overall green result for the Turkish assistant.
+        try require(qualityPassed, "MODEL_QUALITY_FAIL: Turkish capital answer is wrong")
         print("REAL_RUNTIME_PROOF_PASSED")
     }
 }

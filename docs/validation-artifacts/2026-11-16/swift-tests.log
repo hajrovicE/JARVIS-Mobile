@@ -1,0 +1,311 @@
+[0/1] Planning build
+Building for debugging...
+[0/4] Write sources
+[1/4] Write swift-version--44ECBE65C14CF9AE.txt
+[3/5] Compiling JarvisCoreTests ChatDraftTests.swift
+[4/5] Emitting module JarvisCoreTests
+[5/14] /workspace/JARVIS-Mobile/.build/x86_64-unknown-linux-gnu/debug/JarvisCorePackageDiscoveredTests.derived/all-discovered-tests.swift
+[6/14] Write sources
+[7/14] Wrapping AST for JarvisCoreTests for debugging
+[9/17] Compiling JarvisCorePackageDiscoveredTests all-discovered-tests.swift
+[10/17] Emitting module JarvisCorePackageDiscoveredTests
+[11/17] Compiling JarvisCorePackageDiscoveredTests JarvisCoreTests.swift
+[12/18] /workspace/JARVIS-Mobile/.build/x86_64-unknown-linux-gnu/debug/JarvisCorePackageTests.derived/runner.swift
+[13/18] Write sources
+[14/18] Wrapping AST for JarvisCorePackageDiscoveredTests for debugging
+[16/20] Emitting module JarvisCorePackageTests
+[17/20] Compiling JarvisCorePackageTests runner.swift
+[18/20] Write Objects.LinkFileList
+[19/20] Linking JarvisCorePackageTests.xctest
+Build complete! (6.76s)
+Test Suite 'All tests' started at 2026-11-16 08:03:29.660
+Test Suite 'debug.xctest' started at 2026-11-16 08:03:29.686
+Test Suite 'AIProviderTests' started at 2026-11-16 08:03:29.686
+Test Case 'AIProviderTests.testDefaultProviderClearlyReportsNotConfigured' started at 2026-11-16 08:03:29.686
+Test Case 'AIProviderTests.testDefaultProviderClearlyReportsNotConfigured' passed (0.002 seconds)
+Test Case 'AIProviderTests.testExtendedRequestsAndUnsupportedFreshnessCannotPass' started at 2026-11-16 08:03:29.687
+Test Case 'AIProviderTests.testExtendedRequestsAndUnsupportedFreshnessCannotPass' passed (0.01 seconds)
+Test Case 'AIProviderTests.testFailuresNeverReturnFabricatedAnswers' started at 2026-11-16 08:03:29.697
+Test Case 'AIProviderTests.testFailuresNeverReturnFabricatedAnswers' passed (0.002 seconds)
+Test Case 'AIProviderTests.testHTTPSConfigurationAndHeaderInjectionRejected' started at 2026-11-16 08:03:29.699
+Test Case 'AIProviderTests.testHTTPSConfigurationAndHeaderInjectionRejected' passed (0.008 seconds)
+Test Case 'AIProviderTests.testMalformedEmptyAndCrossEndpointResponsesRejected' started at 2026-11-16 08:03:29.707
+Test Case 'AIProviderTests.testMalformedEmptyAndCrossEndpointResponsesRejected' passed (0.002 seconds)
+Test Case 'AIProviderTests.testTurkishRequestAndSelectedContextUseRelayCredential' started at 2026-11-16 08:03:29.709
+Test Case 'AIProviderTests.testTurkishRequestAndSelectedContextUseRelayCredential' passed (0.002 seconds)
+Test Suite 'AIProviderTests' passed at 2026-11-16 08:03:29.710
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.025 (0.025) seconds
+Test Suite 'ActionExecutorTests' started at 2026-11-16 08:03:29.710
+Test Case 'ActionExecutorTests.testApprovedLocalWriteHasReceiptAndRedactedAudit' started at 2026-11-16 08:03:29.710
+Test Case 'ActionExecutorTests.testApprovedLocalWriteHasReceiptAndRedactedAudit' passed (0.002 seconds)
+Test Case 'ActionExecutorTests.testBackgroundInvalidationDiscardsPreviousOwnerRequest' started at 2026-11-16 08:03:29.713
+Test Case 'ActionExecutorTests.testBackgroundInvalidationDiscardsPreviousOwnerRequest' passed (0.0 seconds)
+Test Case 'ActionExecutorTests.testDenyAndPayloadMismatchNeverExecute' started at 2026-11-16 08:03:29.713
+Test Case 'ActionExecutorTests.testDenyAndPayloadMismatchNeverExecute' passed (0.0 seconds)
+Test Case 'ActionExecutorTests.testDirectOwnerExportAndLearningDeletionWithoutBiometrics' started at 2026-11-16 08:03:29.713
+Test Case 'ActionExecutorTests.testDirectOwnerExportAndLearningDeletionWithoutBiometrics' passed (0.002 seconds)
+Test Case 'ActionExecutorTests.testEffectFailureNeverReportsSuccessAndAuditFailureIsSeparate' started at 2026-11-16 08:03:29.715
+Test Case 'ActionExecutorTests.testEffectFailureNeverReportsSuccessAndAuditFailureIsSeparate' passed (0.001 seconds)
+Test Case 'ActionExecutorTests.testMissingOwnerToolHandlerNeverFakesSuccessfulOperation' started at 2026-11-16 08:03:29.716
+Test Case 'ActionExecutorTests.testMissingOwnerToolHandlerNeverFakesSuccessfulOperation' passed (0.0 seconds)
+Test Case 'ActionExecutorTests.testOnlyLiveOwnerOriginIsRequired' started at 2026-11-16 08:03:29.717
+Test Case 'ActionExecutorTests.testOnlyLiveOwnerOriginIsRequired' passed (0.0 seconds)
+Test Case 'ActionExecutorTests.testOnlyOwnerCommandsCanUseImmediatePath' started at 2026-11-16 08:03:29.717
+Test Case 'ActionExecutorTests.testOnlyOwnerCommandsCanUseImmediatePath' passed (0.0 seconds)
+Test Case 'ActionExecutorTests.testOwnerCanEditMemoryByDirectCommandWithoutSecondApproval' started at 2026-11-16 08:03:29.717
+Test Case 'ActionExecutorTests.testOwnerCanEditMemoryByDirectCommandWithoutSecondApproval' passed (0.001 seconds)
+Test Case 'ActionExecutorTests.testOwnerCommandExecutesWithoutBiometricsOrSecondApproval' started at 2026-11-16 08:03:29.718
+Test Case 'ActionExecutorTests.testOwnerCommandExecutesWithoutBiometricsOrSecondApproval' passed (0.001 seconds)
+Test Case 'ActionExecutorTests.testOwnerEraseDoesNotRequireBiometrics' started at 2026-11-16 08:03:29.719
+Test Case 'ActionExecutorTests.testOwnerEraseDoesNotRequireBiometrics' passed (0.0 seconds)
+Test Case 'ActionExecutorTests.testOwnerEraseLeavesNoAuditData' started at 2026-11-16 08:03:29.719
+Test Case 'ActionExecutorTests.testOwnerEraseLeavesNoAuditData' passed (0.0 seconds)
+Test Case 'ActionExecutorTests.testOwnerProvidedToolHandlerCanRunWithoutCentralToolAllowlist' started at 2026-11-16 08:03:29.720
+Test Case 'ActionExecutorTests.testOwnerProvidedToolHandlerCanRunWithoutCentralToolAllowlist' passed (0.0 seconds)
+Test Case 'ActionExecutorTests.testOwnerRequestDoesNotExpireAtArbitraryTimeBoundary' started at 2026-11-16 08:03:29.720
+Test Case 'ActionExecutorTests.testOwnerRequestDoesNotExpireAtArbitraryTimeBoundary' passed (0.0 seconds)
+Test Case 'ActionExecutorTests.testOwnerSingleDeletionWithoutBiometrics' started at 2026-11-16 08:03:29.720
+Test Case 'ActionExecutorTests.testOwnerSingleDeletionWithoutBiometrics' passed (0.0 seconds)
+Test Suite 'ActionExecutorTests' passed at 2026-11-16 08:03:29.721
+	 Executed 15 tests, with 0 failures (0 unexpected) in 0.01 (0.01) seconds
+Test Suite 'ActivityLearningJournalTests' started at 2026-11-16 08:03:29.721
+Test Case 'ActivityLearningJournalTests.testDisabledByDefaultAndOnlyOptInRecordsEvents' started at 2026-11-16 08:03:29.721
+Test Case 'ActivityLearningJournalTests.testDisabledByDefaultAndOnlyOptInRecordsEvents' passed (0.001 seconds)
+Test Case 'ActivityLearningJournalTests.testFailedDiskWriteCannotTurnOnCollectionOrPersistAnEvent' started at 2026-11-16 08:03:29.722
+Test Case 'ActivityLearningJournalTests.testFailedDiskWriteCannotTurnOnCollectionOrPersistAnEvent' passed (0.0 seconds)
+Test Case 'ActivityLearningJournalTests.testInsightsAnalyzeAnyObservedEvidenceWithoutRepeatQuota' started at 2026-11-16 08:03:29.722
+Test Case 'ActivityLearningJournalTests.testInsightsAnalyzeAnyObservedEvidenceWithoutRepeatQuota' passed (0.001 seconds)
+Test Case 'ActivityLearningJournalTests.testNoObservationCountCapAndNoFreeFormPayload' started at 2026-11-16 08:03:29.723
+Test Case 'ActivityLearningJournalTests.testNoObservationCountCapAndNoFreeFormPayload' passed (3.971 seconds)
+Test Case 'ActivityLearningJournalTests.testObservationsPersistUntilExplicitErasure' started at 2026-11-16 08:03:33.694
+Test Case 'ActivityLearningJournalTests.testObservationsPersistUntilExplicitErasure' passed (0.001 seconds)
+Test Case 'ActivityLearningJournalTests.testPersistenceAndCompleteErasure' started at 2026-11-16 08:03:33.695
+Test Case 'ActivityLearningJournalTests.testPersistenceAndCompleteErasure' passed (0.001 seconds)
+Test Suite 'ActivityLearningJournalTests' passed at 2026-11-16 08:03:33.695
+	 Executed 6 tests, with 0 failures (0 unexpected) in 3.974 (3.974) seconds
+Test Suite 'AssistantServiceTests' started at 2026-11-16 08:03:33.695
+Test Case 'AssistantServiceTests.testConsentedConversationContinuityAndNoAutomaticHistorySharing' started at 2026-11-16 08:03:33.695
+Test Case 'AssistantServiceTests.testConsentedConversationContinuityAndNoAutomaticHistorySharing' passed (0.002 seconds)
+Test Case 'AssistantServiceTests.testContextIsExplicitAndModelCannotExecuteOrLearn' started at 2026-11-16 08:03:33.697
+Test Case 'AssistantServiceTests.testContextIsExplicitAndModelCannotExecuteOrLearn' passed (0.001 seconds)
+Test Case 'AssistantServiceTests.testDeleteDuringRequestDoesNotResurrectData' started at 2026-11-16 08:03:33.698
+Test Case 'AssistantServiceTests.testDeleteDuringRequestDoesNotResurrectData' passed (0.001 seconds)
+Test Case 'AssistantServiceTests.testLocalCommandsWorkWithoutNetworkAndRemoteNeedsConsent' started at 2026-11-16 08:03:33.699
+Test Case 'AssistantServiceTests.testLocalCommandsWorkWithoutNetworkAndRemoteNeedsConsent' passed (0.0 seconds)
+Test Case 'AssistantServiceTests.testOldCacheEpochCannotBeUsedAfterDeletion' started at 2026-11-16 08:03:33.700
+Test Case 'AssistantServiceTests.testOldCacheEpochCannotBeUsedAfterDeletion' passed (0.0 seconds)
+Test Case 'AssistantServiceTests.testOwnerCanSendAnyPromptButUnavailableProviderNeverFakesAnswers' started at 2026-11-16 08:03:33.700
+Test Case 'AssistantServiceTests.testOwnerCanSendAnyPromptButUnavailableProviderNeverFakesAnswers' passed (0.0 seconds)
+Test Case 'AssistantServiceTests.testOwnerDirectiveRequiresEnabledLearningSharingAndCannotExecuteModelOutput' started at 2026-11-16 08:03:33.701
+Test Case 'AssistantServiceTests.testOwnerDirectiveRequiresEnabledLearningSharingAndCannotExecuteModelOutput' passed (0.002 seconds)
+Test Case 'AssistantServiceTests.testRevokedMemoryCategoryIsNotResharedThroughConversationHistory' started at 2026-11-16 08:03:33.702
+Test Case 'AssistantServiceTests.testRevokedMemoryCategoryIsNotResharedThroughConversationHistory' passed (0.001 seconds)
+Test Case 'AssistantServiceTests.testStaticCacheExact30DayExpiryAndContextMutation' started at 2026-11-16 08:03:33.703
+Test Case 'AssistantServiceTests.testStaticCacheExact30DayExpiryAndContextMutation' passed (0.001 seconds)
+Test Case 'AssistantServiceTests.testUnverifiedAndDynamicAnswersAreNotCachedAndMetadataSurvivesRestart' started at 2026-11-16 08:03:33.704
+Test Case 'AssistantServiceTests.testUnverifiedAndDynamicAnswersAreNotCachedAndMetadataSurvivesRestart' passed (0.001 seconds)
+Test Suite 'AssistantServiceTests' passed at 2026-11-16 08:03:33.706
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.01 (0.01) seconds
+Test Suite 'ChatDraftTests' started at 2026-11-16 08:03:33.706
+Test Case 'ChatDraftTests.testFreshVoiceEditSurvivesEarlierReply' started at 2026-11-16 08:03:33.706
+Test Case 'ChatDraftTests.testFreshVoiceEditSurvivesEarlierReply' passed (0.0 seconds)
+Test Case 'ChatDraftTests.testOutOfOrderCompletionCannotDiscardLaterSubmission' started at 2026-11-16 08:03:33.706
+Test Case 'ChatDraftTests.testOutOfOrderCompletionCannotDiscardLaterSubmission' passed (0.0 seconds)
+Test Case 'ChatDraftTests.testReenteringIdenticalTextIsNotAnOldSubmission' started at 2026-11-16 08:03:33.706
+Test Case 'ChatDraftTests.testReenteringIdenticalTextIsNotAnOldSubmission' passed (0.0 seconds)
+Test Case 'ChatDraftTests.testReplyClearsOnlyItsUneditedSubmittedDraft' started at 2026-11-16 08:03:33.706
+Test Case 'ChatDraftTests.testReplyClearsOnlyItsUneditedSubmittedDraft' passed (0.0 seconds)
+Test Case 'ChatDraftTests.testTypedNextQuestionSurvivesEarlierReply' started at 2026-11-16 08:03:33.706
+Test Case 'ChatDraftTests.testTypedNextQuestionSurvivesEarlierReply' passed (0.0 seconds)
+Test Suite 'ChatDraftTests' passed at 2026-11-16 08:03:33.706
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'CommandHistoryTests' started at 2026-11-16 08:03:33.706
+Test Case 'CommandHistoryTests.testDirectOwnerActionAliasesNeverMatchModelProse' started at 2026-11-16 08:03:33.707
+Test Case 'CommandHistoryTests.testDirectOwnerActionAliasesNeverMatchModelProse' passed (0.0 seconds)
+Test Case 'CommandHistoryTests.testListingsDoNotCopyExpiredHistoryOrDeletedFacts' started at 2026-11-16 08:03:33.707
+Test Case 'CommandHistoryTests.testListingsDoNotCopyExpiredHistoryOrDeletedFacts' passed (0.001 seconds)
+Test Case 'CommandHistoryTests.testOwnerCommandsInNaturalTurkishAreImmediatelyPersisted' started at 2026-11-16 08:03:33.707
+Test Case 'CommandHistoryTests.testOwnerCommandsInNaturalTurkishAreImmediatelyPersisted' passed (0.001 seconds)
+Test Case 'CommandHistoryTests.testOwnerTeachCommandIsImmediateAndModelTextNeverCreatesAnAction' started at 2026-11-16 08:03:33.708
+Test Case 'CommandHistoryTests.testOwnerTeachCommandIsImmediateAndModelTextNeverCreatesAnAction' passed (0.002 seconds)
+Test Suite 'CommandHistoryTests' passed at 2026-11-16 08:03:33.710
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.004 (0.004) seconds
+Test Suite 'GGUFFileValidatorTests' started at 2026-11-16 08:03:33.710
+Test Case 'GGUFFileValidatorTests.testInvalidVersionAlignmentAndOverflowCountsAreRejected' started at 2026-11-16 08:03:33.710
+Test Case 'GGUFFileValidatorTests.testInvalidVersionAlignmentAndOverflowCountsAreRejected' passed (0.007 seconds)
+Test Case 'GGUFFileValidatorTests.testKnownQuantizedBlockPayloadsAndFinalTensorTruncation' started at 2026-11-16 08:03:33.717
+Test Case 'GGUFFileValidatorTests.testKnownQuantizedBlockPayloadsAndFinalTensorTruncation' passed (0.072 seconds)
+Test Case 'GGUFFileValidatorTests.testQuantizedRowsRequireCompleteBlocksAndUnknownTypesRemainDelegated' started at 2026-11-16 08:03:33.789
+Test Case 'GGUFFileValidatorTests.testQuantizedRowsRequireCompleteBlocksAndUnknownTypesRemainDelegated' passed (0.006 seconds)
+Test Case 'GGUFFileValidatorTests.testQuantizedShapePayloadAndOffsetOverflowAreErrorsRatherThanTraps' started at 2026-11-16 08:03:33.795
+Test Case 'GGUFFileValidatorTests.testQuantizedShapePayloadAndOffsetOverflowAreErrorsRatherThanTraps' passed (0.008 seconds)
+Test Case 'GGUFFileValidatorTests.testSymlinkAndDirectoryCannotMasqueradeAsModels' started at 2026-11-16 08:03:33.803
+Test Case 'GGUFFileValidatorTests.testSymlinkAndDirectoryCannotMasqueradeAsModels' passed (0.005 seconds)
+Test Case 'GGUFFileValidatorTests.testTruncatedHeadersMetadataAndTensorPayloadAreRejected' started at 2026-11-16 08:03:33.808
+Test Case 'GGUFFileValidatorTests.testTruncatedHeadersMetadataAndTensorPayloadAreRejected' passed (0.008 seconds)
+Test Case 'GGUFFileValidatorTests.testTruncatedQuantizedReplacementPreservesInstalledModel' started at 2026-11-16 08:03:33.816
+Test Case 'GGUFFileValidatorTests.testTruncatedQuantizedReplacementPreservesInstalledModel' passed (0.003 seconds)
+Test Case 'GGUFFileValidatorTests.testVersionTwoAndThreeAndArbitraryFilename' started at 2026-11-16 08:03:33.819
+Test Case 'GGUFFileValidatorTests.testVersionTwoAndThreeAndArbitraryFilename' passed (0.003 seconds)
+Test Suite 'GGUFFileValidatorTests' passed at 2026-11-16 08:03:33.822
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.112 (0.112) seconds
+Test Suite 'LearningEngineTests' started at 2026-11-16 08:03:33.822
+Test Case 'LearningEngineTests.testConflictCorrectionPrecedenceAndDeletion' started at 2026-11-16 08:03:33.822
+Test Case 'LearningEngineTests.testConflictCorrectionPrecedenceAndDeletion' passed (0.0 seconds)
+Test Case 'LearningEngineTests.testCorrectionAuditPreservesProvenanceAndDeletesWithRecord' started at 2026-11-16 08:03:33.822
+Test Case 'LearningEngineTests.testCorrectionAuditPreservesProvenanceAndDeletesWithRecord' passed (0.0 seconds)
+Test Case 'LearningEngineTests.testDeletingTaskCorrectionRemovesRelatedExperienceAndRevisionContents' started at 2026-11-16 08:03:33.823
+Test Case 'LearningEngineTests.testDeletingTaskCorrectionRemovesRelatedExperienceAndRevisionContents' passed (0.0 seconds)
+Test Case 'LearningEngineTests.testExpiryMetadataDoesNotDeleteOwnerKnowledge' started at 2026-11-16 08:03:33.823
+Test Case 'LearningEngineTests.testExpiryMetadataDoesNotDeleteOwnerKnowledge' passed (0.0 seconds)
+Test Case 'LearningEngineTests.testExternalKnowledgeCanRemainStoredUntilOwnerDeletes' started at 2026-11-16 08:03:33.823
+Test Case 'LearningEngineTests.testExternalKnowledgeCanRemainStoredUntilOwnerDeletes' passed (0.0 seconds)
+Test Case 'LearningEngineTests.testOldV2RecordsDecodeWithoutRevisionOrTaskCorrectionFields' started at 2026-11-16 08:03:33.823
+Test Case 'LearningEngineTests.testOldV2RecordsDecodeWithoutRevisionOrTaskCorrectionFields' passed (0.002 seconds)
+Test Case 'LearningEngineTests.testOwnerCanStoreCredsAndSensitiveLabelsWhenCommanded' started at 2026-11-16 08:03:33.825
+Test Case 'LearningEngineTests.testOwnerCanStoreCredsAndSensitiveLabelsWhenCommanded' passed (0.005 seconds)
+Test Case 'LearningEngineTests.testOwnerCanStoreSensitiveKnowledgeButInvalidNumbersAreRejected' started at 2026-11-16 08:03:33.831
+Test Case 'LearningEngineTests.testOwnerCanStoreSensitiveKnowledgeButInvalidNumbersAreRejected' passed (0.0 seconds)
+Test Case 'LearningEngineTests.testPendingProposalsNeverBecomeFactsWithoutConfirmation' started at 2026-11-16 08:03:33.831
+Test Case 'LearningEngineTests.testPendingProposalsNeverBecomeFactsWithoutConfirmation' passed (0.0 seconds)
+Test Case 'LearningEngineTests.testStateRoundTripAndSuccessfulExperienceNeedsReceipt' started at 2026-11-16 08:03:33.831
+Test Case 'LearningEngineTests.testStateRoundTripAndSuccessfulExperienceNeedsReceipt' passed (0.0 seconds)
+Test Case 'LearningEngineTests.testTaskCorrectionRequiresConfirmationAndSurvivesTaskHistoryExpiry' started at 2026-11-16 08:03:33.832
+Test Case 'LearningEngineTests.testTaskCorrectionRequiresConfirmationAndSurvivesTaskHistoryExpiry' passed (0.0 seconds)
+Test Case 'LearningEngineTests.testTransitiveSupersessionDeletionCannotResurrectOldRecords' started at 2026-11-16 08:03:33.832
+Test Case 'LearningEngineTests.testTransitiveSupersessionDeletionCannotResurrectOldRecords' passed (0.0 seconds)
+Test Suite 'LearningEngineTests' passed at 2026-11-16 08:03:33.832
+	 Executed 12 tests, with 0 failures (0 unexpected) in 0.01 (0.01) seconds
+Test Suite 'LearningPersistenceTests' started at 2026-11-16 08:03:33.832
+Test Case 'LearningPersistenceTests.testEditedDraftCannotConfirmStoredText' started at 2026-11-16 08:03:33.832
+Test Case 'LearningPersistenceTests.testEditedDraftCannotConfirmStoredText' passed (0.0 seconds)
+Test Case 'LearningPersistenceTests.testLearningFailedWriteAndDeleteAll' started at 2026-11-16 08:03:33.832
+Test Case 'LearningPersistenceTests.testLearningFailedWriteAndDeleteAll' passed (0.001 seconds)
+Test Case 'LearningPersistenceTests.testMigrationOfRealV1PayloadAndLearningRestartDeletion' started at 2026-11-16 08:03:33.833
+Test Case 'LearningPersistenceTests.testMigrationOfRealV1PayloadAndLearningRestartDeletion' passed (0.001 seconds)
+Test Suite 'LearningPersistenceTests' passed at 2026-11-16 08:03:33.834
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
+Test Suite 'LocalAIProviderTests' started at 2026-11-16 08:03:33.834
+Test Case 'LocalAIProviderTests.testEmptyPromptAndUnavailableRuntimeCannotFabricateAnswer' started at 2026-11-16 08:03:33.834
+Test Case 'LocalAIProviderTests.testEmptyPromptAndUnavailableRuntimeCannotFabricateAnswer' passed (0.028 seconds)
+Test Case 'LocalAIProviderTests.testInvalidReplacementPreservesInstalledModelAndCleansTemporaryCopy' started at 2026-11-16 08:03:33.862
+Test Case 'LocalAIProviderTests.testInvalidReplacementPreservesInstalledModelAndCleansTemporaryCopy' passed (0.004 seconds)
+Test Case 'LocalAIProviderTests.testLocalModelImportAndOfflineProviderContract' started at 2026-11-16 08:03:33.867
+Test Case 'LocalAIProviderTests.testLocalModelImportAndOfflineProviderContract' passed (0.004 seconds)
+Test Case 'LocalAIProviderTests.testManifestJSONRestoresOwnerSelectionWithoutHashPinning' started at 2026-11-16 08:03:33.871
+Test Case 'LocalAIProviderTests.testManifestJSONRestoresOwnerSelectionWithoutHashPinning' passed (0.004 seconds)
+Test Case 'LocalAIProviderTests.testManifestValidationAndCodableTraversalRejected' started at 2026-11-16 08:03:33.875
+Test Case 'LocalAIProviderTests.testManifestValidationAndCodableTraversalRejected' passed (0.001 seconds)
+Test Case 'LocalAIProviderTests.testOwnerModelDoesNotRequirePinnedHashOrSize' started at 2026-11-16 08:03:33.875
+Test Case 'LocalAIProviderTests.testOwnerModelDoesNotRequirePinnedHashOrSize' passed (0.003 seconds)
+Test Case 'LocalAIProviderTests.testOwnerModelIsAcceptedByContentNotFileExtension' started at 2026-11-16 08:03:33.879
+Test Case 'LocalAIProviderTests.testOwnerModelIsAcceptedByContentNotFileExtension' passed (0.002 seconds)
+Test Case 'LocalAIProviderTests.testRejectsNonGGUFContentEvenWhenNamedGGUF' started at 2026-11-16 08:03:33.881
+Test Case 'LocalAIProviderTests.testRejectsNonGGUFContentEvenWhenNamedGGUF' passed (0.004 seconds)
+Test Case 'LocalAIProviderTests.testSameIdentifierReplacementSurvivesManagerRestart' started at 2026-11-16 08:03:33.885
+Test Case 'LocalAIProviderTests.testSameIdentifierReplacementSurvivesManagerRestart' passed (0.006 seconds)
+Test Case 'LocalAIProviderTests.testUninstalledModelFailsClosedWithoutCallingRuntime' started at 2026-11-16 08:03:33.891
+Test Case 'LocalAIProviderTests.testUninstalledModelFailsClosedWithoutCallingRuntime' passed (0.002 seconds)
+Test Suite 'LocalAIProviderTests' passed at 2026-11-16 08:03:33.892
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.058 (0.058) seconds
+Test Suite 'MemoryPersistenceRegressionTests' started at 2026-11-16 08:03:33.892
+Test Case 'MemoryPersistenceRegressionTests.testActivityClockRollbackPreservesEventsButExcludesFutureEvidence' started at 2026-11-16 08:03:33.892
+Test Case 'MemoryPersistenceRegressionTests.testActivityClockRollbackPreservesEventsButExcludesFutureEvidence' passed (0.0 seconds)
+Test Case 'MemoryPersistenceRegressionTests.testCacheFreshnessBoundariesAndClockRollbackDoNotDeleteRecords' started at 2026-11-16 08:03:33.893
+Test Case 'MemoryPersistenceRegressionTests.testCacheFreshnessBoundariesAndClockRollbackDoNotDeleteRecords' passed (0.0 seconds)
+Test Case 'MemoryPersistenceRegressionTests.testContextChangesInvalidateReuseWithoutErasingOwnerHistory' started at 2026-11-16 08:03:33.893
+Test Case 'MemoryPersistenceRegressionTests.testContextChangesInvalidateReuseWithoutErasingOwnerHistory' passed (0.001 seconds)
+Test Case 'MemoryPersistenceRegressionTests.testCurrentActivityJournalRemainsReadableWhenWritesFail' started at 2026-11-16 08:03:33.894
+Test Case 'MemoryPersistenceRegressionTests.testCurrentActivityJournalRemainsReadableWhenWritesFail' passed (0.0 seconds)
+Test Case 'MemoryPersistenceRegressionTests.testCurrentSnapshotCanOpenReadAndExportWhenWritesFail' started at 2026-11-16 08:03:33.894
+Test Case 'MemoryPersistenceRegressionTests.testCurrentSnapshotCanOpenReadAndExportWhenWritesFail' passed (0.0 seconds)
+Test Case 'MemoryPersistenceRegressionTests.testExistingJSONWinsWithoutKeyLookupAndDeletedDataCannotResurrect' started at 2026-11-16 08:03:33.895
+Test Case 'MemoryPersistenceRegressionTests.testExistingJSONWinsWithoutKeyLookupAndDeletedDataCannotResurrect' passed (0.005 seconds)
+Test Case 'MemoryPersistenceRegressionTests.testFailedMigrationWritePreservesLegacy' started at 2026-11-16 08:03:33.900
+Test Case 'MemoryPersistenceRegressionTests.testFailedMigrationWritePreservesLegacy' passed (0.003 seconds)
+Test Case 'MemoryPersistenceRegressionTests.testInvalidCurrentJSONIsNotSilentlyReplacedByLegacy' started at 2026-11-16 08:03:33.902
+Test Case 'MemoryPersistenceRegressionTests.testInvalidCurrentJSONIsNotSilentlyReplacedByLegacy' passed (0.004 seconds)
+Test Case 'MemoryPersistenceRegressionTests.testInvalidLegacyDoesNotCreateJSONOrDestroySource' started at 2026-11-16 08:03:33.906
+Test Case 'MemoryPersistenceRegressionTests.testInvalidLegacyDoesNotCreateJSONOrDestroySource' passed (0.006 seconds)
+Test Case 'MemoryPersistenceRegressionTests.testLegacyMigrationValidatesUpgradesAndRemovesSourceAfterCommit' started at 2026-11-16 08:03:33.912
+Test Case 'MemoryPersistenceRegressionTests.testLegacyMigrationValidatesUpgradesAndRemovesSourceAfterCommit' passed (0.004 seconds)
+Test Case 'MemoryPersistenceRegressionTests.testMissingLegacyKeyAndEmptyLegacyDoNotOverwriteSource' started at 2026-11-16 08:03:33.916
+Test Case 'MemoryPersistenceRegressionTests.testMissingLegacyKeyAndEmptyLegacyDoNotOverwriteSource' passed (0.002 seconds)
+Test Suite 'MemoryPersistenceRegressionTests' passed at 2026-11-16 08:03:33.918
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.026 (0.026) seconds
+Test Suite 'MemoryStoreTests' started at 2026-11-16 08:03:33.918
+Test Case 'MemoryStoreTests.testAllOwnerHistoryPersistsUntilDeleted' started at 2026-11-16 08:03:33.918
+Test Case 'MemoryStoreTests.testAllOwnerHistoryPersistsUntilDeleted' passed (0.001 seconds)
+Test Case 'MemoryStoreTests.testFailedWriteDoesNotMutate' started at 2026-11-16 08:03:33.919
+Test Case 'MemoryStoreTests.testFailedWriteDoesNotMutate' passed (0.0 seconds)
+Test Case 'MemoryStoreTests.testFreshnessOptOut' started at 2026-11-16 08:03:33.919
+Test Case 'MemoryStoreTests.testFreshnessOptOut' passed (0.0 seconds)
+Test Case 'MemoryStoreTests.testMigrationAndUnsupportedSchema' started at 2026-11-16 08:03:33.919
+Test Case 'MemoryStoreTests.testMigrationAndUnsupportedSchema' passed (0.0 seconds)
+Test Case 'MemoryStoreTests.testRestartEditDeleteExport' started at 2026-11-16 08:03:33.920
+Test Case 'MemoryStoreTests.testRestartEditDeleteExport' passed (0.001 seconds)
+Test Case 'MemoryStoreTests.testRouterRejectsProposalsAndPersistsCommands' started at 2026-11-16 08:03:33.920
+Test Case 'MemoryStoreTests.testRouterRejectsProposalsAndPersistsCommands' passed (0.0 seconds)
+Test Suite 'MemoryStoreTests' passed at 2026-11-16 08:03:33.921
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.003 (0.003) seconds
+Test Suite 'OfflineAssistantTests' started at 2026-11-16 08:03:33.921
+Test Case 'OfflineAssistantTests.testLocalContextPreservesUserApprovedMemoryWithoutArbitraryTruncation' started at 2026-11-16 08:03:33.921
+Test Case 'OfflineAssistantTests.testLocalContextPreservesUserApprovedMemoryWithoutArbitraryTruncation' passed (0.002 seconds)
+Test Case 'OfflineAssistantTests.testLocalModelMayRespondWithoutNetworkConsent' started at 2026-11-16 08:03:33.923
+Test Case 'OfflineAssistantTests.testLocalModelMayRespondWithoutNetworkConsent' passed (0.0 seconds)
+Test Case 'OfflineAssistantTests.testRemoteProviderStillRequiresExplicitNetworkConsent' started at 2026-11-16 08:03:33.923
+Test Case 'OfflineAssistantTests.testRemoteProviderStillRequiresExplicitNetworkConsent' passed (0.0 seconds)
+Test Suite 'OfflineAssistantTests' passed at 2026-11-16 08:03:33.924
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
+Test Suite 'OwnerActionRegressionTests' started at 2026-11-16 08:03:33.924
+Test Case 'OwnerActionRegressionTests.testCancelledExecutorDoesNotConsumeCommandOrMutateMemory' started at 2026-11-16 08:03:33.924
+Test Case 'OwnerActionRegressionTests.testCancelledExecutorDoesNotConsumeCommandOrMutateMemory' passed (0.001 seconds)
+Test Case 'OwnerActionRegressionTests.testClockRollbackDoesNotReuseFutureGeneratedAnswer' started at 2026-11-16 08:03:33.924
+Test Case 'OwnerActionRegressionTests.testClockRollbackDoesNotReuseFutureGeneratedAnswer' passed (0.0 seconds)
+Test Case 'OwnerActionRegressionTests.testDirectEditExportDeleteCommandsRunOfflineAndReturnRealReceipts' started at 2026-11-16 08:03:33.925
+Test Case 'OwnerActionRegressionTests.testDirectEditExportDeleteCommandsRunOfflineAndReturnRealReceipts' passed (0.001 seconds)
+Test Case 'OwnerActionRegressionTests.testFailedOwnerActionNeverClaimsSuccess' started at 2026-11-16 08:03:33.926
+Test Case 'OwnerActionRegressionTests.testFailedOwnerActionNeverClaimsSuccess' passed (0.0 seconds)
+Test Case 'OwnerActionRegressionTests.testModelReplyAndExternalHistoryAreContextNeverExecutableCommands' started at 2026-11-16 08:03:33.926
+Test Case 'OwnerActionRegressionTests.testModelReplyAndExternalHistoryAreContextNeverExecutableCommands' passed (0.001 seconds)
+Test Case 'OwnerActionRegressionTests.testUntrustedOriginCannotUseLocalOrGeneratedServicePaths' started at 2026-11-16 08:03:33.927
+Test Case 'OwnerActionRegressionTests.testUntrustedOriginCannotUseLocalOrGeneratedServicePaths' passed (0.0 seconds)
+Test Suite 'OwnerActionRegressionTests' passed at 2026-11-16 08:03:33.927
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.003 (0.003) seconds
+Test Suite 'PlainStorageTests' started at 2026-11-16 08:03:33.927
+Test Case 'PlainStorageTests.testOwnerMemoryIsStoredAsPlainJSONWithoutKeychain' started at 2026-11-16 08:03:33.927
+Test Case 'PlainStorageTests.testOwnerMemoryIsStoredAsPlainJSONWithoutKeychain' passed (0.004 seconds)
+Test Case 'PlainStorageTests.testOwnerMemoryStorePersistsWithPlainStorageAndCanBeErased' started at 2026-11-16 08:03:33.932
+Test Case 'PlainStorageTests.testOwnerMemoryStorePersistsWithPlainStorageAndCanBeErased' passed (0.012 seconds)
+Test Case 'PlainStorageTests.testPlainStorageNoLongerRequiresDeviceKeychainAccount' started at 2026-11-16 08:03:33.943
+Test Case 'PlainStorageTests.testPlainStorageNoLongerRequiresDeviceKeychainAccount' passed (0.02 seconds)
+Test Suite 'PlainStorageTests' passed at 2026-11-16 08:03:33.964
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.036 (0.036) seconds
+Test Suite 'SpeakerSecurityTests' started at 2026-11-16 08:03:33.964
+Test Case 'SpeakerSecurityTests.testUnavailableModuleNeverClaimsEnrollmentOrMatch' started at 2026-11-16 08:03:33.964
+Test Case 'SpeakerSecurityTests.testUnavailableModuleNeverClaimsEnrollmentOrMatch' passed (0.001 seconds)
+Test Suite 'SpeakerSecurityTests' passed at 2026-11-16 08:03:33.964
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'SpeechCaptureGateTests' started at 2026-11-16 08:03:33.964
+Test Case 'SpeechCaptureGateTests.testNewCaptureRejectsOlderSessionCallbacks' started at 2026-11-16 08:03:33.964
+Test Case 'SpeechCaptureGateTests.testNewCaptureRejectsOlderSessionCallbacks' passed (0.0 seconds)
+Test Case 'SpeechCaptureGateTests.testReleaseAndTaskCancellationRejectDelayedPermissionResults' started at 2026-11-16 08:03:33.964
+Test Case 'SpeechCaptureGateTests.testReleaseAndTaskCancellationRejectDelayedPermissionResults' passed (0.0 seconds)
+Test Suite 'SpeechCaptureGateTests' passed at 2026-11-16 08:03:33.964
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.0 (0.0) seconds
+Test Suite 'SpeechPermissionPolicyTests' started at 2026-11-16 08:03:33.964
+Test Case 'SpeechPermissionPolicyTests.testAuthorizedPermissionsCannotEnableCloudFallback' started at 2026-11-16 08:03:33.964
+Test Case 'SpeechPermissionPolicyTests.testAuthorizedPermissionsCannotEnableCloudFallback' passed (0.0 seconds)
+Test Case 'SpeechPermissionPolicyTests.testDeniedAndRestrictedDoNotRequestOtherPermissions' started at 2026-11-16 08:03:33.964
+Test Case 'SpeechPermissionPolicyTests.testDeniedAndRestrictedDoNotRequestOtherPermissions' passed (0.002 seconds)
+Test Case 'SpeechPermissionPolicyTests.testSpeechIsRequestedBeforeMicrophone' started at 2026-11-16 08:03:33.966
+Test Case 'SpeechPermissionPolicyTests.testSpeechIsRequestedBeforeMicrophone' passed (0.0 seconds)
+Test Suite 'SpeechPermissionPolicyTests' passed at 2026-11-16 08:03:33.966
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
+Test Suite 'debug.xctest' passed at 2026-11-16 08:03:33.966
+	 Executed 114 tests, with 0 failures (0 unexpected) in 4.277 (4.277) seconds
+Test Suite 'All tests' passed at 2026-11-16 08:03:33.966
+	 Executed 114 tests, with 0 failures (0 unexpected) in 4.277 (4.277) seconds
+◇ Test run started.
+↳ Testing Library Version: 6.0.3 (18c42c19cac3faf)
+✔ Test run with 0 tests passed after 0.001 seconds.
