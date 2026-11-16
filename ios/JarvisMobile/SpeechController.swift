@@ -3,10 +3,18 @@ import JarvisCore
 import Speech
 import SwiftUI
 
+/// Final, locally recognized speech. No partial or network-backed transcript
+/// should trigger an automatic model request.
+struct FinishedVoiceTurn: Equatable {
+  let id: UUID
+  let text: String
+}
+
 @MainActor
 final class SpeechController: ObservableObject {
   @Published private(set) var status = "Sesli komut için basılı tutun."
   @Published private(set) var transcript = ""
+  @Published private(set) var finishedVoiceTurn: FinishedVoiceTurn?
   @Published private(set) var recording = false
   @Published private(set) var requestingPermissions = false
   @Published private(set) var finishing = false
@@ -67,6 +75,7 @@ final class SpeechController: ObservableObject {
       request.shouldReportPartialResults = true
       self.request = request
       transcript = ""
+      finishedVoiceTurn = nil
       let engine = AVAudioEngine()
       self.engine = engine
       let input = engine.inputNode
@@ -86,11 +95,15 @@ final class SpeechController: ObservableObject {
           guard let self, self.captureGate.isCurrent(id) else { return }
           if let text { self.transcript = text }
           if isFinal || failed {
+            let finalText = self.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
             self.completeRecognition()
+            if !finalText.isEmpty {
+              self.finishedVoiceTurn = FinishedVoiceTurn(id: UUID(), text: finalText)
+            }
             self.status =
-              failed && self.transcript.isEmpty
+              failed && finalText.isEmpty
               ? "Tanıma tamamlanamadı. Yazarak devam edebilirsiniz."
-              : "Metni kontrol edip Gönder'e dokunun."
+              : "Konuşma metni hazır."
           }
         }
       }
@@ -121,11 +134,15 @@ final class SpeechController: ObservableObject {
     finishTimeout = Task { [weak self] in
       do { try await Task.sleep(for: .seconds(3)) } catch { return }
       guard let self, let id, self.captureGate.isCurrent(id) else { return }
+      let finalText = self.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
       self.completeRecognition()
+      if !finalText.isEmpty {
+        self.finishedVoiceTurn = FinishedVoiceTurn(id: UUID(), text: finalText)
+      }
       self.status =
-        self.transcript.isEmpty
+        finalText.isEmpty
         ? "Konuşma algılanmadı. Yeniden deneyebilir veya yazabilirsiniz."
-        : "Metni kontrol edip Gönder'e dokunun."
+        : "Konuşma metni hazır."
     }
   }
 
@@ -148,7 +165,7 @@ final class SpeechController: ObservableObject {
 
   /// The UI calls this only after its explicit TTS opt-in. No recording permission is
   /// requested to play a response, and completion/cancellation releases the audio session.
-  func speak(_ text: String) {
+  func speak(_ text: String, rate: Float = AVSpeechUtteranceDefaultSpeechRate) {
     cancel()
     let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !value.isEmpty else { return }
@@ -171,6 +188,7 @@ final class SpeechController: ObservableObject {
       }
       let utterance = AVSpeechUtterance(string: value)
       utterance.voice = voice
+      utterance.rate = min(0.58, max(0.44, rate))
       activeUtteranceID = ObjectIdentifier(utterance)
       speaking = true
       status = "Cevap seslendiriliyor…"
