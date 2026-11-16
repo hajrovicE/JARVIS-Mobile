@@ -26,10 +26,9 @@ struct RootView: View {
   @State private var inferenceRuntime = GGUFInferenceRuntime()
   @AppStorage("jarvis.voice.autoSend") private var voiceAutoSend = true
   @AppStorage("jarvis.voice.handsFree") private var handsFreeVoice = false
-  @State private var voiceConversationActive = false
   @AppStorage("jarvis.conversation.quickMode") private var quickMode = true
   @AppStorage("jarvis.voice.speechRate") private var speechRate = 0.53
-  @State private var previousVoiceTurnID: UUID?
+  @State private var voiceCoordinator = NaturalVoiceTurnCoordinator()
   @State private var responseSeconds: Double?
   @State private var localRuntimeMetrics: LocalRuntimeMetrics?
   @State private var store: MemoryStore?
@@ -78,15 +77,20 @@ struct RootView: View {
     .task { await open() }
     .onChange(of: speech.transcript) { _, text in input = text }
     .onChange(of: speech.finishedVoiceTurn?.id) { _, id in
-      guard voiceAutoSend, let turn = speech.finishedVoiceTurn,
-            id == turn.id, previousVoiceTurnID != id, !busy, store != nil else { return }
-      previousVoiceTurnID = id
+      guard let turn = speech.finishedVoiceTurn, id == turn.id, store != nil,
+            voiceCoordinator.acceptFinal(
+              id: turn.id, text: turn.text,
+              appInForeground: scenePhase == .active,
+              isBusy: busy, autoSend: voiceAutoSend,
+              handsFree: handsFreeVoice, speakReplies: tts) else { return }
       input = turn.text
-      submit(fromVoice: true)
+      submit()
     }
     .onChange(of: speech.naturallyFinishedOutputID) { _, id in
-      guard id != nil, handsFreeVoice, tts, voiceConversationActive,
-            scenePhase == .active, !busy else { return }
+      guard id != nil, voiceCoordinator.canResumeListening(
+        speechFinishedNaturally: true, appInForeground: scenePhase == .active,
+        isBusy: busy, handsFree: handsFreeVoice, autoSend: voiceAutoSend,
+        speakReplies: tts) else { return }
       holdStartTask?.cancel()
       holdStartTask = Task { await speech.begin(autoStopOnSilence: true) }
     }
@@ -97,7 +101,7 @@ struct RootView: View {
         runningOperation?.cancel()
         holdStartTask?.cancel()
         holdStartTask = nil
-        voiceConversationActive = false
+        voiceCoordinator.stopConversation()
         speech.cancel()
         if phase == .background {
           Task {
@@ -550,9 +554,8 @@ struct RootView: View {
     return manifest
   }
 
-  private func submit(fromVoice: Bool = false) {
+  private func submit() {
     guard let store else { return }
-    voiceConversationActive = fromVoice && handsFreeVoice && tts && voiceAutoSend
     let command = input
     chatFocused = false
     perform {
