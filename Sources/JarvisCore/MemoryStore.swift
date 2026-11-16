@@ -65,7 +65,7 @@ public actor MemoryStore {
         // Intentionally no automatic deletion.
     }
     private func commit(_ state: MemorySnapshot, changesContext: Bool = true) throws {
-        var next = state
+        let next = state
         // A context change invalidates in-flight responses by epoch, not stored history.
         try storage.save(JSONEncoder().encode(next)); snapshot = next
         if changesContext { contextEpoch = UUID() }

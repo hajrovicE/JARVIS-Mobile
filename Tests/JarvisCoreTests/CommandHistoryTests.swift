@@ -32,7 +32,8 @@ final class CommandHistoryTests: XCTestCase, @unchecked Sendable {
         XCTAssertTrue(reply.reply.contains("kaydedildi"))
         let snapshot = try await store.read()
         XCTAssertEqual(snapshot.learning.records.count, 1)
-        XCTAssertEqual(snapshot.learning.records.first?.text, lesson)
+        XCTAssertEqual(snapshot.learning.records.first?.text,
+                       lesson.trimmingCharacters(in: .whitespacesAndNewlines))
         XCTAssertTrue(snapshot.learning.records.first?.userConfirmed == true)
         XCTAssertFalse(snapshot.conversations.contains { $0.text.contains(lesson) })
         XCTAssertEqual(CommandRouter.ownerAction(for: "tüm hafızayı sil"), .deleteAllMemory)

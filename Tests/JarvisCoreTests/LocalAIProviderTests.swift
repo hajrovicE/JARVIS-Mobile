@@ -13,6 +13,15 @@ private actor OfflineStubRuntime: OnDeviceInferenceRuntime {
     func calls() -> Int { count }
 }
 
+private actor PromptCapturingRuntime: OnDeviceInferenceRuntime {
+    private var prompt = ""
+    func generate(prompt: String, modelURL: URL) async throws -> String {
+        self.prompt = prompt
+        return "tamam"
+    }
+    func lastPrompt() -> String { prompt }
+}
+
 final class LocalAIProviderTests: XCTestCase, @unchecked Sendable {
     private let digest = String(repeating: "a", count: 64)
     private func manifest(_ size: Int64 = 8) throws -> LocalModelManifest {
@@ -72,8 +81,7 @@ final class LocalAIProviderTests: XCTestCase, @unchecked Sendable {
         defer { try? FileManager.default.removeItem(at: root) }
         let renamed = root.appendingPathComponent("my-private-model.weights")
         try FileManager.default.moveItem(at: source, to: renamed)
-        let manager = try OnDeviceModelManager(directory: root.appendingPathComponent("private"),
-                                                digester: FixedDigest(digest: digest))
+        let manager = try OnDeviceModelManager(directory: root.appendingPathComponent("private"))
         let result = try await manager.importModel(from: renamed, manifest: manifest())
         XCTAssertTrue(FileManager.default.fileExists(atPath: result.path))
     }
@@ -81,10 +89,40 @@ final class LocalAIProviderTests: XCTestCase, @unchecked Sendable {
         let (root, source) = try files()
         defer { try? FileManager.default.removeItem(at: root) }
         try Data("NOT_A_MODEL".utf8).write(to: source)
-        let manager = try OnDeviceModelManager(directory: root.appendingPathComponent("private"),
-                                                digester: FixedDigest(digest: digest))
+        let manager = try OnDeviceModelManager(directory: root.appendingPathComponent("private"))
         do { _ = try await manager.importModel(from: source, manifest: manifest(11)); XCTFail("Not GGUF") }
         catch { XCTAssertEqual(error as? LocalModelError, .invalidFile) }
+    }
+    func testReasoningBlockIsHiddenWithoutLosingTheAnswer() {
+        XCTAssertEqual(ModelOutput.withoutReasoning("<think>\nplan\n</think>\n\nMerhaba!"), "Merhaba!")
+        XCTAssertEqual(ModelOutput.withoutReasoning("Düz cevap"), "Düz cevap")
+        XCTAssertEqual(ModelOutput.withoutReasoning("Önce <think>a</think>sonra"), "Önce sonra")
+        // Never turn a reasoning-only output into an empty answer.
+        XCTAssertEqual(ModelOutput.withoutReasoning("<think>yarım kalan"), "<think>yarım kalan")
+        XCTAssertEqual(ModelOutput.withoutReasoning("Cevap <think>yarım"), "Cevap")
+    }
+    func testPromptWindowDropsOldestBodyTokensOnly() {
+        XCTAssertEqual(PromptWindow.fit(prefix: [1], body: [2, 3, 4, 5], suffix: [9], limit: 4), [1, 4, 5, 9])
+        XCTAssertEqual(PromptWindow.fit(prefix: [1], body: [2, 3], suffix: [9], limit: 10), [1, 2, 3, 9])
+        XCTAssertNil(PromptWindow.fit(prefix: [1], body: [2], suffix: [9], limit: 2))
+    }
+    func testMemoriesAreRenderedAfterHistorySoTrimmingKeepsThem() async throws {
+        let (root, source) = try files()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let manager = try OnDeviceModelManager(directory: root.appendingPathComponent("private"))
+        let m = try manifest()
+        _ = try await manager.importModel(from: source, manifest: m)
+        let runtime = PromptCapturingRuntime()
+        let provider = LocalAIProvider(manager: manager, manifest: m, runtime: runtime)
+        _ = try await provider.respond(to: AIRequest(prompt: "soru", context: [
+            .init(id: "personal:1", text: "kahve severim"),
+            .init(id: "conversation:2", text: "eski sohbet")]))
+        let prompt = await runtime.lastPrompt()
+        let history = try XCTUnwrap(prompt.range(of: "eski sohbet"))
+        let memory = try XCTUnwrap(prompt.range(of: "kahve severim"))
+        let question = try XCTUnwrap(prompt.range(of: "soru", options: .backwards))
+        XCTAssertTrue(history.lowerBound < memory.lowerBound)
+        XCTAssertTrue(memory.lowerBound < question.lowerBound)
     }
     func testManifestValidationAndCodableTraversalRejected() throws {
         XCTAssertThrowsError(try LocalModelManifest(identifier: "../outside", revision: "r1", licenseIdentifier: "Apache-2.0", byteCount: 8, sha256: digest))

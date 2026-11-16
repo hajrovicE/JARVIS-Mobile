@@ -9,7 +9,18 @@ concurrency:
   group: swift-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  core-linux:
+    # Cheap Linux gate for every push; macOS minutes are billed at a much higher rate.
+    runs-on: ubuntu-latest
+    container: swift:6.0-jammy
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Core tests (Swift 6, Linux)
+        run: swift test -Xswiftc -swift-version -Xswiftc 6
   test:
+    # Full iOS validation runs for main, pull requests and manual runs only.
+    if: github.event_name != 'push' || github.ref == 'refs/heads/main'
     runs-on: macos-15
     timeout-minutes: 30
     steps:

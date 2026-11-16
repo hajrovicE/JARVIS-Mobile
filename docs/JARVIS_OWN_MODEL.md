@@ -6,7 +6,7 @@ JARVIS, iPhone'da **harici inference/model sağlayıcısına bağlanmadan** yan�
 İlk çalışır temel için Apache-2.0 lisanslı Qwen3-1.7B GGUF (Q4_K_M, 1,28 GB) ve MIT lisanslı `llama.swift` / `llama.cpp` Metal/CPU motoru kullanılır. Bu kaynak ağırlıklar başkasının lisanslı çalışmasıdır; yerel sistemin davranışlarını ve eğitimle ortaya çıkacak türev JARVIS modelini kullanıcı belirler. **Henüz sıfırdan eğitilmiş bir temel model veya JARVIS'e özel eğitilmiş ağırlık üretildiği iddia edilmez.**
 
 Başlangıç modeli:
-- URL: https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF/blob/daeb8e2/Qwen3-1.7B-Q4_K_M.gguf
+- URL: https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF/tree/main (dosya: `Qwen3-1.7B-Q4_K_M.gguf`; uygulamadaki bağlantı bu sayfayı açar)
 - SHA-256: `d2387ca2dbfee2ffabce7120d3770dadca0b293052bc2f0e138fdc940d9bc7b5`
 - Etiket: `daeb8e2` · Lisans: Apache-2.0
 - Cihaz içinde yalnızca kullanıcının seçtiği GGUF kurulur. Model ağ üzerinden uygulama tarafından indirilmez.
@@ -60,3 +60,11 @@ Tam iPhone gerçek cihaz GGUF inference hızı/RAM/ısınma, iOS derlemesi ve Te
 - Harici model sağlayıcısı / bulut yolu iPhone uygulamasında bulunmaz; kullanıcı hesabı açılması ve AI servis aboneliği gerekmez.
 - Daha önceki belgelerde yer alan `şifreli depolama`, `biyometrik ikinci onay` ve `SHA-256 mecburi` açıklamaları bu yeni uygulama sürümünde geçerli değildir.
 - Çalıştırılmamış veya desteklenmeyen eylemler tamamlanmış gibi raporlanmaz. Sahibi adına yetkisiz işlem başlatma yasağı sürer.
+
+## 16 Kasım 2026 çalışma zamanı güncellemesi
+- Model ilk soruda belleğe yüklenir ve sonraki sorularda yüklü kalır; iOS bellek uyarısında veya model değiştirildiğinde bırakılır.
+- Varsayılan bağlam penceresi 4096 token'dır (sahibi AI sekmesinden değiştirir). Geçmiş pencereye sığmadığında en eski istem token'ları modele gönderilmez; kayıtlı geçmiş ve hafıza **silinmez**. Kayıtlı hafıza, eski sohbetten sonra yerleştirildiği için kırpılmada önce eski sohbet düşer.
+- Şablon işaretleri (`<|im_start|>`, `<|im_end|>`) yalnızca uygulamanın şablonunda kontrol token'ı olarak ayrıştırılır; sahibin yönergesi ve hafıza metni düz metin olarak token'lanır.
+- Qwen3'ün `<think>…</think>` düşünme bloğu varsayılan olarak yanıttan ayıklanır (görüntü/sesli okuma içindir, davranış yönergesi değildir). AI sekmesindeki **Modelin düşünme adımlarını göster** ile açılabilir. Düşünmeyi tamamen kapatmak isterseniz kendi davranış kurallarınıza `/no_think` yazabilirsiniz.
+- Yeni model seçildiğinde önceki model dosyası uygulama klasöründen silinir.
+- App Store'suz kurulum: [SIDELOAD.md](SIDELOAD.md).
