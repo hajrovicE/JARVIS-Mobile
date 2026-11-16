@@ -11,13 +11,30 @@ private enum GGUFBackend {
     }()
 }
 
+/// Keeps the expensive GGUF weights resident across turns. The per-request
+/// llama context is rebuilt so KV cache never leaks between unrelated prompts.
+private final class ResidentGGUFModel {
+    let pointer: OpaquePointer
+    let path: String
+    let bytes: UInt64
+    let modifiedAt: Date?
+    init(pointer: OpaquePointer, path: String, bytes: UInt64, modifiedAt: Date?) {
+        self.pointer = pointer
+        self.path = path
+        self.bytes = bytes
+        self.modifiedAt = modifiedAt
+    }
+    deinit { llama_model_free(pointer) }
+}
+
 actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
-    private let maxNewTokens: Int
-    private let contextLength: Int32
-    private let ownerInstructions: String
-    private let temperature: Float
-    private let topP: Float
-    private let cpuThreads: Int
+    private var maxNewTokens: Int
+    private var contextLength: Int32
+    private var ownerInstructions: String
+    private var temperature: Float
+    private var topP: Float
+    private var cpuThreads: Int
+    private var resident: ResidentGGUFModel?
 
     /// These are user-controlled generation settings, not content moderation rules.
     /// A real context window and finite per-request generation budget are required by llama.cpp.
@@ -32,22 +49,51 @@ actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
         self.cpuThreads = cpuThreads
     }
 
+    /// Reconfiguration between user turns is cheap. Model weights stay loaded.
+    func configure(maxNewTokens: Int, contextLength: Int32, ownerInstructions: String,
+                   temperature: Float, topP: Float, cpuThreads: Int) {
+        self.maxNewTokens = max(1, min(Int(Int32.max - 1), maxNewTokens))
+        self.contextLength = max(512, contextLength)
+        self.ownerInstructions = ownerInstructions
+        self.temperature = temperature.isFinite ? max(0, temperature) : 0.8
+        self.topP = topP.isFinite ? min(1, max(Float.leastNonzeroMagnitude, topP)) : 1.0
+        self.cpuThreads = cpuThreads
+    }
+
+    /// Explicitly free weights on backgrounding or when the app changes models.
+    func unload() {
+        resident = nil
+    }
+
+    private func model(for url: URL) throws -> OpaquePointer {
+        let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
+        let bytes = (attrs[.size] as? NSNumber)?.uint64Value ?? 0
+        let modified = attrs[.modificationDate] as? Date
+        if let resident, resident.path == url.path,
+           resident.bytes == bytes, resident.modifiedAt == modified {
+            return resident.pointer
+        }
+        resident = nil
+        var parameters = llama_model_default_params()
+        #if targetEnvironment(simulator)
+        parameters.n_gpu_layers = 0
+        #else
+        parameters.n_gpu_layers = Int32.max
+        #endif
+        guard let pointer = llama_model_load_from_file(url.path, parameters) else {
+            throw LocalModelError.invalidFile
+        }
+        resident = ResidentGGUFModel(pointer: pointer, path: url.path,
+                                      bytes: bytes, modifiedAt: modified)
+        return pointer
+    }
+
     func generate(prompt: String, modelURL: URL) async throws -> String {
         try Task.checkCancellation()
         guard modelURL.isFileURL, !prompt.isEmpty else { throw LocalModelError.invalidSource }
         _ = GGUFBackend.ready
 
-        var modelParameters = llama_model_default_params()
-        #if targetEnvironment(simulator)
-        modelParameters.n_gpu_layers = 0
-        #else
-        modelParameters.n_gpu_layers = Int32.max
-        #endif
-
-        guard let model = llama_model_load_from_file(modelURL.path, modelParameters) else {
-            throw LocalModelError.invalidFile
-        }
-        defer { llama_model_free(model) }
+        let model = try model(for: modelURL)
 
         var contextParameters = llama_context_default_params()
         contextParameters.n_ctx = UInt32(contextLength)
