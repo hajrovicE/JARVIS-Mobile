@@ -568,7 +568,13 @@ struct RootView: View {
         let conversationGuidance = quickMode ?
           "Türkçe, doğal bir sohbet ritmiyle konuş; gereksiz tekrar ve uzun giriş yapma. " +
           "İsteniyorsa ayrıntıyı koru. Doğrulayamadığın bilgiyi kesinmiş gibi söyleme." : ""
-        let instructions = [ownerInstructions, conversationGuidance]
+        // Qwen3 GGUF supports a /no_think prompt switch. Use it only for short
+        // conversational turns and never override the owner's own /think choice.
+        let ownerSelectedThinking = ownerInstructions.contains("/think")
+            || ownerInstructions.contains("/no_think")
+        let quickAnswerSwitch = quickMode && !budget.needsDetail && !ownerSelectedThinking
+            ? "/no_think" : ""
+        let instructions = [ownerInstructions, conversationGuidance, quickAnswerSwitch]
             .filter { !$0.isEmpty }.joined(separator: "\n")
         await inferenceRuntime.configure(
             maxNewTokens: budget.maxNewTokens,
