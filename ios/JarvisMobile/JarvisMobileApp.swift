@@ -23,6 +23,12 @@ struct RootView: View {
   @AppStorage("onboarded") private var onboarded = false
   @AppStorage("ttsEnabled") private var tts = false
   @StateObject private var speech = SpeechController()
+  @State private var inferenceRuntime = GGUFInferenceRuntime()
+  @AppStorage("jarvis.voice.autoSend") private var voiceAutoSend = true
+  @AppStorage("jarvis.conversation.quickMode") private var quickMode = true
+  @AppStorage("jarvis.voice.speechRate") private var speechRate = 0.53
+  @State private var previousVoiceTurnID: UUID?
+  @State private var responseSeconds: Double?
   @State private var store: MemoryStore?
   @State private var input = ""
   @FocusState private var chatFocused: Bool
@@ -68,6 +74,13 @@ struct RootView: View {
     }
     .task { await open() }
     .onChange(of: speech.transcript) { _, text in input = text }
+    .onChange(of: speech.finishedVoiceTurn?.id) { _, id in
+      guard voiceAutoSend, let turn = speech.finishedVoiceTurn,
+            id == turn.id, previousVoiceTurnID != id, !busy, store != nil else { return }
+      previousVoiceTurnID = id
+      input = turn.text
+      submit()
+    }
     .onChange(of: tts) { _, enabled in if !enabled { speech.cancel() } }
     .onChange(of: scenePhase) { _, phase in
       if phase != .active {
@@ -77,7 +90,10 @@ struct RootView: View {
         holdStartTask = nil
         speech.cancel()
         if phase == .background {
-          Task { await permissions.invalidateAll() }
+          Task {
+            await permissions.invalidateAll()
+            await inferenceRuntime.unload()
+          }
         }
       } else {
         Task { if store == nil { await open() } else { perform { try await refresh() } } }
@@ -195,7 +211,13 @@ struct RootView: View {
             }
           }
           .disabled(speech.requestingPermissions || speech.finishing)
+          Toggle("Akıcı sohbet · kısa ve hızlı yanıt", isOn: $quickMode)
+          Toggle("Konuşmam bitince otomatik yanıtla", isOn: $voiceAutoSend)
           Toggle("Cevapları sesli oku", isOn: $tts)
+          if let responseSeconds {
+            Text("Son yanıt: \(responseSeconds, format: .number.precision(.fractionLength(1))) saniye")
+              .font(.caption).foregroundStyle(.secondary)
+          }
           if speech.speaking { Button("Sesli cevabı durdur") { speech.cancel() } }
         }.padding()
       }.navigationTitle("JARVIS")
@@ -525,16 +547,20 @@ struct RootView: View {
       } else {
         let manifest = try selectedModelManifest()
         let manager = try OnDeviceModelManager(directory: localModelDirectory())
+        let outputLimit = quickMode ? min(320, modelMaxNewTokens) : modelMaxNewTokens
+        let contextLimit = quickMode ? min(4096, modelContextTokens) : modelContextTokens
+        await inferenceRuntime.configure(
+            maxNewTokens: outputLimit,
+            contextLength: Int32(clamping: contextLimit),
+            ownerInstructions: ownerInstructions,
+            temperature: Float(modelTemperature),
+            topP: Float(modelTopP),
+            cpuThreads: modelCPUThreads)
         provider = LocalAIProvider(manager: manager, manifest: manifest,
-            runtime: GGUFInferenceRuntime(
-                maxNewTokens: modelMaxNewTokens,
-                contextLength: Int32(clamping: modelContextTokens),
-                ownerInstructions: ownerInstructions,
-                temperature: Float(modelTemperature),
-                topP: Float(modelTopP),
-                cpuThreads: modelCPUThreads))
+            runtime: inferenceRuntime)
         scope = "local:" + manifest.identifier
       }
+      let answerStart = Date()
       let result = try await AssistantService(
         store: store, provider: provider, providerScope: scope,
         processingMode: .onDevice
@@ -543,6 +569,7 @@ struct RootView: View {
         consent: AISharingConsent(networkAllowed: false,
             personalMemory: true, confirmedLearning: true, recentHistory: true))
       try Task.checkCancellation()
+      responseSeconds = Date().timeIntervalSince(answerStart)
       reply = result.text
       activeReply = result.generated
       input = ""
@@ -550,7 +577,7 @@ struct RootView: View {
       if result.historyWriteFailed {
         errorText = "Komut tamamlandı ancak konuşma geçmişi kaydedilemedi."
       }
-      if tts { speech.speak(result.text) }
+      if tts { speech.speak(result.text, rate: Float(speechRate)) }
     }
   }
 }
