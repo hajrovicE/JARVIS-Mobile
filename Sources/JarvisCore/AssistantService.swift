@@ -31,6 +31,13 @@ public struct AssistantReply: Sendable {
     public let generated: StoredAIAnswer?
     public let fromCache: Bool
     public let historyWriteFailed: Bool
+    public let actionResult: ActionExecutionResult?
+    public var exportedData: Data? { actionResult?.exportedData }
+    public init(text: String, generated: StoredAIAnswer?, fromCache: Bool,
+                historyWriteFailed: Bool, actionResult: ActionExecutionResult? = nil) {
+        self.text = text; self.generated = generated; self.fromCache = fromCache
+        self.historyWriteFailed = historyWriteFailed; self.actionResult = actionResult
+    }
 }
 public enum AssistantError: Error, Equatable {
     case consentRequired, contextChanged, approvalRequired, credentialDetected
@@ -66,15 +73,30 @@ public struct AssistantService: Sendable {
     private let provider: any AIProvider
     private let providerScope: String
     private let processingMode: AIProcessingMode
+    private let permissions: PermissionManager
     public init(store: MemoryStore, provider: any AIProvider = UnavailableAIProvider(),
-                providerScope: String = "unconfigured", processingMode: AIProcessingMode = .remote) {
+                providerScope: String = "unconfigured", processingMode: AIProcessingMode = .remote,
+                permissions: PermissionManager = PermissionManager()) {
         self.store = store
         self.provider = provider
         self.providerScope = providerScope
         self.processingMode = processingMode
+        self.permissions = permissions
     }
-    public func reply(to prompt: String, consent: AISharingConsent, now: Date = Date()) async throws -> AssistantReply {
+    /// Entry point for a current owner message. Context and model replies are display data;
+    /// they are never recursively submitted here as fresh owner instructions.
+    public func reply(to prompt: String, consent: AISharingConsent,
+                      origin: ActionOrigin = .userInterface, now: Date = Date()) async throws -> AssistantReply {
         try Task.checkCancellation()
+        guard origin == .userInterface else { throw ActionPermissionError.untrustedOrigin }
+        if let operation = CommandRouter.ownerAction(for: prompt) {
+            let request = ActionRequest(operation: operation, origin: origin)
+            let authorization = try await permissions.authorizeOwnerCommand(request)
+            let result = try await ActionExecutor(store: store, permissions: permissions)
+                .execute(request, authorization: authorization)
+            return AssistantReply(text: result.message, generated: nil, fromCache: false,
+                                  historyWriteFailed: false, actionResult: result)
+        }
         let router = CommandRouter(store: store)
         if CommandRouter.isLocalCommand(prompt) {
             let result = try await router.executeWithHistory(prompt)
@@ -87,7 +109,7 @@ public struct AssistantService: Sendable {
         let (state, epoch) = try await store.aiContextSnapshot(now: now)
         let scope = providerScope + "|" + consent.cacheScope
         if !consent.recentHistory, !AnswerFreshnessPolicy.isDynamic(prompt), let cached = state.generatedAnswers.last(where: {
-            $0.question == prompt && $0.cacheScope == scope && ($0.cacheUntil ?? .distantPast) > now
+            $0.question == prompt && $0.cacheScope == scope && $0.savedAt <= now && ($0.cacheUntil ?? .distantPast) > now
         }) {
             try await store.validateAIContext(expectedEpoch: epoch)
             try Task.checkCancellation()

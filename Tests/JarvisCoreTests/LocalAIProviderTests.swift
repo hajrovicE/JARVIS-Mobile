@@ -23,7 +23,7 @@ final class LocalAIProviderTests: XCTestCase, @unchecked Sendable {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let source = root.appendingPathComponent("fixture.gguf")
-        try Data("GGUFtest".utf8).write(to: source)
+        try structuralGGUFFixture().write(to: source)
         return (root, source)
     }
     func testUninstalledModelFailsClosedWithoutCallingRuntime() async throws {
@@ -72,8 +72,7 @@ final class LocalAIProviderTests: XCTestCase, @unchecked Sendable {
         defer { try? FileManager.default.removeItem(at: root) }
         let renamed = root.appendingPathComponent("my-private-model.weights")
         try FileManager.default.moveItem(at: source, to: renamed)
-        let manager = try OnDeviceModelManager(directory: root.appendingPathComponent("private"),
-                                                digester: FixedDigest(digest: digest))
+        let manager = try OnDeviceModelManager(directory: root.appendingPathComponent("private"))
         let result = try await manager.importModel(from: renamed, manifest: manifest())
         XCTAssertTrue(FileManager.default.fileExists(atPath: result.path))
     }
@@ -81,12 +80,11 @@ final class LocalAIProviderTests: XCTestCase, @unchecked Sendable {
         let (root, source) = try files()
         defer { try? FileManager.default.removeItem(at: root) }
         try Data("NOT_A_MODEL".utf8).write(to: source)
-        let manager = try OnDeviceModelManager(directory: root.appendingPathComponent("private"),
-                                                digester: FixedDigest(digest: digest))
+        let manager = try OnDeviceModelManager(directory: root.appendingPathComponent("private"))
         do { _ = try await manager.importModel(from: source, manifest: manifest(11)); XCTFail("Not GGUF") }
         catch { XCTAssertEqual(error as? LocalModelError, .invalidFile) }
     }
-    func testManifestValidationAndCodableTraversalRejected() throws {
+    func testManifestValidationAndCodableTraversalRejected() async throws {
         XCTAssertThrowsError(try LocalModelManifest(identifier: "../outside", revision: "r1", licenseIdentifier: "Apache-2.0", byteCount: 8, sha256: digest))
         XCTAssertThrowsError(try LocalModelManifest(identifier: "valid", revision: "r1", licenseIdentifier: "Apache-2.0", byteCount: -1, sha256: digest))
         let valid = try manifest()
@@ -94,6 +92,50 @@ final class LocalAIProviderTests: XCTestCase, @unchecked Sendable {
         XCTAssertEqual(try JSONDecoder().decode(LocalModelManifest.self, from: json), valid)
         let bad = Data(String(decoding: json, as: UTF8.self).replacingOccurrences(of: "test-local-gguf", with: "../../other").utf8)
         XCTAssertThrowsError(try JSONDecoder().decode(LocalModelManifest.self, from: bad))
+    }
+    func testSameIdentifierReplacementSurvivesManagerRestart() async throws {
+        let (root, source) = try files()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let directory = root.appendingPathComponent("private")
+        let manager = try OnDeviceModelManager(directory: directory)
+        let m = try manifest()
+        let installed = try await manager.importModel(from: source, manifest: m)
+        let original = try Data(contentsOf: installed)
+        try structuralGGUFFixture(value: 2).write(to: source)
+        let replacement = try Data(contentsOf: source)
+        XCTAssertNotEqual(original, replacement)
+        _ = try await manager.importModel(from: source, manifest: m)
+        XCTAssertEqual(try Data(contentsOf: installed), replacement)
+        let reopened = try OnDeviceModelManager(directory: directory)
+        let model = try await reopened.installedModelURL(for: m)
+        XCTAssertEqual(try Data(contentsOf: model), replacement)
+        try await reopened.removeModel(m)
+        do { _ = try await reopened.installedModelURL(for: m); XCTFail("Deleted model must remain absent") }
+        catch { XCTAssertEqual(error as? LocalModelError, .notInstalled) }
+    }
+    func testInvalidReplacementPreservesInstalledModelAndCleansTemporaryCopy() async throws {
+        let (root, source) = try files()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let directory = root.appendingPathComponent("private")
+        let manager = try OnDeviceModelManager(directory: directory)
+        let m = try manifest()
+        let installed = try await manager.importModel(from: source, manifest: m)
+        let original = try Data(contentsOf: installed)
+        try Data("GGUFbroken".utf8).write(to: source)
+        do { _ = try await manager.importModel(from: source, manifest: m); XCTFail("Corrupt replacement") }
+        catch { XCTAssertEqual(error as? LocalModelError, .invalidFile) }
+        XCTAssertEqual(try Data(contentsOf: installed), original)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: directory.path), [m.identifier + ".gguf"])
+    }
+    func testManifestJSONRestoresOwnerSelectionWithoutHashPinning() async throws {
+        let (root, source) = try files()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let original = try LocalModelManifest(identifier: "owner-model", revision: "Benim / özgür sürümüm", licenseIdentifier: "Özel lisans açıklaması", byteCount: 0, sha256: "not-a-pin")
+        let restored = try JSONDecoder().decode(LocalModelManifest.self, from: JSONEncoder().encode(original))
+        let directory = root.appendingPathComponent("private")
+        _ = try await OnDeviceModelManager(directory: directory).importModel(from: source, manifest: original)
+        let located = try await OnDeviceModelManager(directory: directory).installedModelURL(for: restored)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: located.path))
     }
     func testEmptyPromptAndUnavailableRuntimeCannotFabricateAnswer() async throws {
         let (root, source) = try files()

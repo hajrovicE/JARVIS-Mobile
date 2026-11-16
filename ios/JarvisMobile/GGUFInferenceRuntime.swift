@@ -1,14 +1,34 @@
 import Foundation
 import JarvisCore
 import LlamaSwift
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
 
 /// A real, fully local llama.cpp generation engine.
 /// No HTTP, server credentials, or analytics are involved in this implementation.
 private enum GGUFBackend {
     static let ready: Bool = {
+        // llama.cpp diagnostics can include prompt/model metadata. Product logs stay silent.
+        llama_log_set({ _, _, _ in }, nil)
         llama_backend_init()
         return true
     }()
+}
+
+struct GGUFGeneration: Sendable {
+    let text: String
+    let renderedPrompt: String
+    let promptTokens: Int
+    let generatedTokens: Int
+    let requestedMaxTokens: Int
+    let effectiveContext: Int
+    let threads: Int
+    let temperature: Float
+    let topP: Float
+    let gpuOffloadRequested: Bool
 }
 
 actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
@@ -24,25 +44,36 @@ actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
     init(maxNewTokens: Int = 2048, contextLength: Int32 = 8192,
          ownerInstructions: String = "", temperature: Float = 0.8, topP: Float = 1.0,
          cpuThreads: Int = 0) {
-        self.maxNewTokens = max(1, min(Int(Int32.max - 1), maxNewTokens))
-        self.contextLength = max(512, contextLength)
+        self.maxNewTokens = maxNewTokens
+        self.contextLength = contextLength
         self.ownerInstructions = ownerInstructions
-        self.temperature = temperature.isFinite ? max(0, temperature) : 0.8
-        self.topP = topP.isFinite ? min(1, max(Float.leastNonzeroMagnitude, topP)) : 1.0
+        self.temperature = temperature
+        self.topP = topP
         self.cpuThreads = cpuThreads
     }
 
     func generate(prompt: String, modelURL: URL) async throws -> String {
+        try await generateDetailed(prompt: prompt, modelURL: modelURL).text
+    }
+
+    func generateDetailed(prompt: String, modelURL: URL) async throws -> GGUFGeneration {
         try Task.checkCancellation()
+        guard maxNewTokens > 0, maxNewTokens < Int(Int32.max), contextLength > 0,
+              temperature.isFinite, temperature >= 0, topP.isFinite, topP > 0, topP <= 1,
+              cpuThreads >= 0, cpuThreads <= Int(Int32.max),
+              !ownerInstructions.utf8.contains(0), !prompt.utf8.contains(0) else {
+            throw LocalModelError.invalidSettings
+        }
         guard modelURL.isFileURL, !prompt.isEmpty else { throw LocalModelError.invalidSource }
         _ = GGUFBackend.ready
 
         var modelParameters = llama_model_default_params()
-        #if targetEnvironment(simulator)
-        modelParameters.n_gpu_layers = 0
+        #if (os(iOS) && !targetEnvironment(simulator)) || os(macOS)
+        let gpuRequested = llama_supports_gpu_offload()
         #else
-        modelParameters.n_gpu_layers = Int32.max
+        let gpuRequested = false
         #endif
+        modelParameters.n_gpu_layers = gpuRequested ? Int32.max : 0
 
         guard let model = llama_model_load_from_file(modelURL.path, modelParameters) else {
             throw LocalModelError.invalidFile
@@ -68,29 +99,45 @@ actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
             throw LocalModelError.runtimeUnavailable
         }
 
-        // Qwen3-family chat template; changes for other model families require
-        // a separate tokenizer/template compatibility check.
-        // The owner controls this local policy. No remote model provider is consulted.
-        // No built-in behavioral system prompt: every instruction is set by the owner.
-        // ActionExecutor independently rejects model-issued device operations.
-        let systemTurn = ownerInstructions.isEmpty ? "" :
-            "<|im_start|>system\n" + ownerInstructions + "\n<|im_end|>\n"
-        let renderedPrompt = systemTurn + "<|im_start|>user\n" + prompt
-            + "\n<|im_end|>\n<|im_start|>assistant\n"
+        // Use the model's own format. No hardcoded behavioral instruction is injected.
+        // ActionExecutor, not model text, controls direct owner operations.
+        guard let template = llama_model_chat_template(model, nil) else { throw LocalModelError.unsupportedTemplate }
+        var allocations: [UnsafeMutablePointer<CChar>] = []
+        defer { allocations.forEach { free($0) } }
+        func cString(_ value: String) throws -> UnsafePointer<CChar> {
+            guard let pointer = strdup(value) else { throw LocalModelError.runtimeUnavailable }
+            allocations.append(pointer); return UnsafePointer(pointer)
+        }
+        var messages: [llama_chat_message] = []
+        if !ownerInstructions.isEmpty {
+            messages.append(llama_chat_message(role: try cString("system"), content: try cString(ownerInstructions)))
+        }
+        messages.append(llama_chat_message(role: try cString("user"), content: try cString(prompt)))
+        let required = messages.withUnsafeBufferPointer {
+            llama_chat_apply_template(template, $0.baseAddress, $0.count, true, nil, 0)
+        }
+        guard required > 0, required < Int32.max - 1 else { throw LocalModelError.unsupportedTemplate }
+        var rendered = [CChar](repeating: 0, count: Int(required) + 1)
+        let renderedCount = messages.withUnsafeBufferPointer {
+            llama_chat_apply_template(template, $0.baseAddress, $0.count, true, &rendered, Int32(rendered.count))
+        }
+        guard renderedCount == required else { throw LocalModelError.unsupportedTemplate }
+        let renderedPrompt = String(decoding: rendered.prefix(Int(renderedCount)).map { UInt8(bitPattern: $0) }, as: UTF8.self)
         let byteCount = renderedPrompt.utf8.count
         guard byteCount < Int(Int32.max - 8) else { throw LocalModelError.runtimeUnavailable }
         let capacity = byteCount + 8
         var tokenBuffer = [llama_token](repeating: 0, count: capacity)
         let nTokens = renderedPrompt.withCString { ptr in
             llama_tokenize(vocabulary, ptr, Int32(byteCount), &tokenBuffer,
-                           Int32(capacity), false, true)
+                           Int32(capacity), true, true)
         }
-        guard nTokens > 0, nTokens < contextLength else {
-            throw LocalModelError.runtimeUnavailable
+        let effectiveContext = Int(llama_n_ctx(context))
+        guard nTokens > 0, Int(nTokens) < min(Int(contextLength), effectiveContext) else {
+            throw LocalModelError.contextExceeded
         }
         // The model's actual context window determines the generation budget.
         // Do not underflow or overflow Int32 when the owner selects large budgets.
-        let generationBudget = min(maxNewTokens, Int(contextLength - nTokens))
+        let generationBudget = min(maxNewTokens, min(Int(contextLength), effectiveContext) - Int(nTokens))
         let tokens = Array(tokenBuffer.prefix(Int(nTokens)))
 
         var batch = llama_batch_init(512, 0, 1)
@@ -134,7 +181,8 @@ actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
         bytes.reserveCapacity(min(32_768, maxNewTokens) * 5)
         var position = Int32(tokens.count)
 
-        for _ in 0..<generationBudget {
+        var generatedTokens = 0
+        for step in 0..<generationBudget {
             try Task.checkCancellation()
             let token = llama_sampler_sample(sampler, context, -1)
             if llama_vocab_is_eog(vocabulary, token) { break }
@@ -152,6 +200,9 @@ actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
                 throw LocalModelError.runtimeUnavailable
             }
             bytes.append(contentsOf: piece.prefix(Int(written)).map { UInt8(bitPattern: $0) })
+            generatedTokens += 1
+            // The last sampled token need not be decoded into the next context position.
+            if step + 1 == generationBudget { break }
 
             batch.n_tokens = 1
             batch.token[0] = token
@@ -172,6 +223,9 @@ actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
         let answer = String(decoding: bytes, as: UTF8.self)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !answer.isEmpty else { throw LocalModelError.emptyOutput }
-        return answer
+        return GGUFGeneration(text: answer, renderedPrompt: renderedPrompt,
+            promptTokens: Int(nTokens), generatedTokens: generatedTokens,
+            requestedMaxTokens: maxNewTokens, effectiveContext: effectiveContext,
+            threads: threads, temperature: temperature, topP: topP, gpuOffloadRequested: gpuRequested)
     }
 }

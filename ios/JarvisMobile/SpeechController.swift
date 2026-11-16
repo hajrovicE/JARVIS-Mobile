@@ -48,6 +48,9 @@ final class SpeechController: ObservableObject {
     let id = captureGate.begin()
     recognitionID = id
     pressed = true
+    // A new gesture must never replay text from an older capture when permission
+    // is denied or the gesture ends before authorization completes.
+    transcript = ""
     let authorized = await authorize()
     // A release/background event while a system dialog is open invalidates this capture.
     guard authorized, pressed, captureGate.canStart(id, taskCancelled: Task.isCancelled) else {
@@ -66,7 +69,6 @@ final class SpeechController: ObservableObject {
       request.requiresOnDeviceRecognition = true
       request.shouldReportPartialResults = true
       self.request = request
-      transcript = ""
       let engine = AVAudioEngine()
       self.engine = engine
       let input = engine.inputNode
@@ -131,6 +133,8 @@ final class SpeechController: ObservableObject {
 
   /// Backgrounding or interruption must not keep an input device or delayed capture alive.
   func cancel() {
+    let wasSpeaking = speaking
+    let wasCapturing = pressed || recording || finishing
     pressed = false
     captureGate.cancel()
     recognitionID = nil
@@ -144,6 +148,13 @@ final class SpeechController: ObservableObject {
     finishing = false
     stopOutput()
     try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    // stopOutput invalidates the callback identity first. Report the terminal
+    // state here, since the synthesizer's delayed cancellation event is stale.
+    if wasSpeaking {
+      status = "Sesli cevap durduruldu. Cevabı okuyabilir veya yeniden dinleyebilirsiniz."
+    } else if wasCapturing {
+      status = "Sesli giriş durduruldu. Yazarak devam edebilirsiniz."
+    }
   }
 
   /// The UI calls this only after its explicit TTS opt-in. No recording permission is
@@ -162,8 +173,8 @@ final class SpeechController: ObservableObject {
       try AVAudioSession.sharedInstance().setActive(true)
       if synthesizer == nil {
         let output = AVSpeechSynthesizer()
-        let delegate = SpeechOutputDelegate { @Sendable [weak self] utteranceID in
-          Task { @MainActor [weak self] in self?.completeOutput(utteranceID) }
+        let delegate = SpeechOutputDelegate { @Sendable [weak self] utteranceID, finished in
+          Task { @MainActor [weak self] in self?.completeOutput(utteranceID, finished: finished) }
         }
         output.delegate = delegate
         synthesizer = output
@@ -186,14 +197,16 @@ final class SpeechController: ObservableObject {
     speaking = false
     synthesizer?.stopSpeaking(at: .immediate)
   }
-  private func completeOutput(_ id: ObjectIdentifier) {
+  private func completeOutput(_ id: ObjectIdentifier, finished: Bool) {
     guard activeUtteranceID == id else { return }
     activeUtteranceID = nil
     speaking = false
     if !recording && !finishing {
       try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
-    status = "Sesli cevap tamamlandı. Yazarak veya konuşarak devam edebilirsiniz."
+    status = finished
+      ? "Sesli cevap tamamlandı. Yazarak veya konuşarak devam edebilirsiniz."
+      : "Sesli cevap durduruldu. Cevabı okuyabilir veya yeniden dinleyebilirsiniz."
   }
 
   private func authorize() async -> Bool {
@@ -293,18 +306,18 @@ private final class AudioRequestSink: @unchecked Sendable {
 
 /// AVFoundation may call these delegate methods away from the main actor. Only an
 /// immutable utterance identity crosses that boundary; session state stays on the actor.
-private final class SpeechOutputDelegate: NSObject, AVSpeechSynthesizerDelegate {
-  private let stopped: @Sendable (ObjectIdentifier) -> Void
-  init(stopped: @escaping @Sendable (ObjectIdentifier) -> Void) { self.stopped = stopped }
+final class SpeechOutputDelegate: NSObject, AVSpeechSynthesizerDelegate {
+  private let stopped: @Sendable (ObjectIdentifier, Bool) -> Void
+  init(stopped: @escaping @Sendable (ObjectIdentifier, Bool) -> Void) { self.stopped = stopped }
   nonisolated func speechSynthesizer(
     _ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance
   ) {
-    stopped(ObjectIdentifier(utterance))
+    stopped(ObjectIdentifier(utterance), true)
   }
   nonisolated func speechSynthesizer(
     _ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance
   ) {
-    stopped(ObjectIdentifier(utterance))
+    stopped(ObjectIdentifier(utterance), false)
   }
 }
 

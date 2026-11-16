@@ -1,4 +1,9 @@
 import Foundation
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
 /// Owner-owned local model metadata. No hash pinning or model provenance restrictions.
 public struct LocalModelManifest: Codable, Equatable, Sendable {
     public let identifier: String
@@ -44,7 +49,7 @@ public struct LocalModelManifest: Codable, Equatable, Sendable {
 
 public enum LocalModelError: Error, Equatable, Sendable {
     case invalidManifest, invalidSource, notInstalled, invalidFile
-    case runtimeUnavailable, emptyOutput
+    case runtimeUnavailable, emptyOutput, invalidSettings, contextExceeded, unsupportedTemplate
 }
 
 /// Imports a user-provided model file into an app-private directory.
@@ -63,17 +68,7 @@ public actor OnDeviceModelManager {
     }
 
     private func verify(_ file: URL, using manifest: LocalModelManifest) throws {
-        let values = try file.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
-        guard values.isRegularFile == true, values.isSymbolicLink != true else {
-            throw LocalModelError.invalidFile
-        }
-        // GGUF is identified by file content, not the filename or extension.
-        let source = try FileHandle(forReadingFrom: file)
-        defer { try? source.close() }
-        guard try source.read(upToCount: 4) == Data([0x47, 0x47, 0x55, 0x46]) else {
-            throw LocalModelError.invalidFile
-        }
-        // No additional owner-selected model checksum or exact-size gate.
+        try GGUFFileValidator.validate(at: file)
     }
 
     public func installedModelURL(for manifest: LocalModelManifest) throws -> URL {
@@ -89,14 +84,19 @@ public actor OnDeviceModelManager {
             throw LocalModelError.invalidSource
         }
         let destination = destination(for: manifest)
-        if FileManager.default.fileExists(atPath: destination.path) {
-            return try installedModelURL(for: manifest)
-        }
         let temporary = directory.appendingPathComponent(UUID().uuidString + ".partial", isDirectory: false)
         do {
+            try Task.checkCancellation()
+            try verify(source, using: manifest)
             try FileManager.default.copyItem(at: source, to: temporary)
             try verify(temporary, using: manifest)
-            try FileManager.default.moveItem(at: temporary, to: destination)
+            try Task.checkCancellation()
+            // Same-directory rename is atomic and replaces an older owner-selected model.
+            // Verification/copy failures never remove the previously installed file.
+            let status = temporary.path.withCString { input in
+                destination.path.withCString { output in rename(input, output) }
+            }
+            guard status == 0 else { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno)) }
             return destination
         } catch {
             try? FileManager.default.removeItem(at: temporary)
@@ -161,6 +161,7 @@ public struct LocalAIProvider: AIProvider {
         let text: String
         do { text = try await runtime.generate(prompt: prompt, modelURL: file) }
         catch LocalModelError.runtimeUnavailable { throw AIProviderError.notConfigured }
+        catch let error as LocalModelError { throw error }
         catch is CancellationError { throw AIProviderError.cancelled }
         catch { throw AIProviderError.unavailable }
         guard !Task.isCancelled else { throw AIProviderError.cancelled }

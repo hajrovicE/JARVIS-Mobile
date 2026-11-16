@@ -9,7 +9,7 @@ final class PlainStorageTests: XCTestCase, @unchecked Sendable {
         return (directory, directory.appendingPathComponent("memory.json"))
     }
 
-    func testOwnerMemoryIsStoredAsPlainJSONWithoutKeychain() throws {
+    func testOwnerMemoryIsStoredAsPlainJSONWithoutKeychain() async throws {
         let (directory, url) = fixture()
         defer { try? FileManager.default.removeItem(at: directory) }
         let storage = try PlainFileStorage(url: url)
@@ -42,7 +42,7 @@ final class PlainStorageTests: XCTestCase, @unchecked Sendable {
         XCTAssertEqual(snapshot, MemorySnapshot())
     }
 
-    func testPlainStorageNoLongerRequiresDeviceKeychainAccount() throws {
+    func testPlainStorageNoLongerRequiresDeviceKeychainAccount() async throws {
         let (directory, url) = fixture()
         defer { try? FileManager.default.removeItem(at: directory) }
         let disk = try PlainFileStorage(url: url)

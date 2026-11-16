@@ -1,0 +1,12 @@
+PASS real Turkish inference transport: <think>  </think>  İstanbul.
+MODEL_QUALITY_FAIL capital question: expected Ankara; no factual reliability claim
+PASS exact multi-line owner prompt; prompt=74 output=7 context=1024 gpu=false
+PASS exact long owner prompt and multi-batch prefill: 1220 tokens
+PASS one-token generation, selected sampling, empty system prompt and model reload
+PASS actual context overflow is explicit
+PASS invalid settings rejected
+PASS cancelled inference
+PASS actual llama.cpp corrupt-model rejection
+PASS real GGUF import/replacement, corrupt replacement preserves model, manifest restart; no hash pin
+PASS AssistantService + real LocalAIProvider + personal context + JSON restart: <think>  </think>  Ankara
+REAL_RUNTIME_PROOF_PASSED

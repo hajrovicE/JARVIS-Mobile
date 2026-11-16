@@ -1,3 +1,5 @@
+> Güncel sahip kararı (AGENTS.md): tamamen yerel GGUF sohbeti, kullanıcı silene kadar JSON geçmişi, ek biyometri/yetki süresi/hash sabitlemesi yok. Aşağıdaki ilk Alpha planı tarihsel bağlamdır; güncel kapsam ve gerçek test durumu [kapsamlı denetim raporundadır](VALIDATION_LOCAL_MODEL_2026_11_15.md).
+
 # Doğrulama
 `swift test`: tam 90/30 gün ve bir saniye önceki sınırlar, kalıcı hafıza, zaman duyarlı önbellek dışlama, yeniden açma, düzenleme, tekli ve toplu silme, dışa aktarma, başarısız yazma, sürüm geçişi ve güvenli komut yönlendirme. Apple platformlarında ek AES-GCM yeniden açma ve değiştirilmiş şifreli dosyayı reddetme testi.
 

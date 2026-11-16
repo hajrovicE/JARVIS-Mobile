@@ -1,0 +1,7 @@
+test_production_caddy_configuration_over_trusted_local_https (__main__.DeploymentSmoke.test_production_caddy_configuration_over_trusted_local_https) ... ok
+test_real_entrypoint_private_secrets_health_and_no_key_in_image (__main__.DeploymentSmoke.test_real_entrypoint_private_secrets_health_and_no_key_in_image) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 26.010s
+
+OK

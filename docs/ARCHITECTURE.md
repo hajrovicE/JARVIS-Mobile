@@ -1,3 +1,5 @@
+> Güncel sahip kararı AGENTS.md içindedir: cihaz içinde GGUF çıkarımı, kullanıcı silene kadar JSON geçmişi, ek biyometri/yetki süresi/SHA sabitlemesi yok. Aşağıdaki ilk Alpha tasarımı tarihsel bağlamdır; [güncel doğrulama](VALIDATION.md) mevcut davranışı ve gerçek test sınırlarını açıklar.
+
 # Mimari
 `JarvisCore`: actor tabanlı MemoryStore, Sendable SnapshotStorage arayüzü, Codable sürümlü veri ve sınırlı yerel CommandRouter. Saat parametresi TTL sınırlarını test etmeye izin verir. Her değişiklik önce diske yazılır; yazma başarısızsa canlı durum değiştirilmez. Okumada ve açılışta TTL temizliği kalıcılaştırılır; uygulama aktifleştiğinde tekrar okunur. Uygulama kapalıyken iOS kesin zamanlı arka plan silme garantisi vermez; süre dolmuş kayıtlar sonraki erişimde temizlenir.
 

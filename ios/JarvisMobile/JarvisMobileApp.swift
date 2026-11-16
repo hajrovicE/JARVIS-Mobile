@@ -24,7 +24,7 @@ struct RootView: View {
   @AppStorage("ttsEnabled") private var tts = false
   @StateObject private var speech = SpeechController()
   @State private var store: MemoryStore?
-  @State private var input = ""
+  @State private var draft = ChatDraft()
   @FocusState private var chatFocused: Bool
   @State private var reply = ""
   @State private var memories: [MemoryItem] = []
@@ -67,7 +67,9 @@ struct RootView: View {
       }
     }
     .task { await open() }
-    .onChange(of: speech.transcript) { _, text in input = text }
+    .onChange(of: speech.transcript) { _, text in
+      if !text.isEmpty { draft.edit(text) }
+    }
     .onChange(of: tts) { _, enabled in if !enabled { speech.cancel() } }
     .onChange(of: scenePhase) { _, phase in
       if phase != .active {
@@ -159,10 +161,11 @@ struct RootView: View {
               Text(source.retrievedAt, style: .date).font(.caption)
             }
           }
-          TextField("Hatırla ki …", text: $input, axis: .vertical).textFieldStyle(.roundedBorder)
+          TextField("Hatırla ki …", text: Binding(
+            get: { draft.text }, set: { draft.edit($0) }), axis: .vertical).textFieldStyle(.roundedBorder)
             .accessibilityIdentifier("chat.input").focused($chatFocused)
           Button("Gönder") { submit() }.accessibilityIdentifier("chat.send").disabled(
-            store == nil || busy || input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            store == nil || busy || draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
           Text("Sesli giriş isteğe bağlıdır. Tanıma cihazda yapılır; yazarak devam edebilirsiniz.")
           Button("Ses izinlerini ver") { Task { await speech.requestPermissions() } }
             .disabled(speech.requestingPermissions || speech.recording || speech.finishing)
@@ -180,7 +183,6 @@ struct RootView: View {
                 holdStartTask?.cancel()
                 holdStartTask = nil
                 speech.stop()
-                input = speech.transcript
               }
             )
             .accessibilityAddTraits(.isButton)
@@ -189,7 +191,6 @@ struct RootView: View {
               holdStartTask?.cancel()
               holdStartTask = nil
               speech.stop()
-              input = speech.transcript
             } else {
               holdStartTask = Task { await speech.begin() }
             }
@@ -395,29 +396,23 @@ struct RootView: View {
         for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true
       ).appendingPathComponent("Jarvis", isDirectory: true)
       let jsonURL = directory.appendingPathComponent("memory.json")
-      let plainStorage = try PlainFileStorage(url: jsonURL)
-      // Legacy encrypted snapshots are read at most once when upgrading.
-      // Future writes use only the owner's plaintext JSON file.
       let legacyURL = directory.appendingPathComponent("memory.aes")
-      if !FileManager.default.fileExists(atPath: jsonURL.path),
-         FileManager.default.fileExists(atPath: legacyURL.path) {
-        let legacyStorage = try EncryptedFileStorage(
-          url: legacyURL, keychainAccount: "primary")
-        if let old = try legacyStorage.load() {
-          try plainStorage.save(old)
-        }
+      let plainStorage = try PlainFileStorage.migratingLegacySnapshot(
+        to: jsonURL, legacyURL: legacyURL
+      ) {
+        try EncryptedFileStorage(url: legacyURL, keychainAccount: "primary").load()
       }
       store = try MemoryStore(storage: plainStorage)
       if let manifest = try? selectedModelManifest(),
          let modelURL = try? localModelDirectory().appendingPathComponent(manifest.identifier + ".gguf"),
          FileManager.default.fileExists(atPath: modelURL.path) {
-        localModelStatus = "Kurulu model: " + manifest.identifier + ". İlk sorguda SHA-256 doğrulanacak."
+        localModelStatus = "Kurulu model: " + manifest.identifier + ". GGUF çıkarımı ilk sohbet isteğinde çalıştırılacak."
       } else {
         localModelStatus = "Yerel model kurulmadı. GGUF dosyasını Dosyalar'dan yükleyin."
       }
       try await refresh()
     } catch {
-      errorText = "Şifreli hafıza açılamadı. Cihazın kilidini açıp uygulamayı yeniden başlatın."
+      errorText = "Hafıza açılamadı veya eski kayıtlar taşınamadı. Kayıtlar korunmuştur; uygulamayı yeniden başlatıp tekrar deneyin."
     }
   }
   private func refresh() async throws {
@@ -463,11 +458,17 @@ struct RootView: View {
           errorText = "Yerel JARVIS modeli kurulu değil veya çıkarım motoru kullanılamıyor."
         case .invalidFile:
           errorText = "Dosya yerel GGUF motoruyla açılamadı."
+        case .invalidSettings:
+          errorText = "Model ayarları geçersiz. Bağlam, yanıt uzunluğu ve örnekleme değerlerini kontrol edin."
+        case .contextExceeded:
+          errorText = "İstek modelin seçilen bağlamına sığmıyor. Bağlamı artırın veya isteği kısaltın."
+        case .unsupportedTemplate:
+          errorText = "Bu modelin sohbet şablonu yerel motor tarafından desteklenmiyor."
         default:
           errorText = "Yerel model kurulumu veya çalıştırılması başarısız."
         }
       } catch let error as AIProviderError {
-        connectionStatus = error.userMessage
+        localModelStatus = error.userMessage
         errorText = error.userMessage
       } catch let error as AssistantError { errorText = error.userMessage } catch let error
         as ActionPermissionError
@@ -510,12 +511,13 @@ struct RootView: View {
 
   private func submit() {
     guard let store else { return }
-    let command = input
+    let submission = draft.submission()
+    let command = submission.text
     chatFocused = false
     perform {
       if let operation = CommandRouter.ownerAction(for: command) {
         try await runOwnerAction(operation, using: store)
-        input = ""
+        draft.complete(submission)
         return
       }
       let provider: any AIProvider
@@ -525,10 +527,13 @@ struct RootView: View {
       } else {
         let manifest = try selectedModelManifest()
         let manager = try OnDeviceModelManager(directory: localModelDirectory())
+        guard let contextTokens = Int32(exactly: modelContextTokens) else {
+          throw LocalModelError.invalidSettings
+        }
         provider = LocalAIProvider(manager: manager, manifest: manifest,
             runtime: GGUFInferenceRuntime(
                 maxNewTokens: modelMaxNewTokens,
-                contextLength: Int32(clamping: modelContextTokens),
+                contextLength: contextTokens,
                 ownerInstructions: ownerInstructions,
                 temperature: Float(modelTemperature),
                 topP: Float(modelTopP),
@@ -545,7 +550,7 @@ struct RootView: View {
       try Task.checkCancellation()
       reply = result.text
       activeReply = result.generated
-      input = ""
+      draft.complete(submission)
       if result.generated != nil { localModelStatus = "Son yanıt cihaz içindeki modelden üretildi." }
       if result.historyWriteFailed {
         errorText = "Komut tamamlandı ancak konuşma geçmişi kaydedilemedi."

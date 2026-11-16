@@ -1,3 +1,11 @@
+# En son devam doğrulaması — 16 Kasım 2026
+
+[PR #19 ek düzeltmeler ve gerçek sonuçlar](VALIDATION_FOLLOWUP_2026_11_16.md): 114 Swift ve 41 Python/Docker testi başarılı; gerçek Qwen3-1.7B çıkarımı ağ kapalı testten geçti. 0.6B modelin Türkçe kalite hataları korunuyor ve kalite hatasında komut artık başarısız döner. iOS derlemesi hesap engeli nedeniyle doğrulanmadı.
+
+# Güncel yerel model denetimi
+
+En son `main` referansı `e0e710f714dd31b40f49354b6ca23fa89e86f45b` için [15 Kasım 2026 kapsamlı denetim raporu](VALIDATION_LOCAL_MODEL_2026_11_15.md) esas alınır. Aşağıdaki sonuçlar eski Alpha 0.3 kaynağına aittir; güncel iOS/Metal derlemesinin geçtiği anlamına gelmez.
+
 # Alpha 0.3 doğrulama — 15 Kasım 2026
 
 Doğrulanan kaynak: `8afab2a78d2ea0306616f8bae2ab13257fe2d96b`.
