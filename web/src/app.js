@@ -34,6 +34,10 @@ if (!SUPPORTS_MEMORY64) {
 
 // ---------- persistence (owner data stays until the owner deletes it) ----------
 const safeGet = (key) => { try { return localStorage.getItem(key); } catch { return null; } };
+const safeRemove = (key) => { try { localStorage.removeItem(key); } catch { /* ignore */ } };
+// Set while a model loads. If iOS kills the page for using too much memory, the
+// marker survives the reload and tells the owner what happened.
+const LOADING_KEY = 'jarvis.web.loading';
 const safeSet = (key, value) => {
   try { localStorage.setItem(key, value); return true; } catch { return false; }
 };
@@ -149,6 +153,7 @@ async function ensureModel() {
   };
   tick();
   const timer = setInterval(tick, 1000);
+  safeSet(LOADING_KEY, JSON.stringify({ name: record.name, size: record.blob.size, ctx: settings.contextTokens, at: Date.now() }));
   pushLog('bilgi', [`Yükleme başladı: ${record.name}, ${sizeText}, bağlam ${settings.contextTokens}, ` +
     `GPU ${settings.useGPU ? 'açık' : 'kapalı'}, WebGPU ${'gpu' in navigator ? 'var' : 'yok'}, ` +
     `iş parçacığı ${globalThis.crossOriginIsolated ? 'çoklu' : 'tek'}, ` +
@@ -192,6 +197,7 @@ async function ensureModel() {
   } finally {
     clearInterval(timer);
     capturingLoadLog = false;
+    safeRemove(LOADING_KEY);
   }
   const seconds = Math.round((Date.now() - started) / 1000);
   loadLog.push(`Model ${seconds} sn içinde yüklendi.`);
@@ -623,8 +629,25 @@ $('owner-instructions').addEventListener('input', (e) => {
   saveSettings();
 });
 
+function reportInterruptedLoad() {
+  const raw = safeGet(LOADING_KEY);
+  if (!raw) return;
+  safeRemove(LOADING_KEY);
+  let info = {};
+  try { info = JSON.parse(raw) || {}; } catch { /* ignore */ }
+  const size = info.size ? (info.size >= 1e9 ? gb(info.size) : mb(info.size)) : '';
+  const text = `Önceki açılışta model yüklenirken sayfa yeniden başladı. Bu genellikle iPhone'un bu sayfaya ayırdığı belleğin ` +
+    `modele yetmediği anlamına gelir (${info.name || 'model'}${size ? ', ' + size : ''}, bağlam ${info.ctx || '?'}). ` +
+    `Daha küçük bir model seçin (AI sekmesi) veya bağlam penceresini küçültün. Diğer uygulamaları kapatmak da yardımcı olabilir.`;
+  showError(text);
+  loadLog.length = 0;
+  loadLog.push('Önceki yükleme tamamlanamadan sayfa yeniden başladı (muhtemelen bellek yetersizliği).');
+  renderLoadLog();
+}
+
 renderSettings();
 renderAll();
+reportInterruptedLoad();
 renderModelStatus();
 // Ask the browser not to evict saved memory and the model under storage pressure.
 navigator.storage?.persist?.().catch(() => {});
