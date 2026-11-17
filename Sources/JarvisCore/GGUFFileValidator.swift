@@ -1,14 +1,16 @@
 import Foundation
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
 
 /// Bounded GGUF v2/v3 format preflight. This does not assert that an architecture or
 /// quantization is supported by a runtime: llama.cpp must still load the actual model.
 /// Owner filenames, provenance text, checksum and declared byteCount are not gates.
 public enum GGUFFileValidator {
     public static func validate(at url: URL) throws {
-        let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
-        guard values.isRegularFile == true, values.isSymbolicLink != true,
-              let count = values.fileSize, count >= 24 else { throw LocalModelError.invalidFile }
-        let reader = try Reader(url: url, size: UInt64(count))
+        let reader = try Reader(url: url)
         defer { reader.close() }
         guard try reader.bytes(4) == Data([0x47, 0x47, 0x55, 0x46]),
               try [UInt32(2), 3].contains(reader.u32()) else { throw LocalModelError.invalidFile }
@@ -70,6 +72,7 @@ public enum GGUFFileValidator {
         let padding = remainder == 0 ? 0 : alignment - remainder
         try reader.skip(padding)
         guard requiredPayload <= reader.remaining else { throw LocalModelError.invalidFile }
+        try reader.verifySize()
     }
 
     /// Wire sizes from ggml-common.h static assertions and ggml.c type_traits
@@ -101,7 +104,29 @@ public enum GGUFFileValidator {
         let size: UInt64
         var offset: UInt64 = 0
         var remaining: UInt64 { size - offset }
-        init(url: URL, size: UInt64) throws { file = try FileHandle(forReadingFrom: url); self.size = size }
+        init(url: URL) throws {
+            guard url.isFileURL else { throw LocalModelError.invalidFile }
+            // URL resource values can stay cached after an in-place rewrite on
+            // Apple platforms. Bound parsing using the file we actually opened.
+            let descriptor = open(url.path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
+            guard descriptor >= 0 else { throw LocalModelError.invalidFile }
+            let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
+            var info = stat()
+            guard fstat(descriptor, &info) == 0,
+                  (info.st_mode & S_IFMT) == S_IFREG, info.st_size >= 24 else {
+                try? handle.close()
+                throw LocalModelError.invalidFile
+            }
+            file = handle
+            size = UInt64(info.st_size)
+        }
+        func verifySize() throws {
+            var info = stat()
+            guard fstat(file.fileDescriptor, &info) == 0,
+                  info.st_size >= 0, UInt64(info.st_size) == size else {
+                throw LocalModelError.invalidFile
+            }
+        }
         func close() { try? file.close() }
         func bytes(_ count: Int) throws -> Data {
             guard count >= 0, UInt64(count) <= remaining,

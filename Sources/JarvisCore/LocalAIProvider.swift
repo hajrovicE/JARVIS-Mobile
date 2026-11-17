@@ -279,7 +279,9 @@ public struct LocalAIProvider: AIProvider {
         let file: URL
         do { file = try await manager.installedModelURL(for: manifest) }
         catch LocalModelError.notInstalled { throw AIProviderError.notConfigured }
-        catch { throw AIProviderError.invalidConfiguration }
+        catch let error as LocalModelError { throw error }
+        catch is CancellationError { throw AIProviderError.cancelled }
+        catch { throw AIProviderError.unavailable }
 
         // Context remains untrusted user data; the model never receives tool authority.
         let context = request.context.enumerated().map { index, entry in

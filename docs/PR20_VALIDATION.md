@@ -6,7 +6,7 @@ Dal: `feature/fast-natural-offline-conversation-20261116`. Başlangıç: `70b8f7
 
 | Kontrol | Sonuç |
 | --- | --- |
-| Linux Swift 6.0.3 Core | **167 test, 0 hata**; ayrıca 4 worker ile paralel koşu başarılı |
+| Linux Swift 6.0.3 Core | **169 test, 0 hata**; ayrıca 4 worker ile paralel koşu başarılı |
 | Python relay | **22 test, 0 hata**; sağlayıcı çağrısı sentetik |
 | Python release | **9 test, 0 hata**; gerçek Apple Secrets yok |
 | Python model/routing | **8 test, 0 hata** |
@@ -54,7 +54,7 @@ Model kalitesinde açık kalan gerçek örnek: üç kısa cümle istendiğinde m
 - Fiziksel iPhone Metal, canlı Türkçe STT/TTS/ilk duyulur ses, gerçek izin diyalogları, termal baskı, bellek uyarısı/sonlandırma, uzun konuşma, kilit/arka plan ve VoiceOver: **AYRICA DOĞRULANMADI**.
 - Apple signing ve TestFlight: çalıştırılmadı. Ücretli servis veya hesap açılmadı.
 
-`runner_id=0, steps=[]` tek başına derleyici hatası değildir. [Eski macOS işi](https://github.com/hajrovicE/JARVIS-Mobile/actions/runs/43810721031) ve [Linux işi](https://github.com/hajrovicE/JARVIS-Mobile/actions/runs/43810721038) GitHub annotation'ında açıkça “recent account payments have failed or your spending limit needs to be increased” diyor. Hesap sahibi **Billing & plans** engelini kaldırmalı, ardından bu PR'ın tam SHA'sında macOS/iOS/Linux ve build-only Release işlerini yeniden çalıştırmalıdır. Ödeme/harcama ayarı değiştirilmedi. İmzalı cihaz kabulü ayrıca uygun Apple hesabı/sertifika ve cihaz gerektirir.
+`runner_id=0, steps=[]` önceki koşularda hesap engeliydi: eski macOS/Linux işleri açıkça failed payment/spending limit annotation'ı verdi. 17 Kasım yeni koşuları **başladı**; güncel engel artık bu varsayımla açıklanamaz. macOS Core, Foundation URL metadata önbelleğinden kaynaklanan GGUF boyut hatasını buldu. Parser açık file descriptor üzerinde fstat kullanacak şekilde düzeltildi; provider artık yerel bozuk dosyayı HTTPS ayarı hatası gibi raporlamaz. Yeni tam macOS/iOS ve build-only Release koşuları bu düzeltmeden sonra yeniden istenir. Ödeme/harcama ayarı değiştirilmedi. İmzalı cihaz kabulü ayrıca uygun Apple hesabı/sertifika ve cihaz gerektirir.
 
 ## Diğer açık PR'lar
 

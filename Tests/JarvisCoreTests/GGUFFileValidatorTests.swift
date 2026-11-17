@@ -82,6 +82,19 @@ final class GGUFFileValidatorTests: XCTestCase, @unchecked Sendable {
         invalidAlignment.replaceSubrange(53..<57, with: [3, 0, 0, 0])
         XCTAssertThrowsError(try check(invalidAlignment, file: file))
     }
+    func testCachedURLSizeCannotApproveARewrittenTruncatedFile() async throws {
+        let root = try root(); defer { try? FileManager.default.removeItem(at: root) }
+        let file = root.appendingPathComponent("owner.weights")
+        let valid = quantizedGGUFFixture(type: 2, dimensions: [32, 2], payloadBytes: 36)
+        try valid.write(to: file)
+        _ = try file.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
+        try GGUFFileValidator.validate(at: file)
+        try Data(valid.dropLast()).write(to: file)
+        XCTAssertThrowsError(try GGUFFileValidator.validate(at: file))
+        try valid.write(to: file)
+        XCTAssertNoThrow(try GGUFFileValidator.validate(at: file))
+    }
+
     func testKnownQuantizedBlockPayloadsAndFinalTensorTruncation() throws {
         let root = try root(); defer { try? FileManager.default.removeItem(at: root) }
         let file = root.appendingPathComponent("owner.weights")

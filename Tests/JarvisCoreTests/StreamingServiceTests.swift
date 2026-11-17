@@ -243,3 +243,21 @@ extension StreamingServiceTests {
         XCTAssertTrue(try XCTUnwrap(last).context.isEmpty)
     }
 }
+
+extension StreamingServiceTests {
+    func testCorruptInstalledModelReportsFileErrorInsteadOfCloudConfiguration() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let manager = try OnDeviceModelManager(directory: root)
+        let file = root.appendingPathComponent("fixture.gguf")
+        try structuralGGUFFixture().write(to: file)
+        let manifest = try LocalModelManifest(identifier: "fixture", revision: "test", licenseIdentifier: "fixture", byteCount: 0, sha256: "")
+        let provider = LocalAIProvider(manager: manager, manifest: manifest, runtime: StreamFixtureRuntime(["Merhaba."]))
+        _ = try await provider.respond(to: AIRequest(prompt: "Selam"))
+        try Data("GGUFbroken".utf8).write(to: file)
+        do {
+            _ = try await provider.respond(to: AIRequest(prompt: "Selam"))
+            XCTFail("A changed malformed file must not use the warm validation result")
+        } catch { XCTAssertEqual(error as? LocalModelError, .invalidFile) }
+    }
+}
