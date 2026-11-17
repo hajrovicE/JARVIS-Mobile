@@ -15,6 +15,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   showReasoning: false,
   useGPU: false,
   speak: false,
+  // Web sources the owner allows `araştır:` / `öğren:` to query.
+  sources: Object.freeze({ wikipedia: true, stackoverflow: true, github: true, hackernews: true, openalex: true }),
 });
 
 const lower = (text) => text.trim().toLocaleLowerCase('tr-TR');
@@ -48,8 +50,14 @@ export function parseSettings(raw) {
   try {
     const value = JSON.parse(raw);
     for (const key of Object.keys(DEFAULT_SETTINGS)) {
+      if (key === 'sources') continue;
       if (typeof value?.[key] === typeof DEFAULT_SETTINGS[key]) settings[key] = value[key];
     }
+    const sources = { ...DEFAULT_SETTINGS.sources };
+    for (const id of Object.keys(sources)) {
+      if (typeof value?.sources?.[id] === 'boolean') sources[id] = value.sources[id];
+    }
+    settings.sources = sources;
   } catch {
     // Corrupt settings fall back to defaults; memory is stored separately.
   }
@@ -301,8 +309,129 @@ export function parseExtracts(json, order, lang, retrievedAt) {
         : `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(String(p.title).replace(/ /g, '_'))}`,
       text: p.extract.replace(/\s+\n/g, '\n').trim(),
       lang,
+      provider: 'Wikipedia',
       retrievedAt,
     }));
+}
+
+/// Web sources that answer browsers directly (CORS) without an API key.
+export const SOURCE_PROVIDERS = Object.freeze([
+  { id: 'wikipedia', label: 'Wikipedia (Türkçe, sonra İngilizce)' },
+  { id: 'stackoverflow', label: 'Stack Overflow (kodlama soru-cevap)' },
+  { id: 'github', label: 'GitHub (açık kaynak projeler)' },
+  { id: 'hackernews', label: 'Hacker News (teknoloji haberleri)' },
+  { id: 'openalex', label: 'OpenAlex (bilimsel makaleler)' },
+]);
+
+const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+/// Plain text from the small HTML fragments these APIs return.
+export function htmlToText(html) {
+  return String(html ?? '')
+    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|pre|li|h\d|blockquote|div)>/gi, '\n')
+    .replace(/<li[^>]*>/gi, '• ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e) => {
+      if (e[0] === '#') {
+        const code = e[1].toLowerCase() === 'x' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+        return Number.isFinite(code) ? String.fromCodePoint(code) : m;
+      }
+      return ENTITIES[e.toLowerCase()] ?? m;
+    })
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+const https = (url) => (typeof url === 'string' && url.startsWith('https://') ? url : null);
+const q = (params) => new URLSearchParams(params).toString();
+
+export const stackSearchURL = (query) => 'https://api.stackexchange.com/2.3/search/advanced?' +
+  q({ order: 'desc', sort: 'relevance', q: query, site: 'stackoverflow', pagesize: '3', filter: 'withbody' });
+export const stackAnswersURL = (ids) => `https://api.stackexchange.com/2.3/questions/${ids.join(';')}/answers?` +
+  q({ order: 'desc', sort: 'votes', site: 'stackoverflow', filter: 'withbody', pagesize: '20' });
+
+/// Questions with their highest-voted answer (if any).
+export function parseStackOverflow(questionsJSON, answersJSON, retrievedAt) {
+  const best = new Map();
+  for (const a of answersJSON?.items ?? []) {
+    const prior = best.get(a.question_id);
+    if (!prior || a.score > prior.score || (a.is_accepted && !prior.is_accepted && a.score === prior.score)) {
+      best.set(a.question_id, a);
+    }
+  }
+  return (questionsJSON?.items ?? [])
+    .filter((item) => https(item.link))
+    .map((item) => {
+      const answer = best.get(item.question_id);
+      const question = htmlToText(item.body);
+      const text = answer
+        ? `Soru: ${question}\n\nEn çok oy alan cevap (${answer.score} oy${answer.is_accepted ? ', kabul edilmiş' : ''}):\n${htmlToText(answer.body)}`
+        : `Soru (henüz cevap yok): ${question}`;
+      return { title: htmlToText(item.title), url: item.link, text, provider: 'Stack Overflow', lang: 'en', retrievedAt };
+    });
+}
+
+export const githubSearchURL = (query) => 'https://api.github.com/search/repositories?' +
+  q({ q: query, sort: 'stars', order: 'desc', per_page: '3' });
+export function parseGitHub(json, retrievedAt) {
+  return (json?.items ?? []).filter((r) => https(r.html_url)).map((r) => ({
+    title: r.full_name,
+    url: r.html_url,
+    text: [r.description || 'Açıklama yok.', `Dil: ${r.language || 'belirtilmemiş'}`,
+      `Yıldız: ${r.stargazers_count ?? 0}`, r.topics?.length ? `Konular: ${r.topics.join(', ')}` : '',
+      r.pushed_at ? `Son güncelleme: ${String(r.pushed_at).slice(0, 10)}` : ''].filter(Boolean).join('\n'),
+    provider: 'GitHub', lang: 'en', retrievedAt,
+  }));
+}
+
+export const hackerNewsURL = (query) => 'https://hn.algolia.com/api/v1/search?' +
+  q({ query, tags: 'story', hitsPerPage: '3' });
+export function parseHackerNews(json, retrievedAt) {
+  return (json?.hits ?? []).filter((h) => h.title && h.objectID).map((h) => {
+    const discussion = `https://news.ycombinator.com/item?id=${encodeURIComponent(h.objectID)}`;
+    return {
+      title: h.title,
+      url: https(h.url) || discussion,
+      text: [h.story_text ? htmlToText(h.story_text) : '', `Tarih: ${String(h.created_at || '').slice(0, 10)}`,
+        `Puan: ${h.points ?? 0}, yorum: ${h.num_comments ?? 0}`, `Tartışma: ${discussion}`].filter(Boolean).join('\n'),
+      provider: 'Hacker News', lang: 'en', retrievedAt,
+    };
+  });
+}
+
+export const openAlexURL = (query) => 'https://api.openalex.org/works?' +
+  q({ search: query, 'per-page': '3', select: 'id,doi,display_name,publication_year,abstract_inverted_index,cited_by_count' });
+export function abstractFromIndex(index) {
+  if (!index || typeof index !== 'object') return '';
+  const words = [];
+  for (const [word, positions] of Object.entries(index)) {
+    for (const p of Array.isArray(positions) ? positions : []) if (Number.isInteger(p) && p >= 0 && p < 5000) words[p] = word;
+  }
+  return words.filter(Boolean).join(' ');
+}
+export function parseOpenAlex(json, retrievedAt) {
+  return (json?.results ?? []).filter((w) => w.display_name).map((w) => ({
+    title: w.display_name,
+    url: https(w.doi) || https(w.id) || `https://openalex.org/${encodeURIComponent(String(w.id || '').split('/').pop())}`,
+    text: [abstractFromIndex(w.abstract_inverted_index) || 'Özet yok.',
+      `Yıl: ${w.publication_year ?? '?'}`, `Atıf: ${w.cited_by_count ?? 0}`].join('\n'),
+    provider: 'OpenAlex', lang: 'en', retrievedAt,
+  }));
+}
+
+/// Interleaves results so every enabled source is represented, in provider order.
+export function mergeSources(groups, max = 6) {
+  const out = [];
+  for (let i = 0; out.length < max; i++) {
+    let added = false;
+    for (const group of groups) {
+      if (group[i] && out.length < max) { out.push(group[i]); added = true; }
+    }
+    if (!added) break;
+  }
+  return out;
 }
 
 const clip = (text, max) => (text.length <= max ? text : text.slice(0, max).replace(/\s+\S*$/, '') + '…');
