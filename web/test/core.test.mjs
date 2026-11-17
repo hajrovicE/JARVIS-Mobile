@@ -96,3 +96,59 @@ test('GGUF detection is by content', () => {
   assert.equal(isGGUF(new Uint8Array([0x47, 0x47, 0x55, 0x46, 3])), true);
   assert.equal(isGGUF(new Uint8Array([0x50, 0x4b, 3, 4])), false);
 });
+
+import {
+  routeResearch, wikipediaSearchURL, wikipediaExtractURL, parseSearchIds, parseExtracts,
+  buildResearchMessages, addWebLearning, formatSources,
+} from '../src/core.js';
+
+test('research commands come only from owner text and keep local commands intact', () => {
+  assert.deepEqual(routeResearch('Araştır: kuantum bilgisayar'), { type: 'research', query: 'kuantum bilgisayar' });
+  assert.deepEqual(routeResearch('internette ara Python'), { type: 'research', query: 'Python' });
+  assert.deepEqual(routeResearch('öğren: JavaScript'), { type: 'learnWeb', query: 'JavaScript' });
+  assert.equal(routeResearch('öğrendiklerin'), null);
+  assert.equal(routeResearch('öğrenmeyi sil abc'), null);
+  assert.equal(routeResearch('Bunu araştırır mısın?'), null);
+  assert.equal(routeResearch('öğret: a = b'), null);
+});
+
+test('wikipedia URLs request CORS-enabled JSON', () => {
+  const u = new URL(wikipediaSearchURL('tr', 'İstanbul tarihi'));
+  assert.equal(u.hostname, 'tr.wikipedia.org');
+  assert.equal(u.searchParams.get('origin'), '*');
+  assert.equal(u.searchParams.get('srsearch'), 'İstanbul tarihi');
+  assert.equal(new URL(wikipediaExtractURL('en', [1, 2])).searchParams.get('pageids'), '1|2');
+});
+
+test('parse search and extract responses in result order', () => {
+  const ids = parseSearchIds({ query: { search: [{ pageid: 7 }, { pageid: 3 }, { title: 'x' }] } });
+  assert.deepEqual(ids, [7, 3]);
+  const sources = parseExtracts({ query: { pages: {
+    3: { pageid: 3, title: 'B', extract: 'ikinci', fullurl: 'https://tr.wikipedia.org/wiki/B' },
+    7: { pageid: 7, title: 'A b', extract: 'birinci' },
+  } } }, ids, 'tr', 5);
+  assert.deepEqual(sources.map((s) => s.title), ['A b', 'B']);
+  assert.equal(sources[0].url, 'https://tr.wikipedia.org/wiki/A_b');
+  assert.equal(sources[1].retrievedAt, 5);
+  assert.deepEqual(parseExtracts({}, [1], 'tr', 1), []);
+});
+
+test('research messages carry sources as data and fit the window', () => {
+  const big = { title: 'T', url: 'https://tr.wikipedia.org/wiki/T', text: 'kelime '.repeat(5000) };
+  const m = buildResearchMessages({ question: 'Nedir?', sources: [big, big], ownerInstructions: '', contextTokens: 1024, maxTokens: 256 });
+  assert.equal(m.length, 1);
+  assert.match(m[0].content, /^Kaynaklar \(internetten alınan veri\):\n\[1\] T/);
+  assert.match(m[0].content, /Kullanıcının sorusu:\nNedir\?$/);
+  assert.ok(m[0].content.length < 1024 * 3);
+  assert.equal(formatSources([big]), '[1] T — https://tr.wikipedia.org/wiki/T');
+});
+
+test('learning from the web stores text with its source and replaces older web copy', () => {
+  const src = { title: 'JS', url: 'https://tr.wikipedia.org/wiki/JS', text: 'JavaScript bir dildir.', retrievedAt: 9 };
+  let state = addWebLearning(emptyState(), 'JavaScript', src, 10, () => 'w1');
+  assert.deepEqual(state.learning[0], { id: 'w1', topic: 'javascript', text: 'JavaScript bir dildir.', at: 10, source: src.url, retrievedAt: 9 });
+  state = addWebLearning(state, 'javascript', { ...src, text: 'yeni' }, 11, () => 'w2');
+  assert.equal(state.learning.length, 1);
+  assert.equal(state.learning[0].id, 'w1');
+  assert.equal(state.learning[0].text, 'yeni');
+});

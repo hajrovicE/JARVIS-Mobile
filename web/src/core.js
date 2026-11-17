@@ -247,3 +247,96 @@ export function isGGUF(firstBytes) {
   return firstBytes.length >= 4 && firstBytes[0] === 0x47 && firstBytes[1] === 0x47 &&
     firstBytes[2] === 0x55 && firstBytes[3] === 0x46;
 }
+
+// ---------- web research (owner-initiated only) ----------
+// Only the owner's search text leaves the phone. The model can never start a
+// search: these run solely from routeCommand() on text the owner typed.
+
+const RESEARCH_PREFIXES = ['araştır: ', 'araştır ', 'internette ara: ', 'internette ara ', 'webde ara: '];
+const LEARN_PREFIXES = ['öğren: ', 'öğren '];
+
+/// Research commands are matched before the local ones in routeResearch so
+/// that "öğrenmeyi sil …" and "öğrendiklerin" keep their meaning.
+export function routeResearch(input) {
+  const text = input.trim();
+  const n = lower(text);
+  if (n.startsWith('öğrenmeyi sil') || n === 'öğrendiklerin') return null;
+  const research = RESEARCH_PREFIXES.find((p) => n.startsWith(p));
+  if (research) return { type: 'research', query: text.slice(research.length).trim() };
+  const learn = LEARN_PREFIXES.find((p) => n.startsWith(p));
+  if (learn) return { type: 'learnWeb', query: text.slice(learn.length).trim() };
+  return null;
+}
+
+export function wikipediaSearchURL(lang, query, limit = 3) {
+  const params = new URLSearchParams({
+    action: 'query', list: 'search', srsearch: query, srlimit: String(limit),
+    format: 'json', origin: '*', utf8: '1',
+  });
+  return `https://${lang}.wikipedia.org/w/api.php?${params}`;
+}
+
+export function wikipediaExtractURL(lang, pageIds) {
+  const params = new URLSearchParams({
+    action: 'query', prop: 'extracts|info', exintro: '1', explaintext: '1', inprop: 'url',
+    pageids: pageIds.join('|'), format: 'json', origin: '*', utf8: '1',
+  });
+  return `https://${lang}.wikipedia.org/w/api.php?${params}`;
+}
+
+export function parseSearchIds(json) {
+  return (json?.query?.search ?? []).map((r) => r.pageid).filter((id) => Number.isInteger(id));
+}
+
+/// Turns an extracts response into sources, kept in search-result order.
+export function parseExtracts(json, order, lang, retrievedAt) {
+  const pages = json?.query?.pages ?? {};
+  return order
+    .map((id) => pages[id])
+    .filter((p) => p && typeof p.extract === 'string' && p.extract.trim())
+    .map((p) => ({
+      title: String(p.title),
+      url: typeof p.fullurl === 'string' && p.fullurl.startsWith('https://')
+        ? p.fullurl
+        : `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(String(p.title).replace(/ /g, '_'))}`,
+      text: p.extract.replace(/\s+\n/g, '\n').trim(),
+      lang,
+      retrievedAt,
+    }));
+}
+
+const clip = (text, max) => (text.length <= max ? text : text.slice(0, max).replace(/\s+\S*$/, '') + '…');
+
+/// Messages for answering from retrieved sources. Sources are passed as data
+/// in the user turn; the only system text is what the owner wrote.
+export function buildResearchMessages({ question, sources, ownerInstructions, contextTokens, maxTokens }) {
+  const reserve = Math.min(maxTokens, Math.floor(contextTokens / 2));
+  const budgetChars = Math.max(300, (contextTokens - reserve - estimateTokens(ownerInstructions) -
+    estimateTokens(question) - 64) * 3);
+  const perSource = Math.max(200, Math.floor(budgetChars / Math.max(1, sources.length)));
+  const blocks = sources.map((s, i) => `[${i + 1}] ${s.title} (${s.url}):\n${clip(s.text, perSource)}`);
+  const user = 'Kaynaklar (internetten alınan veri):\n' + blocks.join('\n\n') +
+    '\n\nKullanıcının sorusu:\n' + question;
+  const messages = [];
+  if (ownerInstructions.trim()) messages.push({ role: 'system', content: ownerInstructions });
+  messages.push({ role: 'user', content: user });
+  return messages;
+}
+
+export function formatSources(sources) {
+  return sources.map((s, i) => `[${i + 1}] ${s.title} — ${s.url}`).join('\n');
+}
+
+/// Saves what was learned from the web as a learning record with its source.
+export function addWebLearning(state, topic, source, now = Date.now(), makeId = newId) {
+  const next = structuredClone(state);
+  const key = lower(topic);
+  const record = {
+    id: makeId(), topic: key, text: clip(source.text, 1200), at: now,
+    source: source.url, retrievedAt: source.retrievedAt,
+  };
+  const prior = next.learning.findIndex((l) => l.topic === key && l.source);
+  if (prior >= 0) next.learning[prior] = { ...record, id: next.learning[prior].id };
+  else next.learning.push(record);
+  return next;
+}

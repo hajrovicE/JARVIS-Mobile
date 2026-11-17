@@ -28,7 +28,7 @@
           Merhaba. Sorularınız bu telefonda çalışan modelle yanıtlanır; yazdıklarınız bir sunucuya gönderilmez.
           İlk kez kullanıyorsanız <b>AI</b> sekmesinden bir model indirin.
           Komutlar: <code>hatırla ki …</code>, <code>ne hatırlıyorsun</code>, <code>unut &lt;kimlik&gt;</code>,
-          <code>öğret: konu = bilgi</code>, <code>geçmiş</code>, <code>verilerimi dışa aktar</code>.
+          <code>öğret: konu = bilgi</code>, <code>araştır: konu</code>, <code>öğren: konu</code>, <code>geçmiş</code>, <code>verilerimi dışa aktar</code>.
         </div>
       </div>
       <div id="progress" class="progress" hidden>
@@ -97,7 +97,8 @@
         <li>Çıkarım bu cihazda yapılır; bulut sağlayıcısı yoktur.</li>
         <li>Sesli giriş için klavyedeki mikrofon tuşunu kullanın (iOS dikte özelliği).</li>
         <li>Konuşmacı kimlik doğrulaması: ETKİN DEĞİL.</li>
-        <li>Web arama ve telefon kontrolü: bağlı değil.</li>
+        <li>Web araştırması: yalnızca sizin yazdığınız <code>araştır:</code> / <code>öğren:</code> komutlarıyla, Wikipedia üzerinden. İnternete yalnızca arama metni gider; hafıza ve geçmiş gönderilmez. Model kendi başına internete çıkamaz.</li>
+        <li>Telefon kontrolü: bağlı değil.</li>
         <li id="runtime-info">Çalışma modu: henüz yüklenmedi.</li>
         <li id="app-version">Sürüm: geliştirme</li>
         <li id="last-answer-timing">Son yanıt: henüz yok.</li>

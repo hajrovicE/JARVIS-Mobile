@@ -16,6 +16,13 @@ iPhone'a App Store, TestFlight veya bilgisayar olmadan kurulabilen sürüm. Safa
 - Komutlar iOS uygulamasıyla aynıdır (`hatırla ki …`, `ne hatırlıyorsun`, `unut <kimlik>`, `düzenle <kimlik> = …`, `öğret: konu = bilgi`, `bundan sonra …`, `geçmiş`, `öğrendiklerin`, `verilerimi dışa aktar`, `tüm hafızayı sil`). Komutu yalnızca sahibin yazdığı metin tetikler; model çıktısı asla komut olarak çalıştırılmaz.
 - Davranış kuralları yalnızca sahibin yazdığı metindir; boşsa modele sistem talimatı gönderilmez. Hafıza, kullanıcı mesajının içinde "kaydedilmiş veri" olarak iletilir. Geçmiş bağlam penceresine sığmazsa en eski kısım modele gönderilmez (silinmez).
 
+## Web araştırması ve öğrenme
+- `araştır: <konu>` (veya `internette ara <konu>`): Wikipedia'da arar (önce Türkçe, sonuç yoksa İngilizce), ilk 3 sonucun giriş metnini alır, bağlantı ve alınma zamanıyla gösterir. Model yüklüyse bu kaynakları "internetten alınan veri" olarak alıp cevap üretir; cevap, kaynak listesiyle geçmişe kaydedilir. Model yoksa kaynağın kendi metni gösterilir.
+- `öğren: <konu>`: ilk sonucun özetini (en fazla 1200 karakter) kaynağı ve tarihiyle **Öğrendikleri** listesine kaydeder; sonraki sorularda hafıza bağlamı olarak kullanılır. Aynı konu yeniden öğrenilirse web kopyası güncellenir. Hafıza sekmesinden silinebilir.
+- Yetki: bu komutları yalnızca sahibin yazdığı metin başlatır. Model çıktısı arama başlatamaz; model kendi başına internete çıkmaz.
+- Gizlilik: Wikipedia'ya yalnızca arama metni gider (çerez ve referrer gönderilmez). Hafıza, geçmiş ve davranış kuralları gönderilmez.
+- Sınır: tarayıcı güvenlik kuralları (CORS) yüzünden sunucusuz bir sayfa rastgele web sitelerini okuyamaz; bu yüzden kaynak Wikipedia ile sınırlıdır. "Öğrenme" model ağırlıklarını değiştirmez; bilgi hafızaya kaydedilir.
+
 ## Sınırlar (dürüst liste)
 - Yerel iOS uygulamasından **belirgin şekilde yavaştır**: Safari'de uyumluluk modu ve tek iş parçacığı kullanılır. 0.6B modelde kısa cevaplar saniyeler-onlarca saniye sürebilir. "GPU (WebGPU)" ayarı iOS 26 Safari'de hızlandırabilir; deneyseldir, yüklenemezse CPU'ya döner.
 - 0.6B modelin Türkçe yetkinliği sınırlıdır. 1.7B daha iyidir ama ~1,3 GB indirir ve eski iPhone'larda belleğe sığmayabilir (sayfa yeniden açılır).
