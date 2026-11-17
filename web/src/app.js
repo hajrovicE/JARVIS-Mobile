@@ -13,6 +13,25 @@ const COMPAT = {
 
 const $ = (id) => document.getElementById(id);
 
+// wllama decides between its normal build (needs WebAssembly Memory64) and the
+// compatibility build by constructing a Memory with {address: 'i64'}. iOS Safari
+// accepts that descriptor without supporting Memory64, so the normal build was
+// chosen and failed to compile ("Memory64 is not enabled"). Validate a real
+// 64-bit memory module instead, and make the library's check agree with it.
+const MEMORY64_PROBE = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 5, 3, 1, 4, 0]);
+const SUPPORTS_MEMORY64 = (() => {
+  try { return WebAssembly.validate(MEMORY64_PROBE); } catch { return false; }
+})();
+if (!SUPPORTS_MEMORY64) {
+  const NativeMemory = WebAssembly.Memory;
+  const Memory = function Memory(descriptor) {
+    if (descriptor && descriptor.address === 'i64') throw new TypeError('Memory64 is not supported');
+    return new NativeMemory(descriptor);
+  };
+  Memory.prototype = NativeMemory.prototype;
+  WebAssembly.Memory = Memory;
+}
+
 // ---------- persistence (owner data stays until the owner deletes it) ----------
 const safeGet = (key) => { try { return localStorage.getItem(key); } catch { return null; } };
 const safeSet = (key, value) => {
@@ -89,6 +108,7 @@ const pushLog = (level, args) => {
   loadLog.push(`${new Date().toLocaleTimeString('tr-TR')} ${level}: ${line}`.slice(0, 300));
   if (loadLog.length > 80) loadLog.shift();
   renderLoadLog();
+  if (failLoad && FATAL.test(line)) failLoad(new Error(line));
 };
 const engineLogger = {
   debug: () => {},
@@ -103,6 +123,10 @@ function renderLoadLog() {
 
 let loadingInstance = null;
 let loadCancelled = false;
+// The engine can abort inside its worker without rejecting loadModel(); a fatal
+// engine message ends the wait instead of leaving the owner on a spinner forever.
+let failLoad = null;
+const FATAL = /Aborted\(|out of memory/i;
 
 async function ensureModel() {
   const record = await getStoredModel();
@@ -127,18 +151,20 @@ async function ensureModel() {
   const timer = setInterval(tick, 1000);
   pushLog('bilgi', [`Yükleme başladı: ${record.name}, ${sizeText}, bağlam ${settings.contextTokens}, ` +
     `GPU ${settings.useGPU ? 'açık' : 'kapalı'}, WebGPU ${'gpu' in navigator ? 'var' : 'yok'}, ` +
-    `iş parçacığı ${globalThis.crossOriginIsolated ? 'çoklu' : 'tek'}`]);
+    `iş parçacığı ${globalThis.crossOriginIsolated ? 'çoklu' : 'tek'}, ` +
+    `Memory64 ${SUPPORTS_MEMORY64 ? 'var' : 'yok (uyumluluk motoru)'}`]);
   const attempt = async (gpu) => {
     const instance = new Wllama(WASM, { suppressNativeLog: false, logger: engineLogger });
     instance.setCompat(COMPAT);
     loadingInstance = instance;
     try {
-      await instance.loadModel([record.blob], {
+      const fatal = new Promise((_, reject) => { failLoad = reject; });
+      await Promise.race([fatal, instance.loadModel([record.blob], {
         n_ctx: settings.contextTokens,
         n_threads: globalThis.crossOriginIsolated ? Math.min(4, navigator.hardwareConcurrency || 2) : 1,
         n_gpu_layers: gpu ? 999 : 0,
         jinja: true,
-      });
+      })]);
       if (loadCancelled) throw new DOMException('cancelled', 'AbortError');
       return instance;
     } catch (error) {
@@ -147,6 +173,7 @@ async function ensureModel() {
       throw error;
     } finally {
       loadingInstance = null;
+      failLoad = null;
     }
   };
   let instance;

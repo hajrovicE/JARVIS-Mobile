@@ -15,6 +15,20 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== 'GET' || url.origin !== self.location.origin) return;
+  // Large engine binaries: cache first. Pages and code: network first, so a
+  // fix reaches the phone on the next open; the cache serves when offline.
+  if (url.pathname.endsWith('.wasm')) {
+    event.respondWith(caches.match(event.request).then((hit) => hit || fetch(event.request)));
+    return;
+  }
   event.respondWith(
-    caches.match(event.request, { ignoreSearch: true }).then((hit) => hit || fetch(event.request)));
+    fetch(event.request)
+      .then((response) => {
+        if (response.ok) {
+          const copy = response.clone();
+          caches.open(CACHE).then((cache) => cache.put(event.request, copy)).catch(() => {});
+        }
+        return response;
+      })
+      .catch(() => caches.match(event.request, { ignoreSearch: true })));
 });
