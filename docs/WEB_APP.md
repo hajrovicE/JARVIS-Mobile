@@ -6,6 +6,7 @@ iPhone'a App Store, TestFlight veya bilgisayar olmadan kurulabilen sürüm. Safa
 1. Safari'de JARVIS web adresini açın (GitHub Actions → *JARVIS web app (GitHub Pages)* koşusunun özetinde ve depo ana sayfasında görünür).
 2. Paylaş düğmesi → **Ana Ekrana Ekle**. Ana ekrandaki JARVIS simgesiyle açın: Safari ana ekrana eklenmiş uygulamaların verilerini, normal sekmelerin aksine, kullanılmadığında silmez.
 3. **AI** sekmesi → **İndir: Hızlı · Qwen3 0.6B** (Wi‑Fi önerilir). Model bir kez indirilir ve telefonda saklanır.
+   Uygulama içi indirme çalışmazsa: Safari'de [Qwen3-1.7B-Q4_K_M.gguf](https://github.com/hajrovicE/JARVIS-Mobile/releases/download/model-qwen3-1.7b/Qwen3-1.7B-Q4_K_M.gguf) (~1,28 GB, Apache-2.0) bağlantısıyla dosyayı İndirilenler'e kaydedin, sonra **AI → Telefondaki GGUF dosyasını seç** ile seçin. Dosya `.github/workflows/model-release.yml` ile Hugging Face'teki sabit revizyondan indirilip SHA-256 ile doğrulanarak yayımlanır.
 4. **Sohbet** sekmesinden yazın. Sesli giriş için klavyedeki mikrofon tuşunu kullanın.
 
 ## Nasıl çalışır
