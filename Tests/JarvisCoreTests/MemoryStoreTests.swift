@@ -54,6 +54,25 @@ final class MemoryStoreTests: XCTestCase, @unchecked Sendable {
         disk.fail = false
         let state = try await store.read(now: now); XCTAssertTrue(state.personal.isEmpty)
     }
+    func testLegacyPersonalEditDatePersistsWithoutChangingIdentityOrCreation() async throws {
+        let disk = TestStorage()
+        var legacy = MemorySnapshot()
+        let original = MemoryItem(text: "Kahvem şekerli", createdAt: now.addingTimeInterval(-60))
+        legacy.personal = [original]
+        let bytes = try JSONEncoder().encode(legacy)
+        XCTAssertFalse(String(decoding: bytes, as: UTF8.self).contains("updatedAt"))
+        try disk.save(bytes)
+        let store = try MemoryStore(storage: disk, now: now)
+        let before = try await store.read(now: now)
+        XCTAssertNil(before.personal[0].updatedAt)
+        try await store.edit(id: original.id, text: "Kahvem şekersiz", now: now)
+        let reopened = try MemoryStore(storage: disk, now: now)
+        let after = try await reopened.read(now: now)
+        XCTAssertEqual(after.personal[0].id, original.id)
+        XCTAssertEqual(after.personal[0].createdAt, original.createdAt)
+        XCTAssertEqual(after.personal[0].updatedAt, now)
+        XCTAssertEqual(after.personal[0].text, "Kahvem şekersiz")
+    }
     func testFreshnessOptOut() async throws {
         let store = try MemoryStore(storage: TestStorage(), now: now)
         try await store.cache(question: "hava", answer: "eski", timeSensitive: false, now: now)

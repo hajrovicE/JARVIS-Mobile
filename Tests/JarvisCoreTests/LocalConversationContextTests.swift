@@ -248,3 +248,44 @@ extension LocalConversationContextTests {
         XCTAssertTrue(LocalConversationContext.select(state: state, query: "Mahrem tercihim?", consent: .init(), now: now).isEmpty)
     }
 }
+
+extension LocalConversationContextTests {
+    func testEditedPersonalFactInvalidatesOldFollowupButKeepsNewFactAndArchive() async throws {
+        var state = MemorySnapshot()
+        let personal = MemoryItem(text: "Kahvem şekersiz", createdAt: now.addingTimeInterval(-90), updatedAt: now)
+        state.personal = [personal]
+        let first = StoredAIAnswer(question: "Kahvem?", response: .init(text: "Şekerli kahve", provider: "test", model: "fixture", generatedAt: now.addingTimeInterval(-60)), savedAt: now.addingTimeInterval(-60), cacheUntil: nil, cacheScope: "local", contextIDs: ["personal:\(personal.id)"])
+        let second = StoredAIAnswer(question: "Devam", response: .init(text: "Eski tercihe devam", provider: "test", model: "fixture", generatedAt: now.addingTimeInterval(-30)), savedAt: now.addingTimeInterval(-30), cacheUntil: nil, cacheScope: "local", contextIDs: ["answer:\(first.id)"])
+        state.generatedAnswers = [first, second]
+        let selected = LocalConversationContext.select(state: state, query: "Peki kahvem?", consent: .init(personalMemory: true, recentHistory: true), now: now)
+        XCTAssertFalse(selected.contains { $0.id.hasPrefix("answer:") })
+        XCTAssertTrue(selected.contains { $0.id == "personal:\(personal.id)" && $0.text == personal.text })
+        XCTAssertEqual(state.generatedAnswers.count, 2)
+    }
+
+    func testCorrectionInvalidatesLegacyMultiHopDerivedConversation() async throws {
+        var state = MemorySnapshot()
+        var current = knowledge("Kahvem şekersiz", key: "kahve.tercih", source: .userCorrection)
+        current.kind = .preference
+        current.updatedAt = now
+        state.learning.records = [current]
+        let first = StoredAIAnswer(question: "Kahvem?", response: .init(text: "Şekerli kahve", provider: "test", model: "fixture", generatedAt: now.addingTimeInterval(-60)), savedAt: now.addingTimeInterval(-60), cacheUntil: nil, cacheScope: "local", contextIDs: ["learning:\(current.id)"])
+        let second = StoredAIAnswer(question: "Devam", response: .init(text: "Eski şekerli tercihe göre plan", provider: "test", model: "fixture", generatedAt: now.addingTimeInterval(-30)), savedAt: now.addingTimeInterval(-30), cacheUntil: nil, cacheScope: "local", contextIDs: ["answer:\(first.id)", "derived:learning"])
+        state.generatedAnswers = [first, second]
+        let selected = LocalConversationContext.select(state: state, query: "Peki devam", consent: .init(confirmedLearning: true, recentHistory: true), now: now)
+        XCTAssertFalse(selected.contains { $0.id.hasPrefix("answer:") })
+        XCTAssertEqual(state.generatedAnswers.count, 2, "Selection must not erase owner history")
+    }
+
+    func testDeletedPersonalOrExperienceCannotReturnThroughFollowupHistory() async throws {
+        for origin in ["personal:", "experience:"] {
+            var state = MemorySnapshot()
+            let missing = UUID()
+            let first = StoredAIAnswer(question: "Rota", response: .init(text: "Silinmiş kaynaktan rota", provider: "test", model: "fixture", generatedAt: now), savedAt: now, cacheUntil: nil, cacheScope: "local", contextIDs: [origin + missing.uuidString])
+            let second = StoredAIAnswer(question: "Devam", response: .init(text: "Eski rota devamı", provider: "test", model: "fixture", generatedAt: now), savedAt: now, cacheUntil: nil, cacheScope: "local", contextIDs: ["answer:\(first.id)"])
+            state.generatedAnswers = [first, second]
+            let selected = LocalConversationContext.select(state: state, query: "Peki devam", consent: .init(personalMemory: true, confirmedLearning: true, recentHistory: true), now: now)
+            XCTAssertTrue(selected.isEmpty, origin)
+        }
+    }
+}

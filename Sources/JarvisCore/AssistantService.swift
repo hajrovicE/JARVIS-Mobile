@@ -129,6 +129,9 @@ public struct AssistantService: Sendable {
                 state: state, query: prompt, consent: consent, now: now)
             let selectedIDs = Set(context.map(\.id))
             for answer in state.generatedAnswers where selectedIDs.contains("answer:\(answer.id)") {
+                historyCategories.formUnion(answer.contextIDs.filter {
+                    $0.hasPrefix("personal:") || $0.hasPrefix("learning:") || $0.hasPrefix("experience:")
+                })
                 if answer.contextIDs.contains(where: { $0.hasPrefix("personal:") || $0 == "derived:personal" }) {
                     historyCategories.insert("derived:personal")
                 }
@@ -148,7 +151,9 @@ public struct AssistantService: Sendable {
         if consent.recentHistory {
             let local = state.conversations.map { ($0.createdAt, "conversation:\($0.id)", $0.text, Set<String>()) }
             let generated = state.generatedAnswers.compactMap { answer -> (Date, String, String, Set<String>)? in
-                var categories: Set<String> = []
+                var categories = Set(answer.contextIDs.filter {
+                    $0.hasPrefix("personal:") || $0.hasPrefix("learning:") || $0.hasPrefix("experience:")
+                })
                 if answer.contextIDs.contains(where: { $0.hasPrefix("personal:") || $0 == "derived:personal" }) { categories.insert("derived:personal") }
                 if answer.contextIDs.contains(where: { $0.hasPrefix("learning:") || $0.hasPrefix("experience:") || $0 == "derived:learning" }) { categories.insert("derived:learning") }
                 guard (!categories.contains("derived:personal") || consent.personalMemory),

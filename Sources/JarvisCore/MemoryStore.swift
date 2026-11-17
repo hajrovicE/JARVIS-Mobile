@@ -4,8 +4,10 @@ public struct MemoryItem: Codable, Identifiable, Equatable, Sendable {
     public var id: UUID
     public var text: String
     public var createdAt: Date
-    public init(id: UUID = UUID(), text: String, createdAt: Date = Date()) {
-        self.id = id; self.text = text; self.createdAt = createdAt
+    /// Absent in older JSON/AES snapshots. Creation time remains unchanged on edit.
+    public var updatedAt: Date?
+    public init(id: UUID = UUID(), text: String, createdAt: Date = Date(), updatedAt: Date? = nil) {
+        self.id = id; self.text = text; self.createdAt = createdAt; self.updatedAt = updatedAt
     }
 }
 public struct AnswerCache: Codable, Equatable, Sendable {
@@ -101,11 +103,13 @@ public actor MemoryStore {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw MemoryError.emptyText }
         var next = try read(now: now); next.personal.append(.init(text: text, createdAt: now)); try commit(next)
     }
-    public func edit(id: UUID, text: String) throws {
+    public func edit(id: UUID, text: String, now: Date = Date()) throws {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw MemoryError.emptyText }
         var next = snapshot
         guard let index = next.personal.firstIndex(where: { $0.id == id }) else { throw MemoryError.missingMemory }
-        next.personal[index].text = text; try commit(next)
+        next.personal[index].text = text
+        next.personal[index].updatedAt = now
+        try commit(next)
     }
     public func forget(id: UUID) throws {
         var next = snapshot

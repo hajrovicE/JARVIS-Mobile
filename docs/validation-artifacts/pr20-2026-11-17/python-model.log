@@ -8,6 +8,6 @@ test_requires_explicit_examples_and_does_not_modify_source (test_prepare_dataset
 test_stable_deduplication_and_holdout (test_prepare_dataset.DatasetTests.test_stable_deduplication_and_holdout) ... ok
 
 ----------------------------------------------------------------------
-Ran 8 tests in 0.005s
+Ran 8 tests in 0.008s
 
 OK

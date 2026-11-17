@@ -22,6 +22,6 @@ test_safe_logger_accepts_only_allowlisted_fields (test_runtime.RuntimeTests.test
 test_secret_files_and_explicit_expiry (test_runtime.RuntimeTests.test_secret_files_and_explicit_expiry) ... ok
 
 ----------------------------------------------------------------------
-Ran 22 tests in 3.621s
+Ran 22 tests in 3.799s
 
 OK

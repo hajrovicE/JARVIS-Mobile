@@ -9,6 +9,6 @@ test_signing_entrypoint_rejects_no_membership_without_creating_files (test_polic
 test_valid_profile_and_exact_identity_are_used_for_export (test_policy.ReleasePolicyTests.test_valid_profile_and_exact_identity_are_used_for_export) ... ok
 
 ----------------------------------------------------------------------
-Ran 9 tests in 0.214s
+Ran 9 tests in 0.380s
 
 OK

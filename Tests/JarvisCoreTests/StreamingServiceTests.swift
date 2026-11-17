@@ -238,6 +238,7 @@ extension StreamingServiceTests {
         XCTAssertTrue(try XCTUnwrap(first.generated).contextIDs.contains("experience:\(experience.id)"))
         let second = try await service.reply(to: "Peki devam", consent: .init(confirmedLearning: true, recentHistory: true), now: now.addingTimeInterval(1))
         XCTAssertTrue(try XCTUnwrap(second.generated).contextIDs.contains("derived:learning"))
+        XCTAssertTrue(try XCTUnwrap(second.generated).contextIDs.contains("experience:\(experience.id)"))
         _ = try await service.reply(to: "Peki devam", consent: .init(recentHistory: true), now: now.addingTimeInterval(2))
         let last = await provider.lastRequest()
         XCTAssertTrue(try XCTUnwrap(last).context.isEmpty)

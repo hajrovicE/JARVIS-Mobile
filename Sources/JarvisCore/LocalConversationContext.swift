@@ -83,6 +83,7 @@ public enum LocalConversationContext {
             }
         }
         if consent.recentHistory {
+            let historyByID = Dictionary(state.generatedAnswers.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
             let followup = isFollowUp(query)
             let local = state.conversations.filter { $0.createdAt <= now }
                 .suffix(12)
@@ -96,7 +97,7 @@ public enum LocalConversationContext {
             let answers = state.generatedAnswers.filter { $0.savedAt <= now && $0.response.generatedAt <= now }
                 .suffix(12)
             for (index, item) in answers.enumerated() {
-                guard permitsHistory(item, state: state, consent: consent) else { continue }
+                guard permitsHistory(item, state: state, consent: consent, historyByID: historyByID) else { continue }
                 let text = "Kullanıcı: \(item.question)\nJARVIS: \(item.response.text)"
                 let score = overlap(text, terms)
                 guard score > 0 || (followup && index >= max(0, answers.count - 2)) else { continue }
@@ -171,17 +172,33 @@ public enum LocalConversationContext {
     }
 
     private static func permitsHistory(_ answer: StoredAIAnswer, state: MemorySnapshot,
-                                       consent: AISharingConsent) -> Bool {
-        for id in answer.contextIDs {
-            if (id.hasPrefix("personal:") || id == "derived:personal"), !consent.personalMemory { return false }
-            if (id.hasPrefix("learning:") || id.hasPrefix("experience:") || id == "derived:learning"), !consent.confirmedLearning { return false }
-            if id.hasPrefix("learning:"), let uuid = UUID(uuidString: String(id.dropFirst("learning:".count))) {
-                guard let record = state.learning.records.first(where: { $0.id == uuid }),
-                      record.userConfirmed, record.supersededBy == nil,
-                      record.updatedAt <= answer.savedAt else { return false }
+                                       consent: AISharingConsent, historyByID: [UUID: StoredAIAnswer]) -> Bool {
+        // Follow older answer-only ancestry too: previous schema-v3 records
+        // may carry a derived category without the original source IDs. Use an
+        // iterative walk so long/cyclic imported histories cannot recurse forever.
+        var pending = [answer]
+        var visited = Set<UUID>()
+        while let current = pending.popLast() {
+            guard visited.insert(current.id).inserted else { continue }
+            for id in current.contextIDs {
+                if (id.hasPrefix("personal:") || id == "derived:personal"), !consent.personalMemory { return false }
+                if (id.hasPrefix("learning:") || id.hasPrefix("experience:") || id == "derived:learning"), !consent.confirmedLearning { return false }
+                if id.hasPrefix("learning:"), let uuid = UUID(uuidString: String(id.dropFirst("learning:".count))) {
+                    guard let record = state.learning.records.first(where: { $0.id == uuid }),
+                          record.userConfirmed, record.supersededBy == nil,
+                          record.updatedAt <= current.savedAt else { return false }
+                }
+                if id.hasPrefix("personal:"), let uuid = UUID(uuidString: String(id.dropFirst("personal:".count))) {
+                    guard let record = state.personal.first(where: { $0.id == uuid }),
+                          (record.updatedAt ?? record.createdAt) <= current.savedAt else { return false }
+                }
+                if id.hasPrefix("experience:"), let uuid = UUID(uuidString: String(id.dropFirst("experience:".count))),
+                   !state.learning.experiences.contains(where: { $0.id == uuid }) { return false }
+                if id.hasPrefix("answer:"), let uuid = UUID(uuidString: String(id.dropFirst("answer:".count))) {
+                    guard let parent = historyByID[uuid] else { return false }
+                    pending.append(parent)
+                }
             }
-            if id.hasPrefix("personal:"), let uuid = UUID(uuidString: String(id.dropFirst("personal:".count))),
-               !state.personal.contains(where: { $0.id == uuid }) { return false }
         }
         return true
     }
