@@ -70,7 +70,19 @@ jobs:
           xcodebuild -project ios/JarvisMobile.xcodeproj -scheme JarvisMobile -sdk iphonesimulator ARCHS="$SIMULATOR_ARCH" ONLY_ACTIVE_ARCH=YES -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -derivedDataPath build -resultBundlePath TestResults.xcresult -parallel-testing-enabled NO -test-timeouts-enabled YES -default-test-execution-time-allowance 180 -maximum-test-execution-time-allowance 180 CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES SWIFT_ACTIVE_COMPILATION_CONDITIONS='$(inherited) JARVIS_REAL_INFERENCE_REQUIRED' test 2>&1 | tee ios-tests.log
       - name: Collect simulator and unsigned device apps
         run: |
-          ditto -c -k --sequesterRsrc --keepParent build/Build/Products/Debug-iphonesimulator/JarvisMobile.app JarvisMobile-simulator.zip
+          # A hosted test build embeds its XCTest bundle (including real GGUF
+          # fixtures) in the host app. Package a clean copy after tests, keeping
+          # the tested host and xcresult untouched for diagnostics.
+          mkdir -p artifact-apps
+          ditto build/Build/Products/Debug-iphonesimulator/JarvisMobile.app artifact-apps/JarvisMobile.app
+          rm -rf artifact-apps/JarvisMobile.app/PlugIns/JarvisMobileTests.xctest
+          if find artifact-apps/JarvisMobile.app -name '*.xctest' -print -quit | grep -q .; then
+            echo 'Unexpected test bundle in simulator delivery' >&2
+            exit 1
+          fi
+          codesign --force --sign - --preserve-metadata=identifier,entitlements,flags artifact-apps/JarvisMobile.app
+          codesign --verify --strict artifact-apps/JarvisMobile.app
+          ditto -c -k --sequesterRsrc --keepParent artifact-apps/JarvisMobile.app JarvisMobile-simulator.zip
           ditto -c -k --sequesterRsrc --keepParent build-device/Build/Products/Debug-iphoneos/JarvisMobile.app JarvisMobile-iphone-unsigned.zip
       - name: Upload test evidence and simulator app
         if: always()

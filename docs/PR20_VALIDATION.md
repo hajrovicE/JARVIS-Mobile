@@ -1,12 +1,17 @@
 # PR #20 doğrulaması — 17 Kasım 2026
 
-Dal: `feature/fast-natural-offline-conversation-20261116`. Başlangıç: `70b8f7ec2aba73b80ed5b687e16bc4a5c500d2d3`; main referansı `e0e710f714dd31b40f49354b6ca23fa89e86f45b`. #19'un `20dc342cc5fb6f65c0427f18556f3d8b0b7cf7ec` düzeltmeleri bu dalda birleştirildi. Runtime/UI/Speech çakışmaları resident model, akış ve güvenli ses turu korunarak çözüldü. Ana dala birleştirme yapılmaz: gerekli Apple testleri henüz geçmedi.
+Dal: `feature/fast-natural-offline-conversation-20261116`. Başlangıç: `70b8f7ec2aba73b80ed5b687e16bc4a5c500d2d3`; main referansı `e0e710f714dd31b40f49354b6ca23fa89e86f45b`. #19'un `20dc342cc5fb6f65c0427f18556f3d8b0b7cf7ec` düzeltmeleri bu dalda birleştirildi. Runtime/UI/Speech çakışmaları resident model, akış ve güvenli ses turu korunarak çözüldü. Ana dala birleştirme yapılmadı; gerçek cihaz kabulü simulator testinden ayrıdır.
 
 ## Başarılı
 
 | Kontrol | Sonuç |
 | --- | --- |
-| Linux Swift 6.0.3 Core | **169 test, 0 hata**; ayrıca 4 worker ile paralel koşu başarılı |
+| Linux Swift 6.0.3 Core | **173 test, 0 hata**; ayrıca 4 worker ile paralel koşu başarılı |
+| macOS Core (09ef15a) | **171 test, 0 hata**; yeni hafıza regresyonları son commit için yeniden koşulacak |
+| iOS hosted testler (09ef15a) | **186 test, 0 hata, 0 atlama**; gerçek GGUF zorunlu |
+| iOS UI (09ef15a) | **3 test, 0 hata** |
+| Simulator uygulama derlemesi (09ef15a) | **BUILD SUCCEEDED**, gerçek kaynak derlemeli CPU native slice |
+| iPhone SDK Debug / Release (09ef15a) | **BUILD SUCCEEDED**, imzasız |
 | Python relay | **22 test, 0 hata**; sağlayıcı çağrısı sentetik |
 | Python release | **9 test, 0 hata**; gerçek Apple Secrets yok |
 | Python model/routing | **8 test, 0 hata** |
@@ -41,20 +46,26 @@ Aynı kısa prompt, greedy, 2 CPU thread, context 1024, en fazla 48 yeni token; 
 
 Sıcak token akışı 3,497 sn'de başladı ve yaklaşık 2,344 sn boyunca devam etti. Ayrı hızlı-mod cümle deneyinde ilk cümle **6,435 sn**, modelin tamamlanması **8,636 sn**. Termal başlangıç/son `null`: Linux burada Apple termal durumunu sağlamıyor. Termal performans ölçülmüş sayılmaz. Decode hızı sıcak koşuda artmadı; görülen iyileşme yeniden model yüklemeyi kaldırmaktır. Sonuçlar çalıştırmalar arasında değişebilir.
 
+GitHub Ubuntu CPU koşusu `09ef15a` ayrıca [gerçek native kontrolü geçti](https://github.com/hajrovicE/JARVIS-Mobile/actions/runs/44017193034/job/133817831668). [Özet ham kayıt](validation-artifacts/pr20-2026-11-17/github-real-native-excerpt.log): aynı promptta cold/warm ilk token **2,827 / 1,164 sn**, yükleme **1,666 / 0,000039 sn**, decode **14,94 / 14,97 token/sn**, toplam **3,697 / 2,033 sn**, load count **1 / 1**, RSS yaklaşık **2,02 GiB**. İlk cümle **2,872 sn**, üretimin bitmesi **3,812 sn**. Bu ayrı runner ölçümü önceki Docker ölçümünün yerine yazılmaz; iPhone/Metal sonucu değildir.
+
 ## Başarısız gözlemler ve düzeltmeler
 
-İlk Core koşusunda Swift 6 XCTest Sendable uyumsuzluğu, eski test argument sırası ve tarihsel soru eşleştirmesi düzeltildi. Yeni bağlam sözleşmesinde normal sorulara tüm ilgisiz hafızayı gönderme beklentisi yerine, açık owner isteğinde bütün kayıtların eksiksiz seçildiği test edildi. Gizlilik kategorisinin görev-deneyimi → yanıt → takip yanıtı boyunca kaybolması düzeltildi ve regresyon eklendi. Son Core koşusu yeşildir.
+İlk Core koşusunda Swift 6 XCTest Sendable uyumsuzluğu, eski test argument sırası ve tarihsel soru eşleştirmesi düzeltildi. Yeni bağlam sözleşmesinde normal sorulara tüm ilgisiz hafızayı gönderme beklentisi yerine, açık owner isteğinde bütün kayıtların eksiksiz seçildiği test edildi. Gizlilik kategorisinin görev-deneyimi → yanıt → takip yanıtı boyunca kaybolması düzeltildi ve regresyon eklendi. Son Core koşusu yeşildir. Eski takip yanıtlarının kaynak zinciri de kontrol edilir: silinen kaynak veya yeni bir düzeltme eski iddiayı geri getiremez. Kişisel düzenleme tarihi isteğe bağlı `updatedAt` alanıyla kalır; eski JSON/AES kayıtlarında alanın bulunmaması geçerlidir. Kimlik, oluşturulma tarihi ve sahibin arşivi korunur; yeni metin sonraki ilgili bağlama girer.
 
 Model kalitesinde açık kalan gerçek örnek: üç kısa cümle istendiğinde model tek, doğal olmayan cümle üretti; bu denemenin erken-TTS beklentisi başarısız oldu. [Kayıt](validation-artifacts/pr20-2026-11-17/model-instruction-failure.log). Son iki cümleli akış kabul denemesinde model metni tekrar da üretti; çıktı başarılı performans kaydında satır sonları/boşluklar kaybolmadan JSON kaçışlarıyla korunmuştur. Uygulama çift final transkripti veya final yanıtın ikinci kez kuyruğa eklenmesini engeller, fakat modelin kendi ürettiği her anlamsal tekrarı düzelttiği iddia edilmez. Başkent ve kişisel hafıza örneklerinin doğru olması genel doğruluk/çok adımlı muhakeme garantisi değildir. Önceki 0.6B Q4/Q8 yanlış cevapları #19 kayıtlarında durur; model eğitilmedi.
 
-## Çalıştırılamayan / ayrı cihaz gerektiren
+## Apple CI, atlanan ve ayrı cihaz gerektiren kontroller
 
-- macOS Swift 6, iOS Simulator build/hosted unit, UI ve unsigned iPhone SDK derlemesi: GitHub runner başlamadığı için **çalıştırılamadı**.
-- Hosted testlerde gerçek GGUF zorunludur; fixture yoksa CI hata verir. Apple AES/Keychain geçişi, gerçek controller TTS, native streaming ve UI testleri hazırdır; Linux'ta çalışmış sayılmaz.
+- `09ef15a` için macOS/iOS koşusu **tamamlandı ve başarılı**. Hosted **186** ve UI **3** test çalıştı; test atlanmadı. [Ham özet kayıt](validation-artifacts/pr20-2026-11-17/github-ios-baseline-excerpt.log). Yeni hafıza regresyonları Linux üzerinde 173 testle doğrulandı; bu sonraki kaynak için son CI durumu PR #20 checks bölümünden izlenir.
 - Fiziksel iPhone Metal, canlı Türkçe STT/TTS/ilk duyulur ses, gerçek izin diyalogları, termal baskı, bellek uyarısı/sonlandırma, uzun konuşma, kilit/arka plan ve VoiceOver: **AYRICA DOĞRULANMADI**.
-- Apple signing ve TestFlight: çalıştırılmadı. Ücretli servis veya hesap açılmadı.
+- Apple signing ve TestFlight: çalıştırılmadı; `build-only` koşusunda `sign-and-distribute` **skipped**. Ücretli servis veya hesap açılmadı.
 
-`runner_id=0, steps=[]` önceki koşularda hesap engeliydi: eski macOS/Linux işleri açıkça failed payment/spending limit annotation'ı verdi. 17 Kasım yeni koşuları **başladı**; güncel engel artık bu varsayımla açıklanamaz. macOS Core, Foundation URL metadata önbelleğinden kaynaklanan GGUF boyut hatasını buldu. Parser açık file descriptor üzerinde fstat kullanacak şekilde düzeltildi; provider artık yerel bozuk dosyayı HTTPS ayarı hatası gibi raporlamaz. Yeni tam macOS/iOS ve build-only Release koşuları bu düzeltmeden sonra yeniden istenir. Ödeme/harcama ayarı değiştirilmedi. İmzalı cihaz kabulü ayrıca uygun Apple hesabı/sertifika ve cihaz gerektirir.
+`runner_id=0, steps=[]` önceki koşularda hesap engeliydi: eski macOS/Linux işleri açıkça failed payment/spending limit annotation'ı verdi. 17 Kasım yeni koşuları **başladı**. Ödeme/harcama ayarı değiştirilmedi. İlk macOS Core koşusu Foundation URL metadata önbelleğinden kaynaklanan GGUF boyut hatasını buldu. Parser açık file descriptor üzerinde fstat kullanacak şekilde düzeltildi; provider yerel bozuk dosyayı HTTPS ayarı hatası gibi raporlamaz. Ardından Xcode, pinned upstream XCFramework'de Simulator slice olmadığını gösterdi. Mevcut iPhone Metal framework korunarak aynı pinned llama.cpp commit'inden gerçek Simulator CPU framework derleme adımı eklendi; yeni Simulator ve imzasız iPhone derlemeleri geçti. Test sonrası simulator teslim kopyasından yalnızca gömülü XCTest paketi çıkarılır, simulator uygulaması ad-hoc yeniden imzalanıp doğrulanır. Böylece 1,28 GB test GGUF dosyası son kullanıcı uygulama paketine taşınmaz; orijinal test hostu ve xcresult korunur.
+
+- [macOS/iOS + gerçek Linux GGUF — 09ef15a](https://github.com/hajrovicE/JARVIS-Mobile/actions/runs/44017193034)
+- [İmzasız Release — 09ef15a, başarılı](https://github.com/hajrovicE/JARVIS-Mobile/actions/runs/44017187439)
+- [Linux Core — 09ef15a, başarılı](https://github.com/hajrovicE/JARVIS-Mobile/actions/runs/44017192985)
+- [Relay — 09ef15a, başarılı](https://github.com/hajrovicE/JARVIS-Mobile/actions/runs/44017192981)
 
 ## Diğer açık PR'lar
 
