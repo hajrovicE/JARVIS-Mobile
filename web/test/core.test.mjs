@@ -152,3 +152,52 @@ test('learning from the web stores text with its source and replaces older web c
   assert.equal(state.learning[0].id, 'w1');
   assert.equal(state.learning[0].text, 'yeni');
 });
+
+import {
+  parseStackOverflow, parseGitHub, parseHackerNews, parseOpenAlex, abstractFromIndex,
+  mergeSources, htmlToText, stackSearchURL, stackAnswersURL, githubSearchURL, hackerNewsURL, openAlexURL,
+  SOURCE_PROVIDERS,
+} from '../src/core.js';
+
+test('settings keep owner source choices and default new ones on', () => {
+  const s = parseSettings('{"sources":{"github":false,"x":true}}');
+  assert.equal(s.sources.github, false);
+  assert.equal(s.sources.wikipedia, true);
+  assert.equal('x' in s.sources, false);
+  assert.deepEqual(Object.keys(DEFAULT_SETTINGS.sources), SOURCE_PROVIDERS.map((p) => p.id));
+});
+
+test('stack overflow pairs each question with its best answer', () => {
+  const sources = parseStackOverflow(
+    { items: [{ question_id: 1, title: 'How to &amp; why', link: 'https://stackoverflow.com/q/1', body: '<p>Q?</p>' },
+      { question_id: 2, title: 'Unanswered', link: 'https://stackoverflow.com/q/2', body: '<p>?</p>' },
+      { question_id: 3, title: 'bad link', link: 'javascript:alert(1)', body: '' }] },
+    { items: [{ question_id: 1, score: 3, body: '<p>low</p>' }, { question_id: 1, score: 9, is_accepted: true, body: '<pre><code>x = 1</code></pre>' }] },
+    7);
+  assert.equal(sources.length, 2);
+  assert.equal(sources[0].title, 'How to & why');
+  assert.match(sources[0].text, /9 oy, kabul edilmiş\):\nx = 1/);
+  assert.match(sources[1].text, /henüz cevap yok/);
+  assert.equal(sources[0].provider, 'Stack Overflow');
+  assert.match(stackAnswersURL([1, 2]), /questions\/1;2\/answers\?/);
+  assert.equal(new URL(stackSearchURL('a b')).searchParams.get('q'), 'a b');
+});
+
+test('github, hacker news and openalex parsing', () => {
+  const gh = parseGitHub({ items: [{ full_name: 'o/r', html_url: 'https://github.com/o/r', description: 'd', language: 'Go', stargazers_count: 5, topics: ['x'] }] }, 1);
+  assert.match(gh[0].text, /d\nDil: Go\nYıldız: 5\nKonular: x/);
+  const hn = parseHackerNews({ hits: [{ objectID: '9', title: 'T', url: 'http://insecure', points: 3, num_comments: 1, created_at: '2026-01-02T00:00:00Z' }] }, 1);
+  assert.equal(hn[0].url, 'https://news.ycombinator.com/item?id=9');
+  assert.match(hn[0].text, /Tarih: 2026-01-02/);
+  assert.equal(abstractFromIndex({ world: [1], Hello: [0] }), 'Hello world');
+  const oa = parseOpenAlex({ results: [{ id: 'https://openalex.org/W1', doi: 'https://doi.org/10.1/x', display_name: 'P', publication_year: 2020, cited_by_count: 4, abstract_inverted_index: { A: [0] } }] }, 1);
+  assert.equal(oa[0].url, 'https://doi.org/10.1/x');
+  assert.match(oa[0].text, /^A\nYıl: 2020\nAtıf: 4$/);
+  for (const u of [githubSearchURL('x'), hackerNewsURL('x'), openAlexURL('x')]) assert.ok(u.startsWith('https://'));
+});
+
+test('merge interleaves providers and respects the limit', () => {
+  const merged = mergeSources([['w1', 'w2', 'w3'], [], ['s1'], ['g1', 'g2']], 5);
+  assert.deepEqual(merged, ['w1', 's1', 'g1', 'w2', 'g2']);
+  assert.equal(htmlToText('<ul><li>a</li><li>b</li></ul>'), '• a\n• b');
+});

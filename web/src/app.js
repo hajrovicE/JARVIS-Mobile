@@ -3,7 +3,9 @@ import {
   STATE_KEY, SETTINGS_KEY, MODEL_CHOICES, routeCommand, executeCommand, parseState,
   parseSettings, normalizeSettings, buildMessages, stripReasoning, isGGUF, newId,
   routeResearch, wikipediaSearchURL, wikipediaExtractURL, parseSearchIds, parseExtracts,
-  buildResearchMessages, addWebLearning, formatSources,
+  buildResearchMessages, addWebLearning, formatSources, SOURCE_PROVIDERS, mergeSources,
+  stackSearchURL, stackAnswersURL, parseStackOverflow, githubSearchURL, parseGitHub,
+  hackerNewsURL, parseHackerNews, openAlexURL, parseOpenAlex,
 } from './core.js';
 
 const WASM = { default: new URL('./vendor/wllama/wllama.wasm', import.meta.url).href };
@@ -346,7 +348,7 @@ async function fetchJSON(url, signal) {
     if (signal.aborted) throw error;
     throw new NetworkError('İnternete bağlanılamadı. Bağlantınızı kontrol edin.');
   }
-  if (!response.ok) throw new NetworkError(`Wikipedia yanıt vermedi (HTTP ${response.status}).`);
+  if (!response.ok) throw new NetworkError(`Kaynak yanıt vermedi (HTTP ${response.status}).`);
   return response.json();
 }
 
@@ -361,18 +363,60 @@ async function searchWikipedia(query, signal) {
   return [];
 }
 
+const PROVIDER_SEARCH = {
+  wikipedia: searchWikipedia,
+  stackoverflow: async (query, signal) => {
+    const questions = await fetchJSON(stackSearchURL(query), signal);
+    const ids = (questions?.items ?? []).map((i) => i.question_id).filter(Number.isInteger);
+    const answers = ids.length ? await fetchJSON(stackAnswersURL(ids), signal) : { items: [] };
+    return parseStackOverflow(questions, answers, Date.now());
+  },
+  github: async (query, signal) => parseGitHub(await fetchJSON(githubSearchURL(query), signal), Date.now()),
+  hackernews: async (query, signal) => parseHackerNews(await fetchJSON(hackerNewsURL(query), signal), Date.now()),
+  openalex: async (query, signal) => parseOpenAlex(await fetchJSON(openAlexURL(query), signal), Date.now()),
+};
+
+/// Queries every source the owner enabled in parallel. A slow or failing
+/// source is reported, never silently treated as "no results".
+async function searchAll(query, signal) {
+  const enabled = SOURCE_PROVIDERS.filter((p) => settings.sources[p.id]);
+  const results = await Promise.allSettled(enabled.map(async (provider) => {
+    const controller = new AbortController();
+    const stop = () => controller.abort();
+    signal.addEventListener('abort', stop, { once: true });
+    const timer = setTimeout(stop, 15000);
+    try { return await PROVIDER_SEARCH[provider.id](query, controller.signal); }
+    catch (error) {
+      if (signal.aborted) throw error;
+      throw new NetworkError(controller.signal.aborted ? 'zaman aşımı' : (error?.message || 'hata'));
+    } finally {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', stop);
+    }
+  }));
+  if (signal.aborted) throw new DOMException('cancelled', 'AbortError');
+  const groups = [];
+  const failed = [];
+  results.forEach((r, i) => {
+    if (r.status === 'fulfilled') groups.push(r.value);
+    else failed.push(enabled[i].label.split(' (')[0]);
+  });
+  return { sources: mergeSources(groups, 6), failed, enabled: enabled.length };
+}
+
 function addSourcesMessage(sources, heading) {
   const div = addMessage('bot', '');
   div.append(document.createTextNode(heading + '\n'));
   sources.forEach((source, i) => {
     const a = Object.assign(document.createElement('a'), {
       href: source.url, target: '_blank', rel: 'noopener noreferrer',
-      textContent: `[${i + 1}] ${source.title}`,
+      textContent: `[${i + 1}] ${source.title}${source.provider && source.provider !== 'Wikipedia' ? ' · ' + source.provider : ''}`,
     });
     div.append(a, document.createTextNode(i < sources.length - 1 ? '\n' : ''));
   });
   const when = new Date(sources[0].retrievedAt).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' });
-  div.append(document.createTextNode(`\nAlındı: ${when} · Wikipedia (${sources[0].lang})`));
+  const providers = [...new Set(sources.map((s) => s.provider || 'Wikipedia'))].join(', ');
+  div.append(document.createTextNode(`\nAlındı: ${when} · ${providers}`));
   return div;
 }
 
@@ -383,10 +427,20 @@ async function research(command, typed) {
   abort = new AbortController();
   let bubble = null;
   try {
-    setProgress('Wikipedia\'da aranıyor…');
-    const sources = await searchWikipedia(command.query, abort.signal);
+    const { sources, failed, enabled } = await (async () => {
+      setProgress('Kaynaklarda aranıyor…');
+      return searchAll(command.query, abort.signal);
+    })();
+    if (!enabled) {
+      addMessage('bot', 'Tüm web kaynakları kapalı. AI sekmesinden en az bir kaynak seçin.');
+      return;
+    }
+    if (failed.length) {
+      addMessage('system', `Şu kaynaklara ulaşılamadı: ${failed.join(', ')}. Diğer kaynakların sonuçları kullanıldı.`);
+    }
     if (!sources.length) {
-      addMessage('bot', `Wikipedia'da "${command.query}" için sonuç bulunamadı. Farklı kelimelerle deneyin.`);
+      if (failed.length === enabled) throw new NetworkError('Hiçbir kaynağa ulaşılamadı. İnternet bağlantınızı kontrol edin.');
+      addMessage('bot', `"${command.query}" için sonuç bulunamadı. Farklı kelimelerle deneyin (Stack Overflow, GitHub, Hacker News ve OpenAlex İngilizce aramada daha iyi sonuç verir).`);
       return;
     }
     if (command.type === 'learnWeb') {
@@ -581,6 +635,10 @@ function renderSettings() {
   $('use-gpu').checked = settings.useGPU;
   $('use-gpu').disabled = !('gpu' in navigator);
   $('speak').checked = settings.speak;
+  for (const provider of SOURCE_PROVIDERS) {
+    const box = $('source-' + provider.id);
+    if (box) box.checked = !!settings.sources[provider.id];
+  }
 }
 
 function renderAll() { renderMemory(); renderHistory(); }
@@ -735,6 +793,17 @@ bindCheck('thinking', 'thinking');
 bindCheck('show-reasoning', 'showReasoning');
 bindCheck('use-gpu', 'useGPU');
 bindCheck('speak', 'speak');
+for (const provider of SOURCE_PROVIDERS) {
+  const label = document.createElement('label');
+  label.className = 'check';
+  const box = Object.assign(document.createElement('input'), { type: 'checkbox', id: 'source-' + provider.id });
+  box.addEventListener('change', () => {
+    settings = { ...settings, sources: { ...settings.sources, [provider.id]: box.checked } };
+    saveSettings();
+  });
+  label.append(box, ' ' + provider.label);
+  $('source-list').append(label);
+}
 $('owner-instructions').addEventListener('input', (e) => {
   settings = { ...settings, ownerInstructions: e.target.value };
   saveSettings();
