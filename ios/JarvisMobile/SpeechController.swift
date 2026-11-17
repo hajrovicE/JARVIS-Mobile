@@ -2,25 +2,49 @@ import AVFoundation
 import JarvisCore
 import Speech
 import SwiftUI
+import UIKit
+
+/// Final, locally recognized speech. No partial or network-backed transcript
+/// should trigger an automatic model request.
+struct FinishedVoiceTurn: Equatable {
+  let id: UUID
+  let text: String
+}
 
 @MainActor
 final class SpeechController: ObservableObject {
   @Published private(set) var status = "Sesli komut için basılı tutun."
   @Published private(set) var transcript = ""
+  @Published private(set) var finishedVoiceTurn: FinishedVoiceTurn?
+  @Published private(set) var naturallyFinishedOutputID: UUID?
   @Published private(set) var recording = false
   @Published private(set) var requestingPermissions = false
   @Published private(set) var finishing = false
   @Published private(set) var needsSettings = false
   @Published private(set) var speaking = false
+  @Published private(set) var outputStreaming = false
   // Text-only use does not construct audio capture, Speech or TTS resources.
   private var engine: AVAudioEngine?
   private lazy var recognizer = SFSpeechRecognizer(locale: Locale(identifier: "tr-TR"))
   private var synthesizer: AVSpeechSynthesizer?
   private var outputDelegate: SpeechOutputDelegate?
-  private var activeUtteranceID: ObjectIdentifier?
+  // Prefer an installed enhanced Turkish voice, while keeping the device's
+  // default Turkish voice as a reliable offline fallback.
+  private lazy var turkishVoice: AVSpeechSynthesisVoice? = {
+    AVSpeechSynthesisVoice.speechVoices()
+      .filter { $0.language == "tr-TR" }
+      .sorted { $0.quality.rawValue > $1.quality.rawValue }
+      .first
+  }()
+  private var outputQueue = SpeechResponseQueue()
+  private var pendingUtterances: [ObjectIdentifier: (response: UUID, utterance: UUID)] = [:]
+  private var speechStream = TurkishSpeechStream()
+  private var streamingRate = AVSpeechUtteranceDefaultSpeechRate
   private var request: SFSpeechAudioBufferRecognitionRequest?
   private var task: SFSpeechRecognitionTask?
   private var finishTimeout: Task<Void, Never>?
+  private var silenceTimeout: Task<Void, Never>?
+  private var autoStopOnSilence = false
   private var captureGate = SpeechCaptureGate()
   private var recognitionID: UUID?
   private var pressed = false
@@ -43,11 +67,17 @@ final class SpeechController: ObservableObject {
     _ = await authorize()
   }
 
-  func begin() async {
-    guard !Task.isCancelled, !pressed, !requestingPermissions, !finishing else { return }
+  func begin(autoStopOnSilence: Bool = false,
+             onCaptureStarted: (@MainActor (UUID) -> Void)? = nil) async {
+    guard UIApplication.shared.applicationState == .active,
+          !Task.isCancelled, !pressed, !requestingPermissions, !finishing else { return }
     let id = captureGate.begin()
+    self.autoStopOnSilence = autoStopOnSilence
     recognitionID = id
     pressed = true
+    transcript = ""
+    finishedVoiceTurn = nil
+    onCaptureStarted?(id)
     let authorized = await authorize()
     // A release/background event while a system dialog is open invalidates this capture.
     guard authorized, pressed, captureGate.canStart(id, taskCancelled: Task.isCancelled) else {
@@ -66,7 +96,6 @@ final class SpeechController: ObservableObject {
       request.requiresOnDeviceRecognition = true
       request.shouldReportPartialResults = true
       self.request = request
-      transcript = ""
       let engine = AVAudioEngine()
       self.engine = engine
       let input = engine.inputNode
@@ -84,13 +113,23 @@ final class SpeechController: ObservableObject {
         let failed = error != nil
         Task { @MainActor [weak self] in
           guard let self, self.captureGate.isCurrent(id) else { return }
-          if let text { self.transcript = text }
+          if let text {
+            let changed = text != self.transcript
+            self.transcript = text
+            if changed, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+              self.scheduleEndOfSpeech(for: id)
+            }
+          }
           if isFinal || failed {
+            let finalText = self.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
             self.completeRecognition()
+            if isFinal && !failed && !finalText.isEmpty {
+              self.finishedVoiceTurn = FinishedVoiceTurn(id: id, text: finalText)
+            }
             self.status =
-              failed && self.transcript.isEmpty
-              ? "Tanıma tamamlanamadı. Yazarak devam edebilirsiniz."
-              : "Metni kontrol edip Gönder'e dokunun."
+              failed
+              ? "Tanıma tamamlanamadı. Metni kontrol edip Gönder'e dokunabilir veya yazabilirsiniz."
+              : "Konuşma metni hazır."
           }
         }
       }
@@ -104,8 +143,23 @@ final class SpeechController: ObservableObject {
     }
   }
 
+  /// Ends a spoken turn after a short pause, only for foreground hands-free mode.
+  /// No microphone is started by this timer. Manual push-to-talk is unaffected.
+  private func scheduleEndOfSpeech(for id: UUID) {
+    guard autoStopOnSilence, recording, !finishing else { return }
+    silenceTimeout?.cancel()
+    silenceTimeout = Task { [weak self] in
+      do { try await Task.sleep(for: .milliseconds(1_350)) }
+      catch { return }
+      guard let self, self.captureGate.isCurrent(id), self.recording, !self.finishing else { return }
+      self.stop()
+    }
+  }
+
   /// Stop audio capture, but let Speech deliver the final transcription before cleanup.
   func stop() {
+    silenceTimeout?.cancel()
+    silenceTimeout = nil
     pressed = false
     guard recording else {
       // Cancels a pending authorization-to-capture transition.
@@ -121,16 +175,23 @@ final class SpeechController: ObservableObject {
     finishTimeout = Task { [weak self] in
       do { try await Task.sleep(for: .seconds(3)) } catch { return }
       guard let self, let id, self.captureGate.isCurrent(id) else { return }
+      let finalText = self.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
       self.completeRecognition()
+      // A timeout contains only a partial hypothesis. Keep it editable,
+      // but do not promote it into an automatically submitted final command.
       self.status =
-        self.transcript.isEmpty
+        finalText.isEmpty
         ? "Konuşma algılanmadı. Yeniden deneyebilir veya yazabilirsiniz."
-        : "Metni kontrol edip Gönder'e dokunun."
+        : "Sonuç kesinleşmedi. Metni kontrol edip Gönder'e dokunun."
     }
   }
 
   /// Backgrounding or interruption must not keep an input device or delayed capture alive.
   func cancel() {
+    let wasSpeaking = speaking || outputStreaming
+    let wasCapturing = pressed || recording || finishing
+    silenceTimeout?.cancel()
+    silenceTimeout = nil
     pressed = false
     captureGate.cancel()
     recognitionID = nil
@@ -142,17 +203,56 @@ final class SpeechController: ObservableObject {
     task = nil
     request = nil
     finishing = false
+    finishedVoiceTurn = nil
     stopOutput()
     try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    if wasSpeaking {
+      status = "Sesli cevap durduruldu. Cevabı okuyabilir veya yeniden dinleyebilirsiniz."
+    } else if wasCapturing {
+      status = "Sesli giriş durduruldu. Yazarak devam edebilirsiniz."
+    }
   }
 
-  /// The UI calls this only after its explicit TTS opt-in. No recording permission is
-  /// requested to play a response, and completion/cancellation releases the audio session.
-  func speak(_ text: String) {
+  /// Explicit opt-in creates a response, but audio starts only once a reliable
+  /// sentence arrives. No recording permission is requested by output playback.
+  @discardableResult
+  func beginStreamingResponse(rate: Float = AVSpeechUtteranceDefaultSpeechRate) -> UUID {
     cancel()
-    let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !value.isEmpty else { return }
-    guard let voice = AVSpeechSynthesisVoice(language: "tr-TR") else {
+    naturallyFinishedOutputID = nil
+    speechStream = TurkishSpeechStream()
+    streamingRate = rate.isFinite
+      ? min(AVSpeechUtteranceMaximumSpeechRate, max(AVSpeechUtteranceMinimumSpeechRate, rate))
+      : AVSpeechUtteranceDefaultSpeechRate
+    let id = outputQueue.begin()
+    outputStreaming = true
+    return id
+  }
+
+  func appendStreamingText(_ delta: String, responseID: UUID) {
+    guard outputQueue.responseID == responseID else { return }
+    for sentence in speechStream.append(delta) { enqueueSpeech(sentence, responseID: responseID) }
+  }
+
+  func finishStreamingResponse(responseID: UUID) {
+    guard outputQueue.responseID == responseID else { return }
+    for sentence in speechStream.finish() { enqueueSpeech(sentence, responseID: responseID) }
+    applyOutputOutcome(outputQueue.finishInput(responseID: responseID))
+  }
+
+  /// The completed-response compatibility path uses the same queue and sentence
+  /// renderer; a response is never queued both here and in the streaming path.
+  func speak(_ text: String, rate: Float = AVSpeechUtteranceDefaultSpeechRate) {
+    guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+    let id = beginStreamingResponse(rate: rate)
+    appendStreamingText(text, responseID: id)
+    finishStreamingResponse(responseID: id)
+  }
+
+  private func enqueueSpeech(_ sentence: String, responseID: UUID) {
+    guard UIApplication.shared.applicationState == .active,
+          outputQueue.responseID == responseID else { return }
+    guard let voice = turkishVoice else {
+      stopOutput()
       status = "Türkçe sesli cevap bu cihazda kullanılamıyor. Cevabı okuyabilirsiniz."
       return
     }
@@ -162,38 +262,71 @@ final class SpeechController: ObservableObject {
       try AVAudioSession.sharedInstance().setActive(true)
       if synthesizer == nil {
         let output = AVSpeechSynthesizer()
-        let delegate = SpeechOutputDelegate { @Sendable [weak self] utteranceID in
-          Task { @MainActor [weak self] in self?.completeOutput(utteranceID) }
+        let delegate = SpeechOutputDelegate { @Sendable [weak self] utteranceID, token, finished in
+          Task { @MainActor [weak self] in self?.completeOutput(utteranceID, token: token, finished: finished) }
         }
         output.delegate = delegate
         synthesizer = output
         outputDelegate = delegate
       }
-      let utterance = AVSpeechUtterance(string: value)
+      guard let queuedID = outputQueue.enqueue(responseID: responseID) else { return }
+      let utterance = AVSpeechUtterance(string: sentence)
       utterance.voice = voice
-      activeUtteranceID = ObjectIdentifier(utterance)
+      utterance.rate = streamingRate
+      utterance.postUtteranceDelay = 0.09
+      pendingUtterances[ObjectIdentifier(utterance)] = (responseID, queuedID)
+      outputDelegate?.register(utterance, token: SpeechOutputToken(response: responseID, utterance: queuedID))
       speaking = true
       status = "Cevap seslendiriliyor…"
       synthesizer?.speak(utterance)
     } catch {
-      cancel()
+      stopOutput()
+      try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
       status = "Sesli cevap başlatılamadı. Cevabı okuyabilirsiniz."
     }
   }
 
   private func stopOutput() {
-    activeUtteranceID = nil
+    outputQueue.cancel()
+    outputDelegate?.invalidate()
+    pendingUtterances.removeAll()
+    outputStreaming = false
     speaking = false
+    naturallyFinishedOutputID = nil
     synthesizer?.stopSpeaking(at: .immediate)
   }
-  private func completeOutput(_ id: ObjectIdentifier) {
-    guard activeUtteranceID == id else { return }
-    activeUtteranceID = nil
-    speaking = false
-    if !recording && !finishing {
+
+  private func completeOutput(_ id: ObjectIdentifier, token: SpeechOutputToken?, finished: Bool) {
+    guard let token, let expected = pendingUtterances[id],
+          expected.response == token.response, expected.utterance == token.utterance else { return }
+    pendingUtterances.removeValue(forKey: id)
+    applyOutputOutcome(outputQueue.complete(utteranceID: token.utterance,
+        responseID: token.response, finished: finished))
+  }
+
+  private func applyOutputOutcome(_ outcome: SpeechResponseQueue.Outcome) {
+    switch outcome {
+    case .ignored: return
+    case .waiting:
+      speaking = outputQueue.hasPendingUtterances
+      if !speaking { status = "Yanıtın devamı bekleniyor…" }
+    case .cancelled:
+      stopOutput()
       try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+      status = "Sesli cevap durduruldu. Cevabı okuyabilir veya yeniden dinleyebilirsiniz."
+    case .completed(let id):
+      outputStreaming = false
+      speaking = false
+      if !recording && !finishing {
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+      }
+      status = "Sesli cevap tamamlandı. Yazarak veya konuşarak devam edebilirsiniz."
+      naturallyFinishedOutputID = id
+    case .empty:
+      outputStreaming = false
+      speaking = false
+      status = "Seslendirilecek metin yok. Cevabı okuyabilirsiniz."
     }
-    status = "Sesli cevap tamamlandı. Yazarak veya konuşarak devam edebilirsiniz."
   }
 
   private func authorize() async -> Bool {
@@ -267,6 +400,8 @@ final class SpeechController: ObservableObject {
     recording = false
   }
   private func completeRecognition() {
+    silenceTimeout?.cancel()
+    silenceTimeout = nil
     captureGate.cancel()
     recognitionID = nil
     pressed = false
@@ -293,18 +428,41 @@ private final class AudioRequestSink: @unchecked Sendable {
 
 /// AVFoundation may call these delegate methods away from the main actor. Only an
 /// immutable utterance identity crosses that boundary; session state stays on the actor.
-private final class SpeechOutputDelegate: NSObject, AVSpeechSynthesizerDelegate {
-  private let stopped: @Sendable (ObjectIdentifier) -> Void
-  init(stopped: @escaping @Sendable (ObjectIdentifier) -> Void) { self.stopped = stopped }
+struct SpeechOutputToken: Sendable {
+  let response: UUID
+  let utterance: UUID
+}
+
+final class SpeechOutputDelegate: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sendable {
+  private let lock = NSLock()
+  private var identities: [ObjectIdentifier: SpeechOutputToken] = [:]
+  private let stopped: @Sendable (ObjectIdentifier, SpeechOutputToken?, Bool) -> Void
+  init(stopped: @escaping @Sendable (ObjectIdentifier, SpeechOutputToken?, Bool) -> Void) {
+    self.stopped = stopped
+  }
+  func register(_ utterance: AVSpeechUtterance, token: SpeechOutputToken) {
+    lock.lock(); defer { lock.unlock() }
+    identities[ObjectIdentifier(utterance)] = token
+  }
+  func invalidate() {
+    lock.lock(); defer { lock.unlock() }
+    identities.removeAll()
+  }
+  private func take(_ id: ObjectIdentifier) -> SpeechOutputToken? {
+    lock.lock(); defer { lock.unlock() }
+    return identities.removeValue(forKey: id)
+  }
   nonisolated func speechSynthesizer(
     _ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance
   ) {
-    stopped(ObjectIdentifier(utterance))
+    let id = ObjectIdentifier(utterance)
+    stopped(id, take(id), true)
   }
   nonisolated func speechSynthesizer(
     _ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance
   ) {
-    stopped(ObjectIdentifier(utterance))
+    let id = ObjectIdentifier(utterance)
+    stopped(id, take(id), false)
   }
 }
 

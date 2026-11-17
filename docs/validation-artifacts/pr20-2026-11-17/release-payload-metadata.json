@@ -1,0 +1,12 @@
+{
+  "source": "9aea7cc06c24463dd70207865fb22efbeb49de35",
+  "run": 44022078570,
+  "artifact": 14300964134,
+  "requested_build": "6",
+  "CFBundleVersion": "6",
+  "CFBundleShortVersionString": "0.3.0",
+  "platform": "iphoneos",
+  "native_llama_binary": true,
+  "test_bundle_or_fixture": false,
+  "result": "PASS; unsigned payload only, no signing or TestFlight"
+}

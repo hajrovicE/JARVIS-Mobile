@@ -7,12 +7,12 @@ JARVIS, iPhone'da **harici inference/model sağlayıcısına bağlanmadan** yan�
 
 Başlangıç modeli:
 - URL: https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF/blob/daeb8e2/Qwen3-1.7B-Q4_K_M.gguf
-- SHA-256: `d2387ca2dbfee2ffabce7120d3770dadca0b293052bc2f0e138fdc940d9bc7b5`
+- Bilgilendirici kaynak SHA-256 (uygulamada kabul şartı değildir): `d2387ca2dbfee2ffabce7120d3770dadca0b293052bc2f0e138fdc940d9bc7b5`
 - Etiket: `daeb8e2` · Lisans: Apache-2.0
 - Cihaz içinde yalnızca kullanıcının seçtiği GGUF kurulur. Model ağ üzerinden uygulama tarafından indirilmez.
 
 ## Özel JARVIS modeli yükleme
-Eğitilmiş ve **Qwen3 tokenizer/chat-template uyumlu GGUF** bir dosya seçilirse dosyanın SHA-256 özeti alınır ve uygulama içinde yerel manifestte saklanır. Modelin tamamı cihazda okunur, yerel çıkarım başlatılır. Özel modelin lisansından ve kaynağından kullanıcı sorumludur; uygulama onu resmî Qwen modeli olarak etiketlemez. Her yeni sürüm kimliği digest'e bağlıdır.
+Sahibin seçtiği, llama.cpp tarafından desteklenen sohbet şablonuna sahip **GGUF** dosyası yapısal kontrolden geçirilip uygulamanın model dizinine kopyalanır. Dosya adı/uzantısı veya SHA-256 sabitlemesi kabul kapısı değildir; etkin seçim UUID tabanlı manifestle saklanır. Gerçek çıkarım dosyayı yükleyemiyorsa açık hata gösterilir. Özel modelin lisansından ve kaynağından kullanıcı sorumludur; uygulama onu resmî Qwen modeli olarak etiketlemez.
 
 ## Öğrenme ile ağırlık eğitimi farkı
 - `MemoryStore` / `LearningEngine`: kullanıcının öğrettiği bilgileri cihaz içinde anında kaydeder, fakat ağırlıkları **değiştirmez**.

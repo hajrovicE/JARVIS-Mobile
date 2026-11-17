@@ -66,8 +66,24 @@ public enum AIProviderError: Error, Equatable, Sendable {
     }
 }
 
+/// Providers must await ordered callbacks; callback failure cancels the response.
+public typealias AITokenHandler = @Sendable (String) async throws -> Void
+
 public protocol AIProvider: Sendable {
     func respond(to request: AIRequest) async throws -> AIResponse
+    func respond(to request: AIRequest, onToken: @escaping AITokenHandler) async throws -> AIResponse
+}
+
+public extension AIProvider {
+    /// Compatibility for providers that only support a completed response. This
+    /// fallback does not claim to generate token-level streaming.
+    func respond(to request: AIRequest, onToken: @escaping AITokenHandler) async throws -> AIResponse {
+        let response = try await respond(to: request)
+        try Task.checkCancellation()
+        try await onToken(response.text)
+        try Task.checkCancellation()
+        return response
+    }
 }
 
 public struct UnavailableAIProvider: AIProvider {

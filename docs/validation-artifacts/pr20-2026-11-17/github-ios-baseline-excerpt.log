@@ -1,0 +1,55 @@
+Source: 09ef15a7459fe30d945f1b68685eaec5f376a4cc (PR merge ref c162a4700027f792cdf95a9c15739f809a6aade6)
+Run: https://github.com/hajrovicE/JARVIS-Mobile/actions/runs/44017193034
+Job: macOS test (133817831951), Xcode 16.4, Swift 6.1.2, language mode 6
+Selected test/build log lines. No test was skipped in this iOS run.
+
+2026-11-17T04:27:28.2725810Z Test Suite 'GGUFFileValidatorTests' started at 2026-11-17 04:27:28.184.
+2026-11-17T04:27:28.2747370Z Test Suite 'GGUFFileValidatorTests' passed at 2026-11-17 04:27:28.254.
+2026-11-17T04:27:28.3978120Z 	 Executed 3 tests, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
+2026-11-17T04:27:28.4311640Z Test Case '-[JarvisCoreTests.MemoryPersistenceRegressionTests testRealEncryptedSnapshotMigratesToJSONWithoutResurrection]' started.
+2026-11-17T04:27:28.4319740Z Test Case '-[JarvisCoreTests.MemoryPersistenceRegressionTests testRealEncryptedSnapshotMigratesToJSONWithoutResurrection]' passed (0.021 seconds).
+2026-11-17T04:27:28.6568340Z 	 Executed 3 tests, with 0 failures (0 unexpected) in 0.005 (0.005) seconds
+2026-11-17T04:27:28.6595110Z 	 Executed 3 tests, with 0 failures (0 unexpected) in 0.023 (0.024) seconds
+2026-11-17T04:27:28.6627500Z 	 Executed 3 tests, with 0 failures (0 unexpected) in 0.003 (0.004) seconds
+2026-11-17T04:27:28.6691880Z 	 Executed 171 tests, with 0 failures (0 unexpected) in 2.666 (2.680) seconds
+2026-11-17T04:27:28.6693050Z 	 Executed 171 tests, with 0 failures (0 unexpected) in 2.666 (2.681) seconds
+2026-11-17T04:30:49.7899970Z ** BUILD SUCCEEDED **
+2026-11-17T04:31:24.3696130Z ** BUILD SUCCEEDED **
+2026-11-17T04:37:37.8556450Z Test Suite 'GGUFFileValidatorTests' started at 2026-11-17 04:37:37.852.
+2026-11-17T04:37:37.9085490Z Test Suite 'GGUFFileValidatorTests' passed at 2026-11-17 04:37:37.905.
+2026-11-17T04:37:37.9088170Z Test Suite 'GGUFInferenceTests' started at 2026-11-17 04:37:37.905.
+2026-11-17T04:37:37.9246230Z Test Case '-[JarvisMobileTests.GGUFInferenceTests testRealContextOverflowIsAnErrorRatherThanSilentTruncation]' started.
+2026-11-17T04:37:53.1880220Z Test Case '-[JarvisMobileTests.GGUFInferenceTests testRealContextOverflowIsAnErrorRatherThanSilentTruncation]' passed (15.168 seconds).
+2026-11-17T04:37:53.2551470Z Test Case '-[JarvisMobileTests.GGUFInferenceTests testRealInferencePreservesEntireOwnerSystemTurnAndSettings]' started.
+2026-11-17T04:38:09.3074260Z Test Case '-[JarvisMobileTests.GGUFInferenceTests testRealInferencePreservesEntireOwnerSystemTurnAndSettings]' passed (16.172 seconds).
+2026-11-17T04:38:09.3086440Z Test Case '-[JarvisMobileTests.GGUFInferenceTests testRealLongOwnerPromptUsesMultiplePrefillBatchesWithoutTruncation]' started.
+2026-11-17T04:38:48.7709470Z Test Case '-[JarvisMobileTests.GGUFInferenceTests testRealLongOwnerPromptUsesMultiplePrefillBatchesWithoutTruncation]' passed (39.349 seconds).
+2026-11-17T04:38:48.7822390Z Test Case '-[JarvisMobileTests.GGUFInferenceTests testRealSamplingTokenLimitEmptyOwnerAndReload]' started.
+2026-11-17T04:39:15.1476560Z Test Case '-[JarvisMobileTests.GGUFInferenceTests testRealSamplingTokenLimitEmptyOwnerAndReload]' passed (26.424 seconds).
+2026-11-17T04:39:15.2089940Z Test Suite 'GGUFInferenceTests' passed at 2026-11-17 04:39:15.039.
+2026-11-17T04:39:15.2097630Z Test Suite 'GGUFStreamingTests' started at 2026-11-17 04:39:15.040.
+2026-11-17T04:39:15.2107760Z Test Case '-[JarvisMobileTests.GGUFStreamingTests testMidstreamTaskCancellationHasNoFurtherDeltasAndModelCanBeReused]' started.
+2026-11-17T04:39:37.7663170Z Test Case '-[JarvisMobileTests.GGUFStreamingTests testMidstreamTaskCancellationHasNoFurtherDeltasAndModelCanBeReused]' passed (22.538 seconds).
+2026-11-17T04:39:37.7810700Z Test Case '-[JarvisMobileTests.GGUFStreamingTests testQuickModeUsesModelNonThinkingPrefixAndPreservesExplicitOwnerChoice]' started.
+2026-11-17T04:39:59.5587420Z Test Case '-[JarvisMobileTests.GGUFStreamingTests testQuickModeUsesModelNonThinkingPrefixAndPreservesExplicitOwnerChoice]' passed (21.849 seconds).
+2026-11-17T04:39:59.6193390Z Test Case '-[JarvisMobileTests.GGUFStreamingTests testUnloadFromStreamingCallbackStopsTurnAndReloadsCleanly]' started.
+2026-11-17T04:40:23.6973360Z Test Case '-[JarvisMobileTests.GGUFStreamingTests testUnloadFromStreamingCallbackStopsTurnAndReloadsCleanly]' passed (24.027 seconds).
+2026-11-17T04:40:23.7079570Z Test Case '-[JarvisMobileTests.GGUFStreamingTests testWarmWeightsStreamRealUTF8DeltasBeforeCompletion]' started.
+2026-11-17T04:40:34.5321070Z Test Case '-[JarvisMobileTests.GGUFStreamingTests testWarmWeightsStreamRealUTF8DeltasBeforeCompletion]' passed (11.002 seconds).
+2026-11-17T04:40:34.5412660Z Test Suite 'GGUFStreamingTests' passed at 2026-11-17 04:40:34.509.
+2026-11-17T04:40:35.2728330Z 	 Executed 3 tests, with 0 failures (0 unexpected) in 0.007 (0.008) seconds
+2026-11-17T04:40:35.9678850Z Test Case '-[JarvisMobileTests.MemoryPersistenceRegressionTests testRealEncryptedSnapshotMigratesToJSONWithoutResurrection]' started.
+2026-11-17T04:40:35.9785240Z Test Case '-[JarvisMobileTests.MemoryPersistenceRegressionTests testRealEncryptedSnapshotMigratesToJSONWithoutResurrection]' passed (0.049 seconds).
+2026-11-17T04:40:36.0965790Z 	 Executed 3 tests, with 0 failures (0 unexpected) in 0.079 (0.080) seconds
+2026-11-17T04:40:37.8032710Z 	 Executed 3 tests, with 0 failures (0 unexpected) in 1.054 (1.054) seconds
+2026-11-17T04:40:37.9979290Z 	 Executed 3 tests, with 0 failures (0 unexpected) in 0.018 (0.104) seconds
+2026-11-17T04:40:38.5275570Z 	 Executed 3 tests, with 0 failures (0 unexpected) in 0.094 (0.096) seconds
+2026-11-17T04:40:38.7691310Z 	 Executed 186 tests, with 0 failures (0 unexpected) in 181.065 (182.098) seconds
+2026-11-17T04:40:38.7692030Z 	 Executed 186 tests, with 0 failures (0 unexpected) in 181.065 (182.099) seconds
+2026-11-17T04:40:53.5092420Z Test Suite 'SmokeTests' started at 2026-11-17 04:40:53.353.
+2026-11-17T04:43:38.2655590Z Test Suite 'SmokeTests' passed at 2026-11-17 04:43:38.253.
+2026-11-17T04:43:38.2666970Z 	 Executed 3 tests, with 0 failures (0 unexpected) in 164.897 (164.900) seconds
+2026-11-17T04:43:38.4168070Z 	 Executed 3 tests, with 0 failures (0 unexpected) in 164.897 (164.902) seconds
+2026-11-17T04:43:38.4172130Z 	 Executed 3 tests, with 0 failures (0 unexpected) in 164.897 (164.904) seconds
+2026-11-17T04:43:40.0633760Z ** TEST SUCCEEDED **
+

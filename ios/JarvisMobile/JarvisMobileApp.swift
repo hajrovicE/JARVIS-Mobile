@@ -1,4 +1,5 @@
 import JarvisCore
+import AVFoundation
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
@@ -23,8 +24,22 @@ struct RootView: View {
   @AppStorage("onboarded") private var onboarded = false
   @AppStorage("ttsEnabled") private var tts = false
   @StateObject private var speech = SpeechController()
+  @State private var inferenceRuntime = GGUFInferenceRuntime()
+  @AppStorage("jarvis.voice.autoSend") private var voiceAutoSend = true
+  @AppStorage("jarvis.voice.handsFree") private var handsFreeVoice = false
+  @AppStorage("jarvis.conversation.quickMode") private var quickMode = true
+  @AppStorage("jarvis.voice.speechRate") private var speechRate = 0.53
+  @State private var voiceCoordinator = NaturalVoiceTurnCoordinator()
+  @State private var responseSeconds: Double?
+  @State private var firstVisibleTokenSeconds: Double?
+  @State private var generationStartedAt: TimeInterval?
+  @State private var localRuntimeMetrics: LocalRuntimeMetrics?
   @State private var store: MemoryStore?
-  @State private var input = ""
+  @State private var modelManager: OnDeviceModelManager?
+  @State private var draft = ChatDraft()
+  @State private var activeGenerationID: UUID?
+  @State private var hasStreamedReply = false
+  @State private var lastResumedOutputID: UUID?
   @FocusState private var chatFocused: Bool
   @State private var reply = ""
   @State private var memories: [MemoryItem] = []
@@ -49,6 +64,8 @@ struct RootView: View {
   @AppStorage("jarvis.model.contextTokens") private var modelContextTokens = 8192
   @AppStorage("jarvis.model.temperature") private var modelTemperature = 0.8
   @AppStorage("jarvis.model.topP") private var modelTopP = 1.0
+  @AppStorage("jarvis.model.repetitionPenalty") private var modelRepetitionPenalty = 1.0
+  @AppStorage("jarvis.model.repetitionWindow") private var modelRepetitionWindow = 64
   @AppStorage("jarvis.model.cpuThreads") private var modelCPUThreads = 0
   @State private var busy = false
   @Environment(\.scenePhase) private var scenePhase
@@ -67,25 +84,48 @@ struct RootView: View {
       }
     }
     .task { await open() }
-    .onChange(of: speech.transcript) { _, text in input = text }
-    .onChange(of: tts) { _, enabled in if !enabled { speech.cancel() } }
+    .onChange(of: speech.transcript) { _, text in
+      if !text.isEmpty { draft.edit(text) }
+    }
+    .onChange(of: speech.finishedVoiceTurn?.id) { _, id in
+      guard let turn = speech.finishedVoiceTurn, id == turn.id, store != nil,
+            voiceCoordinator.acceptFinal(
+              id: turn.id, text: turn.text,
+              appInForeground: scenePhase == .active,
+              isBusy: busy, autoSend: voiceAutoSend,
+              handsFree: handsFreeVoice, speakReplies: tts) else { return }
+      draft.edit(turn.text)
+      submit()
+    }
+    .onChange(of: speech.naturallyFinishedOutputID) { _, _ in resumeListeningIfEligible() }
+    .onChange(of: busy) { _, isBusy in if !isBusy { resumeListeningIfEligible() } }
+    .onChange(of: tts) { _, enabled in if !enabled { stopVoiceConversation(cancelGeneration: false) } }
+    .onChange(of: handsFreeVoice) { _, enabled in if !enabled { stopVoiceConversation(cancelGeneration: false) } }
+    .onChange(of: voiceAutoSend) { _, enabled in if !enabled { stopVoiceConversation(cancelGeneration: false) } }
+    .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
+      stopVoiceConversation()
+      Task { await inferenceRuntime.unload() }
+    }
     .onChange(of: scenePhase) { _, phase in
       if phase != .active {
         // A submitted owner's inference request may not run unattended.
         runningOperation?.cancel()
         holdStartTask?.cancel()
         holdStartTask = nil
+        voiceCoordinator.stopConversation()
         speech.cancel()
         if phase == .background {
-          Task { await permissions.invalidateAll() }
+          Task {
+            await permissions.invalidateAll()
+            await inferenceRuntime.unload()
+          }
         }
       } else {
         Task { if store == nil { await open() } else { perform { try await refresh() } } }
       }
     }
     .onDisappear {
-      holdStartTask?.cancel()
-      speech.cancel()
+      stopVoiceConversation()
     }
     .alert(
       "İşlem tamamlanamadı",
@@ -117,8 +157,9 @@ struct RootView: View {
             identifier: "owner-model-" + UUID().uuidString.lowercased(),
             revision: "owner-selected", licenseIdentifier: "owner-provided",
             byteCount: size.int64Value, sha256: "")
-          let manager = try OnDeviceModelManager(directory: localModelDirectory())
+          let manager = try sharedModelManager()
           _ = try await manager.importModel(from: url, manifest: manifest)
+          await inferenceRuntime.unload()
           activeLocalModelManifest = String(
             decoding: try JSONEncoder().encode(manifest), as: UTF8.self)
           localModelStatus = "Seçtiğin model içeriği yüklendi. Çıkarım testi bekleniyor."
@@ -159,28 +200,28 @@ struct RootView: View {
               Text(source.retrievedAt, style: .date).font(.caption)
             }
           }
-          TextField("Hatırla ki …", text: $input, axis: .vertical).textFieldStyle(.roundedBorder)
+          TextField("Hatırla ki …", text: Binding(
+            get: { draft.text }, set: { draft.edit($0) }), axis: .vertical).textFieldStyle(.roundedBorder)
             .accessibilityIdentifier("chat.input").focused($chatFocused)
           Button("Gönder") { submit() }.accessibilityIdentifier("chat.send").disabled(
-            store == nil || busy || input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            store == nil || busy || draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
           Text("Sesli giriş isteğe bağlıdır. Tanıma cihazda yapılır; yazarak devam edebilirsiniz.")
           Button("Ses izinlerini ver") { Task { await speech.requestPermissions() } }
             .disabled(speech.requestingPermissions || speech.recording || speech.finishing)
           if speech.needsSettings, let settings = URL(string: UIApplication.openSettingsURLString) {
             Link("Ses izinleri için Ayarlar'ı aç", destination: settings)
           }
-          Text(speech.status)
+          Text(speech.status).accessibilityIdentifier("voice.status")
           Text(speech.recording ? "Dinleniyor…" : "Konuşmak için basılı tutun")
             .padding().background(.blue.opacity(0.15)).cornerRadius(12)
             .gesture(
               DragGesture(minimumDistance: 0).onChanged { _ in
-                if holdStartTask == nil { holdStartTask = Task { await speech.begin() } }
+                if holdStartTask == nil { startVoiceCapture(autoStop: false) }
               }
               .onEnded { _ in
                 holdStartTask?.cancel()
                 holdStartTask = nil
                 speech.stop()
-                input = speech.transcript
               }
             )
             .accessibilityAddTraits(.isButton)
@@ -189,14 +230,50 @@ struct RootView: View {
               holdStartTask?.cancel()
               holdStartTask = nil
               speech.stop()
-              input = speech.transcript
             } else {
-              holdStartTask = Task { await speech.begin() }
+              startVoiceCapture(autoStop: handsFreeVoice)
             }
           }
           .disabled(speech.requestingPermissions || speech.finishing)
-          Toggle("Cevapları sesli oku", isOn: $tts)
-          if speech.speaking { Button("Sesli cevabı durdur") { speech.cancel() } }
+          Toggle("Akıcı sohbet · kısa ve hızlı yanıt", isOn: $quickMode).accessibilityIdentifier("conversation.quickMode")
+          Text("Hızlı mod yanıt bütçesini azaltır; Qwen3'te kısa sohbet için /no_think kullanır. Sistem talimatınız ve açık düşünme seçiminiz korunur.")
+            .font(.caption).foregroundStyle(.secondary)
+          Toggle("Konuşmam bitince otomatik yanıtla", isOn: $voiceAutoSend).accessibilityIdentifier("voice.autoSend")
+          Toggle("Ön planda kesintisiz sesli sohbet", isOn: $handsFreeVoice).accessibilityIdentifier("voice.handsFree")
+            .disabled(!tts || !voiceAutoSend)
+          Text("Kesintisiz sohbet yalnızca uygulama açıkken ve ilk sesli komutu başlattığınızda dinler. Başka uygulamaları veya arka planı izlemez.")
+            .font(.caption).foregroundStyle(.secondary)
+          Toggle("Cevapları sesli oku", isOn: $tts).accessibilityIdentifier("voice.tts")
+          Slider(value: $speechRate,
+                 in: Double(AVSpeechUtteranceMinimumSpeechRate)...Double(AVSpeechUtteranceMaximumSpeechRate),
+                 step: 0.01) { Text("Konuşma hızı") }
+            .accessibilityIdentifier("voice.rate")
+          Text("Konuşma hızı: \(speechRate, format: .number.precision(.fractionLength(2)))")
+            .font(.caption).foregroundStyle(.secondary)
+          if let responseSeconds {
+            Text("Son yanıt: \(responseSeconds, format: .number.precision(.fractionLength(1))) saniye")
+              .font(.caption).foregroundStyle(.secondary)
+          }
+          if let firstVisibleTokenSeconds {
+            Text("İlk görünür metin: \(firstVisibleTokenSeconds, format: .number.precision(.fractionLength(2))) sn")
+              .font(.caption).foregroundStyle(.secondary)
+          }
+          if let localRuntimeMetrics {
+            Text("İlk token: \(localRuntimeMetrics.firstTokenSeconds, format: .number.precision(.fractionLength(2))) sn · Hız: \(localRuntimeMetrics.tokensPerSecond, format: .number.precision(.fractionLength(1))) token/sn · \(localRuntimeMetrics.warmModel ? "Hazır model" : "İlk yükleme")")
+              .font(.caption).foregroundStyle(.secondary)
+            Text("Model yükleme: \(localRuntimeMetrics.modelLoadSeconds, format: .number.precision(.fractionLength(3))) sn · Bağlam: \(localRuntimeMetrics.contextInitSeconds, format: .number.precision(.fractionLength(3))) sn · İstek işleme: \(localRuntimeMetrics.prefillSeconds, format: .number.precision(.fractionLength(3))) sn")
+              .font(.caption).foregroundStyle(.secondary)
+            if let bytes = localRuntimeMetrics.residentMemoryBytes {
+              Text("İşlem belleği: \(Double(bytes) / 1_048_576, format: .number.precision(.fractionLength(0))) MiB")
+                .font(.caption).foregroundStyle(.secondary)
+            }
+            if let thermal = localRuntimeMetrics.thermalState {
+              Text("İşletim sistemi termal durumu: " + thermal).font(.caption).foregroundStyle(.secondary)
+            }
+          }
+          if speech.speaking || speech.outputStreaming { Button("Sesli cevabı durdur") { stopVoiceConversation() } }
+          if busy { Button("Yanıtı durdur") { stopVoiceConversation() }.accessibilityIdentifier("chat.cancel") }
+          if handsFreeVoice { Button("Sesli sohbeti bitir") { stopVoiceConversation() } }
         }.padding()
       }.navigationTitle("JARVIS")
     }.tabItem { Label("Sohbet", systemImage: "bubble.left") }
@@ -356,6 +433,13 @@ struct RootView: View {
           TextField("CPU iş parçacıkları (0 = otomatik)", value: $modelCPUThreads, format: .number)
             .keyboardType(.numberPad)
             .accessibilityIdentifier("model.cpuThreads")
+          TextField("Tekrar katsayısı (1 = kapalı)", value: $modelRepetitionPenalty, format: .number)
+            .keyboardType(.decimalPad)
+            .accessibilityIdentifier("model.repetitionPenalty")
+          TextField("Tekrar penceresi (token, 0 = kapalı)", value: $modelRepetitionWindow, format: .number)
+            .keyboardType(.numberPad)
+            .accessibilityIdentifier("model.repetitionWindow")
+          Text("1'den büyük tekrar katsayısı tekrarı azaltabilir; doğru alıntıları da etkileyebilir. Varsayılan 1, mevcut model davranışını korur. Pencere en fazla o turun bağlamı kadar uygulanır.")
           Text("Uygulama yapay karakter/token üst limiti koymaz. Modelin bağlam kapasitesi ve iPhone belleği aşılırsa çıkarım hata verebilir.")
         }
         Section("Çalışma biçimi") {
@@ -395,29 +479,21 @@ struct RootView: View {
         for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true
       ).appendingPathComponent("Jarvis", isDirectory: true)
       let jsonURL = directory.appendingPathComponent("memory.json")
-      let plainStorage = try PlainFileStorage(url: jsonURL)
-      // Legacy encrypted snapshots are read at most once when upgrading.
-      // Future writes use only the owner's plaintext JSON file.
       let legacyURL = directory.appendingPathComponent("memory.aes")
-      if !FileManager.default.fileExists(atPath: jsonURL.path),
-         FileManager.default.fileExists(atPath: legacyURL.path) {
-        let legacyStorage = try EncryptedFileStorage(
-          url: legacyURL, keychainAccount: "primary")
-        if let old = try legacyStorage.load() {
-          try plainStorage.save(old)
-        }
-      }
+      let plainStorage = try PlainFileStorage.migratingLegacySnapshot(
+        to: jsonURL, legacyURL: legacyURL
+      ) { try EncryptedFileStorage(url: legacyURL, keychainAccount: "primary").load() }
       store = try MemoryStore(storage: plainStorage)
       if let manifest = try? selectedModelManifest(),
          let modelURL = try? localModelDirectory().appendingPathComponent(manifest.identifier + ".gguf"),
          FileManager.default.fileExists(atPath: modelURL.path) {
-        localModelStatus = "Kurulu model: " + manifest.identifier + ". İlk sorguda SHA-256 doğrulanacak."
+        localModelStatus = "Kurulu model: " + manifest.identifier + ". GGUF çıkarımı ilk sohbet isteğinde çalıştırılacak."
       } else {
         localModelStatus = "Yerel model kurulmadı. GGUF dosyasını Dosyalar'dan yükleyin."
       }
       try await refresh()
     } catch {
-      errorText = "Şifreli hafıza açılamadı. Cihazın kilidini açıp uygulamayı yeniden başlatın."
+      errorText = "Hafıza açılamadı veya eski kayıtlar taşınamadı. Kayıtlar korunmuştur; yeniden deneyin."
     }
   }
   private func refresh() async throws {
@@ -445,12 +521,16 @@ struct RootView: View {
     busy = true
     runningOperation = Task {
       defer {
+        if activeGenerationID != nil { abortPartialReply(); voiceCoordinator.stopConversation() }
         busy = false
         runningOperation = nil
       }
       do {
         try await operation()
         try await refresh()
+      } catch is CancellationError {
+        abortPartialReply()
+        voiceCoordinator.stopConversation()
       } catch LearningError.staleProposal {
         errorText =
           "Öneri metni değişti. Düzenlediğiniz metni kaydetmek için Düzelt ve onayla seçeneğini kullanın."
@@ -463,11 +543,17 @@ struct RootView: View {
           errorText = "Yerel JARVIS modeli kurulu değil veya çıkarım motoru kullanılamıyor."
         case .invalidFile:
           errorText = "Dosya yerel GGUF motoruyla açılamadı."
+        case .invalidSettings:
+          errorText = "Model ayarları geçersiz. Bağlam, yanıt uzunluğu ve örneklemeyi kontrol edin."
+        case .contextExceeded:
+          errorText = "İstek seçilen model bağlamına sığmıyor. Bağlamı artırın veya isteği kısaltın."
+        case .unsupportedTemplate:
+          errorText = "Modelin sohbet şablonu bu yerel motor tarafından desteklenmiyor."
         default:
           errorText = "Yerel model kurulumu veya çalıştırılması başarısız."
         }
       } catch let error as AIProviderError {
-        connectionStatus = error.userMessage
+        localModelStatus = error.userMessage
         errorText = error.userMessage
       } catch let error as AssistantError { errorText = error.userMessage } catch let error
         as ActionPermissionError
@@ -508,14 +594,84 @@ struct RootView: View {
     return manifest
   }
 
+  private func receiveModelDelta(_ delta: String, generationID: UUID, outputID: UUID?) throws {
+    try Task.checkCancellation()
+    guard activeGenerationID == generationID, scenePhase == .active else { throw CancellationError() }
+    if !hasStreamedReply, let generationStartedAt {
+      firstVisibleTokenSeconds = ProcessInfo.processInfo.systemUptime - generationStartedAt
+    }
+    hasStreamedReply = true
+    reply += delta
+    if let outputID, tts { speech.appendStreamingText(delta, responseID: outputID) }
+  }
+
+  private func abortPartialReply() {
+    guard activeGenerationID != nil else { return }
+    activeGenerationID = nil
+    hasStreamedReply = false
+    activeReply = nil
+    reply = "Yanıt tamamlanmadı; konuşma geçmişine kaydedilmedi."
+    speech.cancel()
+  }
+
+  private func stopVoiceConversation(cancelGeneration: Bool = true) {
+    voiceCoordinator.stopConversation()
+    holdStartTask?.cancel()
+    holdStartTask = nil
+    if cancelGeneration {
+      runningOperation?.cancel()
+      abortPartialReply()
+    }
+    speech.cancel()
+  }
+
+  private func startVoiceCapture(autoStop: Bool) {
+    let previous = runningOperation
+    stopVoiceConversation()
+    holdStartTask = Task {
+      await previous?.value
+      guard !Task.isCancelled, scenePhase == .active else { return }
+      await speech.begin(autoStopOnSilence: autoStop) { id in
+        voiceCoordinator.beginUserCapture(id: id)
+      }
+    }
+  }
+
+  private func resumeListeningIfEligible() {
+    guard let output = speech.naturallyFinishedOutputID, output != lastResumedOutputID,
+      voiceCoordinator.canResumeListening(
+        speechFinishedNaturally: true, appInForeground: scenePhase == .active,
+        isBusy: busy, handsFree: handsFreeVoice, autoSend: voiceAutoSend, speakReplies: tts)
+    else { return }
+    lastResumedOutputID = output
+    holdStartTask?.cancel()
+    holdStartTask = Task {
+      guard !Task.isCancelled, scenePhase == .active else { return }
+      await speech.begin(autoStopOnSilence: true) { id in voiceCoordinator.beginUserCapture(id: id) }
+    }
+  }
+
+  private func sharedModelManager() throws -> OnDeviceModelManager {
+    if let modelManager { return modelManager }
+    let manager = try OnDeviceModelManager(directory: localModelDirectory())
+    modelManager = manager
+    return manager
+  }
+
   private func submit() {
-    guard let store else { return }
-    let command = input
+    guard let store, !busy else { return }
+    holdStartTask?.cancel()
+    holdStartTask = nil
+    speech.cancel()
+    let submission = draft.submission()
+    let command = submission.text
     chatFocused = false
     perform {
       if let operation = CommandRouter.ownerAction(for: command) {
         try await runOwnerAction(operation, using: store)
-        input = ""
+        draft.complete(submission)
+        if errorText != nil { voiceCoordinator.stopConversation() }
+        if tts { speech.speak(reply, rate: Float(speechRate)) }
         return
       }
       let provider: any AIProvider
@@ -524,33 +680,65 @@ struct RootView: View {
         provider = UnavailableAIProvider()
       } else {
         let manifest = try selectedModelManifest()
-        let manager = try OnDeviceModelManager(directory: localModelDirectory())
+        let manager = try sharedModelManager()
+        let budget = LocalTurnBudget.select(
+            prompt: command, fastConversation: quickMode,
+            ownerMaxNewTokens: modelMaxNewTokens,
+            ownerContextTokens: modelContextTokens)
+        guard let contextTokens = Int32(exactly: budget.contextTokens) else {
+          throw LocalModelError.invalidSettings
+        }
+        await inferenceRuntime.configure(
+            maxNewTokens: budget.maxNewTokens,
+            contextLength: contextTokens,
+            ownerInstructions: ownerInstructions,
+            temperature: Float(modelTemperature),
+            topP: Float(modelTopP),
+            cpuThreads: modelCPUThreads,
+            preferFastResponse: quickMode && !budget.needsDetail,
+            repetitionPenalty: Float(modelRepetitionPenalty), repetitionWindow: modelRepetitionWindow)
         provider = LocalAIProvider(manager: manager, manifest: manifest,
-            runtime: GGUFInferenceRuntime(
-                maxNewTokens: modelMaxNewTokens,
-                contextLength: Int32(clamping: modelContextTokens),
-                ownerInstructions: ownerInstructions,
-                temperature: Float(modelTemperature),
-                topP: Float(modelTopP),
-                cpuThreads: modelCPUThreads))
+            runtime: inferenceRuntime)
         scope = "local:" + manifest.identifier
       }
+      let answerStart = ProcessInfo.processInfo.systemUptime
+      generationStartedAt = answerStart
+      firstVisibleTokenSeconds = nil
+      localRuntimeMetrics = nil
+      let generationID = UUID()
+      activeGenerationID = generationID
+      hasStreamedReply = false
+      activeReply = nil
+      reply = ""
+      // Starting an output session never starts the microphone. It stays open
+      // until generation completes, even if its first sentence finishes earlier.
+      let outputID = tts ? speech.beginStreamingResponse(rate: Float(speechRate)) : nil
       let result = try await AssistantService(
         store: store, provider: provider, providerScope: scope,
         processingMode: .onDevice
       ).reply(
         to: command,
         consent: AISharingConsent(networkAllowed: false,
-            personalMemory: true, confirmedLearning: true, recentHistory: true))
+            personalMemory: true, confirmedLearning: true, recentHistory: true),
+        onToken: { delta in
+          try await receiveModelDelta(delta, generationID: generationID, outputID: outputID)
+        })
       try Task.checkCancellation()
+      guard activeGenerationID == generationID, scenePhase == .active else { throw CancellationError() }
+      responseSeconds = ProcessInfo.processInfo.systemUptime - answerStart
+      if result.generated != nil { localRuntimeMetrics = await inferenceRuntime.metrics }
       reply = result.text
       activeReply = result.generated
-      input = ""
+      draft.complete(submission)
       if result.generated != nil { localModelStatus = "Son yanıt cihaz içindeki modelden üretildi." }
       if result.historyWriteFailed {
         errorText = "Komut tamamlandı ancak konuşma geçmişi kaydedilemedi."
       }
-      if tts { speech.speak(result.text) }
+      if let outputID, tts {
+        if !hasStreamedReply { speech.appendStreamingText(result.text, responseID: outputID) }
+        speech.finishStreamingResponse(responseID: outputID)
+      }
+      activeGenerationID = nil
     }
   }
 }

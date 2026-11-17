@@ -16,3 +16,13 @@ local-dataset/
 jarvis-model/
 training-data/
 model-output/
+
+# Python bytecode and locally staged CI test marker
+__pycache__/
+*.pyc
+ios/JarvisMobileTests/Fixtures/real-inference-required.txt
+
+# Generated native Apple dependency artifacts
+NativeRuntime/.artifacts/
+NativeRuntime/.build/
+NativeRuntime/.swiftpm/

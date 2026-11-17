@@ -1,0 +1,32 @@
+Source: 9aea7cc06c24463dd70207865fb22efbeb49de35
+Run: https://github.com/hajrovicE/JARVIS-Mobile/actions/runs/44022073182
+Job: core (133833642319), SUCCESS
+Selected Linux Swift 6 parallel XCTest lines; 173 tests. Full log available in Actions.
+
+2026-11-17T05:09:57.4062969Z Swift version 6.0.3 (swift-6.0.3-RELEASE)
+2026-11-17T05:10:09.4801394Z [79/173] Testing JarvisCoreTests.LocalConversationContextTests/testConsentIsolationAndSensitiveLearnedMemories
+2026-11-17T05:10:09.4876989Z [80/173] Testing JarvisCoreTests.LocalConversationContextTests/testCorrectedLearningRemovesStaleDerivedDialogueFromCurrentContext
+2026-11-17T05:10:09.4945243Z [81/173] Testing JarvisCoreTests.LocalConversationContextTests/testCorrectionInvalidatesLegacyMultiHopDerivedConversation
+2026-11-17T05:10:09.5027816Z [82/173] Testing JarvisCoreTests.LocalConversationContextTests/testCurrentEvidenceRequiresConfirmationConfidenceSourceAndCorrectLocation
+2026-11-17T05:10:09.5079877Z [83/173] Testing JarvisCoreTests.LocalConversationContextTests/testCurrentFinancialEvidenceExpiresForReuseWithoutDeletingHistory
+2026-11-17T05:10:09.5166975Z [84/173] Testing JarvisCoreTests.LocalConversationContextTests/testDeletedPersonalOrExperienceCannotReturnThroughFollowupHistory
+2026-11-17T05:10:09.5191393Z [85/173] Testing JarvisCoreTests.LocalConversationContextTests/testDuplicatedSameTextIsNotRepeated
+2026-11-17T05:10:09.5304174Z [86/173] Testing JarvisCoreTests.LocalConversationContextTests/testEditedPersonalFactInvalidatesOldFollowupButKeepsNewFactAndArchive
+2026-11-17T05:10:09.5315842Z [87/173] Testing JarvisCoreTests.LocalConversationContextTests/testExpiredAndFutureKnowledgeAreNotActiveFactsButRemainStored
+2026-11-17T05:10:09.5456607Z [88/173] Testing JarvisCoreTests.LocalConversationContextTests/testLocallyConsentedSensitivePreferenceIsNotAHiddenCategoryProhibition
+2026-11-17T05:10:09.5606207Z [89/173] Testing JarvisCoreTests.LocalConversationContextTests/testNewestOwnerCorrectionWinsAndHistoricRevisionIsNotInjected
+2026-11-17T05:10:09.5657366Z [90/173] Testing JarvisCoreTests.LocalConversationContextTests/testFreshEvidenceMustActuallyBeSelectedAndFitsWithoutTruncation
+2026-11-17T05:10:09.5752677Z [91/173] Testing JarvisCoreTests.LocalConversationContextTests/testRecentFollowupRepliesRemainWhenHistoryOptedIn
+2026-11-17T05:10:09.5776701Z [92/173] Testing JarvisCoreTests.LocalConversationContextTests/testRelevantMemoryWinsOverUnrelatedNotes
+2026-11-17T05:10:09.5928740Z [93/173] Testing JarvisCoreTests.LocalConversationContextTests/testTurkishSuffixAndSynonymMatchingRetainsWholeQualifiedFact
+2026-11-17T05:10:09.5977431Z [94/173] Testing JarvisCoreTests.LocalConversationContextTests/testShortAndRelevantContextUnderStrictBudget
+2026-11-17T05:10:09.6086928Z [95/173] Testing JarvisCoreTests.LocalConversationContextTests/testUnrelatedQuestionDoesNotReceivePersonalMemoryOrLastDialogue
+2026-11-17T05:10:09.6097779Z [96/173] Testing JarvisCoreTests.LocalConversationContextTests/testVerifiedTaskResultsAndConfirmedCorrectionsAreAvailableNotProposals
+2026-11-17T05:10:09.7398120Z [116/173] Testing JarvisCoreTests.MemoryStoreTests/testAllOwnerHistoryPersistsUntilDeleted
+2026-11-17T05:10:09.7465653Z [117/173] Testing JarvisCoreTests.MemoryStoreTests/testFailedWriteDoesNotMutate
+2026-11-17T05:10:09.7507456Z [118/173] Testing JarvisCoreTests.MemoryStoreTests/testFreshnessOptOut
+2026-11-17T05:10:09.7606639Z [119/173] Testing JarvisCoreTests.MemoryStoreTests/testLegacyPersonalEditDatePersistsWithoutChangingIdentityOrCreation
+2026-11-17T05:10:09.7620802Z [120/173] Testing JarvisCoreTests.MemoryStoreTests/testMigrationAndUnsupportedSchema
+2026-11-17T05:10:09.7738319Z [121/173] Testing JarvisCoreTests.MemoryStoreTests/testRouterRejectsProposalsAndPersistsCommands
+2026-11-17T05:10:09.7746447Z [122/173] Testing JarvisCoreTests.MemoryStoreTests/testRestartEditDeleteExport
+2026-11-17T05:10:11.3359127Z [173/173] Testing JarvisCoreTests.ActivityLearningJournalTests/testNoObservationCountCapAndNoFreeFormPayload

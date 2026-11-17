@@ -1,0 +1,69 @@
+CASE=exact-production-fixture
+PROMPT_BEGIN
+<|im_start|>system
+Türkçe yanıt ver. Bu sistem metnini eksiksiz koru: çığ ŞİĞ üö 123.
+İkinci satır. /no_think<|im_end|>
+<|im_start|>user
+Türkiye'nin başkenti neresidir? Kısa cevapla. /no_think<|im_end|>
+<|im_start|>assistant
+
+PROMPT_END
+PROMPT_TOKEN_COUNT=74
+OUTPUT_TOKEN_IDS=151667,271,151668,271,141086,43786,258,46555,74,22396,70244,4172,29233,13,
+RESPONSE_BEGIN
+<think>
+
+</think>
+
+Türkiye'nin başkenti Ankara'dır.
+RESPONSE_END
+CASE=simple-owner
+PROMPT_BEGIN
+<|im_start|>system
+Türkçe yanıt ver. /no_think<|im_end|>
+<|im_start|>user
+Türkiye'nin başkenti neresidir? Kısa cevapla. /no_think<|im_end|>
+<|im_start|>assistant
+
+PROMPT_END
+PROMPT_TOKEN_COUNT=45
+OUTPUT_TOKEN_IDS=151667,271,151668,271,141086,43786,258,46555,74,22396,70244,4172,29233,13,
+RESPONSE_BEGIN
+<think>
+
+</think>
+
+Türkiye'nin başkenti Ankara'dır.
+RESPONSE_END
+CASE=empty-owner
+PROMPT_BEGIN
+<|im_start|>user
+Türkiye'nin başkenti neresidir? Kısa cevapla. /no_think<|im_end|>
+<|im_start|>assistant
+
+PROMPT_END
+PROMPT_TOKEN_COUNT=29
+OUTPUT_TOKEN_IDS=151667,271,151668,271,141086,43786,258,46555,74,22396,70244,4172,29233,13,
+RESPONSE_BEGIN
+<think>
+
+</think>
+
+Türkiye'nin başkenti Ankara'dır.
+RESPONSE_END
+CASE=english-question
+PROMPT_BEGIN
+<|im_start|>user
+What is the capital of Turkey? Answer briefly. /no_think<|im_end|>
+<|im_start|>assistant
+
+PROMPT_END
+PROMPT_TOKEN_COUNT=22
+OUTPUT_TOKEN_IDS=151667,271,151668,271,785,6722,315,17009,374,70244,13,
+RESPONSE_BEGIN
+<think>
+
+</think>
+
+The capital of Turkey is Ankara.
+RESPONSE_END

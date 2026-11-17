@@ -1,0 +1,23 @@
+name: JARVIS Core Linux
+on:
+  push:
+    branches:
+      - feature/fast-natural-offline-conversation-20261116
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  core:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    container: swift:6.0
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift version
+        run: swift --version
+      - name: JarvisCore tests (Linux)
+        run: swift test --parallel

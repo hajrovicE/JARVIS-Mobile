@@ -1,0 +1,25 @@
+{
+  "source": "9aea7cc06c24463dd70207865fb22efbeb49de35",
+  "run": 44022073158,
+  "artifact": 14302333063,
+  "artifact_bytes": 13317705,
+  "payloads": [
+    {
+      "zip": "JarvisMobile-simulator.zip",
+      "platform": "iphonesimulator",
+      "build": "3",
+      "marketing": "0.3.0",
+      "native_llama": true,
+      "test_bundle_or_fixture": false
+    },
+    {
+      "zip": "JarvisMobile-iphone-unsigned.zip",
+      "platform": "iphoneos",
+      "build": "3",
+      "marketing": "0.3.0",
+      "native_llama": true,
+      "test_bundle_or_fixture": false
+    }
+  ],
+  "result": "PASS; simulator ad-hoc signature also verified by codesign in CI; iPhone payload is unsigned"
+}

@@ -1,0 +1,29 @@
+Source: 09ef15a7459fe30d945f1b68685eaec5f376a4cc
+Run: https://github.com/hajrovicE/JARVIS-Mobile/actions/runs/44017193034
+Job: real-local-inference (133817831668), ubuntu-24.04
+Extract of native checks and raw model/benchmark diagnostics; full build log is in Actions.
+
+2026-11-17T04:30:23.3277672Z PASS real Turkish inference transport: <think>  </think>  Türkiye'nin başkenti Ankara'dır.
+2026-11-17T04:30:23.3278487Z MODEL_QUALITY_PASS capital question
+2026-11-17T04:30:23.3278974Z PASS exact multi-line owner prompt; prompt=74 output=14 context=1024 gpu=false
+2026-11-17T04:30:23.3280437Z BENCHMARK {"case":"cold","context_init_s":0.045656030999964514,"decode_tokens_per_second":14.94242968621691,"first_token_s":2.8272798820000276,"model_bytes":1282439264,"model_load_count":1,"model_load_s":1.6656465959999878,"output_tokens":14,"peak_resident_memory_bytes":2165493760,"prefill_s":1.1127752730000111,"resident_memory_bytes":2165608448,"thermal_end":null,"thermal_start":null,"total_s":3.69728564899998,"warm_model":false}
+2026-11-17T04:30:23.3282289Z BENCHMARK {"case":"warm","context_init_s":0.04474688499999502,"decode_tokens_per_second":14.971572329717176,"first_token_s":1.1644633550000094,"model_bytes":1282439264,"model_load_count":1,"model_load_s":3.850199999533288e-05,"output_tokens":14,"peak_resident_memory_bytes":2169729024,"prefill_s":1.1188909620000231,"resident_memory_bytes":2169925632,"thermal_end":null,"thermal_start":null,"total_s":2.0327756279999676,"warm_model":true}
+2026-11-17T04:30:23.3283582Z PASS real streaming before completion: callbacks=14 first_callback_s=1.164577021 callback_span_s=0.8059621670000001
+2026-11-17T04:30:23.3284093Z PASS Task cancellation after first real native delta
+2026-11-17T04:30:23.3284500Z PASS concurrent-generation rejection and per-turn configuration snapshot
+2026-11-17T04:30:23.3285815Z BENCHMARK {"case":"reload","context_init_s":0.022696624000047905,"decode_tokens_per_second":10.214749114039334,"first_token_s":2.3237487970000075,"model_bytes":1282439264,"model_load_count":2,"model_load_s":1.7266167459999906,"output_tokens":3,"peak_resident_memory_bytes":2176495616,"prefill_s":0.5738494920000221,"resident_memory_bytes":2150813696,"thermal_end":null,"thermal_start":null,"total_s":2.5195441100000266,"warm_model":false}
+2026-11-17T04:30:23.3286913Z PASS unload during suspended streaming and safe cold reload
+2026-11-17T04:30:23.3287325Z PASS exact long owner prompt and multi-batch prefill: 1220 tokens
+2026-11-17T04:30:23.3287734Z PASS one-token generation, selected sampling, empty system prompt and model reload
+2026-11-17T04:30:23.3288094Z PASS actual context overflow is explicit
+2026-11-17T04:30:23.3288414Z PASS invalid settings rejected
+2026-11-17T04:30:23.3288665Z PASS cancelled inference
+2026-11-17T04:30:23.3288957Z PASS actual llama.cpp corrupt-model rejection
+2026-11-17T04:30:23.3289382Z PASS real GGUF import/replacement, corrupt replacement preserves model, manifest restart; no hash pin
+2026-11-17T04:30:23.3291627Z PASS AssistantService + real LocalAIProvider + personal context + JSON restart: En sevdiğim şehir: Ankara.
+2026-11-17T04:30:23.3292285Z PASS resident identity invalidation after atomic replacement with preserved size/mtime
+2026-11-17T04:30:23.3293093Z SPEECH_PROBE visible_json="Merhaba. Görüşmek üzere.  \nMerhaba. Görüşmek üzere." raw_tokens=19 sentences=3 fast_directive=true
+2026-11-17T04:30:23.3294298Z PASS real speech sentence ready before model completion: first_sentence_s=2.8720208189999994 generation_s=3.812371568000003 sentences_before_completion=3
+2026-11-17T04:30:23.3294972Z REAL_RUNTIME_FUNCTIONAL_CHECKS_PASSED
+2026-11-17T04:30:23.3295292Z REAL_RUNTIME_PROOF_PASSED
+

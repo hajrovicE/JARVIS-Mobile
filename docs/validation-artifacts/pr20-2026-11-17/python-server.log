@@ -1,0 +1,27 @@
+test_auth_configuration_expiry_and_no_provider_call (test_relay.RelayTests.test_auth_configuration_expiry_and_no_provider_call) ... ok
+test_bad_requests_and_limits (test_relay.RelayTests.test_bad_requests_and_limits) ... ok
+test_http_server_auth_json_limits_and_no_sensitive_logs (test_relay.RelayTests.test_http_server_auth_json_limits_and_no_sensitive_logs) ... ok
+test_large_prompts_and_context_not_artificially_truncated (test_relay.RelayTests.test_large_prompts_and_context_not_artificially_truncated) ... ok
+test_openai_request_uses_fixed_destination_store_false_and_no_tools (test_relay.RelayTests.test_openai_request_uses_fixed_destination_store_false_and_no_tools) ... ok
+test_real_response_contract_preserves_turkish_context_without_fake_citations (test_relay.RelayTests.test_real_response_contract_preserves_turkish_context_without_fake_citations) ... ok
+test_redirects_are_rejected (test_relay.RelayTests.test_redirects_are_rejected) ... ok
+test_upstream_errors_are_sanitized_and_do_not_make_fake_answer (test_relay.RelayTests.test_upstream_errors_are_sanitized_and_do_not_make_fake_answer) ... ok
+test_upstream_network_failure_is_sanitized (test_relay.RelayTests.test_upstream_network_failure_is_sanitized) ... ok
+test_ambiguous_unreadable_oversized_or_control_secrets_fail_closed (test_runtime.RuntimeTests.test_ambiguous_unreadable_oversized_or_control_secrets_fail_closed) ... ok
+test_budget_is_atomic_across_threads (test_runtime.RuntimeTests.test_budget_is_atomic_across_threads) ... ok
+test_concurrency_limit_and_recovery (test_runtime.RuntimeTests.test_concurrency_limit_and_recovery) ... ok
+test_disabled_quotas_by_default_and_no_unbounded_history (test_runtime.RuntimeTests.test_disabled_quotas_by_default_and_no_unbounded_history) ... ok
+test_duplicate_framing_and_auth_headers_fail_before_upstream (test_runtime.RuntimeTests.test_duplicate_framing_and_auth_headers_fail_before_upstream) ... ok
+test_failed_attempts_count_but_unauthorized_and_invalid_do_not (test_runtime.RuntimeTests.test_failed_attempts_count_but_unauthorized_and_invalid_do_not) ... ok
+test_forwarded_addresses_cannot_bypass_global_owner_budget (test_runtime.RuntimeTests.test_forwarded_addresses_cannot_bypass_global_owner_budget) ... ok
+test_liveness_and_readiness_never_probe_provider (test_runtime.RuntimeTests.test_liveness_and_readiness_never_probe_provider) ... ok
+test_minute_and_day_windows_exact_boundaries (test_runtime.RuntimeTests.test_minute_and_day_windows_exact_boundaries) ... ok
+test_production_expiry_and_limit_config_fail_closed (test_runtime.RuntimeTests.test_production_expiry_and_limit_config_fail_closed) ... ok
+test_production_logs_omit_input_headers_ip_and_exception_messages (test_runtime.RuntimeTests.test_production_logs_omit_input_headers_ip_and_exception_messages) ... ok
+test_safe_logger_accepts_only_allowlisted_fields (test_runtime.RuntimeTests.test_safe_logger_accepts_only_allowlisted_fields) ... ok
+test_secret_files_and_explicit_expiry (test_runtime.RuntimeTests.test_secret_files_and_explicit_expiry) ... ok
+
+----------------------------------------------------------------------
+Ran 22 tests in 3.132s
+
+OK

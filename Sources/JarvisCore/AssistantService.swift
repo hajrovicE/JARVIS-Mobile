@@ -31,6 +31,13 @@ public struct AssistantReply: Sendable {
     public let generated: StoredAIAnswer?
     public let fromCache: Bool
     public let historyWriteFailed: Bool
+    public let actionResult: ActionExecutionResult?
+    public var exportedData: Data? { actionResult?.exportedData }
+    public init(text: String, generated: StoredAIAnswer?, fromCache: Bool,
+                historyWriteFailed: Bool, actionResult: ActionExecutionResult? = nil) {
+        self.text = text; self.generated = generated; self.fromCache = fromCache
+        self.historyWriteFailed = historyWriteFailed; self.actionResult = actionResult
+    }
 }
 public enum AssistantError: Error, Equatable {
     case consentRequired, contextChanged, approvalRequired, credentialDetected
@@ -48,6 +55,7 @@ public enum AnswerFreshnessPolicy {
     public static func isDynamic(_ question: String) -> Bool {
         let text = question.lowercased(with: Locale(identifier: "tr_TR"))
         return ["bugün", "şimdi", "güncel", "son durum", "hava", "fiyat", "kur ", "dolar", "euro", "borsa", "hisse", "saat", "trafik", "haber", "yarın", "finans"].contains { text.contains($0) }
+            || OfflineCurrentFactPolicy.requiresFreshEvidence(question)
     }
     public static func cacheUntil(question: String, response: AIResponse, now: Date) -> Date? {
         guard !isDynamic(question), response.freshness == .verifiedStatic,
@@ -66,15 +74,31 @@ public struct AssistantService: Sendable {
     private let provider: any AIProvider
     private let providerScope: String
     private let processingMode: AIProcessingMode
+    private let permissions: PermissionManager
     public init(store: MemoryStore, provider: any AIProvider = UnavailableAIProvider(),
-                providerScope: String = "unconfigured", processingMode: AIProcessingMode = .remote) {
+                providerScope: String = "unconfigured", processingMode: AIProcessingMode = .remote,
+                permissions: PermissionManager = PermissionManager()) {
         self.store = store
         self.provider = provider
         self.providerScope = providerScope
         self.processingMode = processingMode
+        self.permissions = permissions
     }
-    public func reply(to prompt: String, consent: AISharingConsent, now: Date = Date()) async throws -> AssistantReply {
+    /// Entry point for a current owner message. Context and model replies are display data;
+    /// they are never recursively submitted here as fresh owner instructions.
+    public func reply(to prompt: String, consent: AISharingConsent,
+                      origin: ActionOrigin = .userInterface, now: Date = Date(),
+                      onToken: AITokenHandler? = nil) async throws -> AssistantReply {
         try Task.checkCancellation()
+        guard origin == .userInterface else { throw ActionPermissionError.untrustedOrigin }
+        if let operation = CommandRouter.ownerAction(for: prompt) {
+            let request = ActionRequest(operation: operation, origin: origin)
+            let authorization = try await permissions.authorizeOwnerCommand(request)
+            let result = try await ActionExecutor(store: store, permissions: permissions)
+                .execute(request, authorization: authorization)
+            return AssistantReply(text: result.message, generated: nil, fromCache: false,
+                                  historyWriteFailed: false, actionResult: result)
+        }
         let router = CommandRouter(store: store)
         if CommandRouter.isLocalCommand(prompt) {
             let result = try await router.executeWithHistory(prompt)
@@ -85,9 +109,14 @@ public struct AssistantService: Sendable {
             throw AssistantError.consentRequired
         }
         let (state, epoch) = try await store.aiContextSnapshot(now: now)
+        if processingMode == .onDevice {
+            if let local = OfflineCurrentFactPolicy.clockReply(to: prompt, now: now) {
+                return try await localFactReply(local, prompt: prompt, now: now)
+            }
+        }
         let scope = providerScope + "|" + consent.cacheScope
         if !consent.recentHistory, !AnswerFreshnessPolicy.isDynamic(prompt), let cached = state.generatedAnswers.last(where: {
-            $0.question == prompt && $0.cacheScope == scope && ($0.cacheUntil ?? .distantPast) > now
+            $0.question == prompt && $0.cacheScope == scope && $0.savedAt <= now && ($0.cacheUntil ?? .distantPast) > now
         }) {
             try await store.validateAIContext(expectedEpoch: epoch)
             try Task.checkCancellation()
@@ -95,6 +124,22 @@ public struct AssistantService: Sendable {
         }
         var context: [AIContextEntry] = []
         var historyCategories: Set<String> = []
+        if processingMode == .onDevice {
+            context = LocalConversationContext.select(
+                state: state, query: prompt, consent: consent, now: now)
+            let selectedIDs = Set(context.map(\.id))
+            for answer in state.generatedAnswers where selectedIDs.contains("answer:\(answer.id)") {
+                historyCategories.formUnion(answer.contextIDs.filter {
+                    $0.hasPrefix("personal:") || $0.hasPrefix("learning:") || $0.hasPrefix("experience:")
+                })
+                if answer.contextIDs.contains(where: { $0.hasPrefix("personal:") || $0 == "derived:personal" }) {
+                    historyCategories.insert("derived:personal")
+                }
+                if answer.contextIDs.contains(where: { $0.hasPrefix("learning:") || $0.hasPrefix("experience:") || $0 == "derived:learning" }) {
+                    historyCategories.insert("derived:learning")
+                }
+            }
+        } else {
         if consent.confirmedLearning {
             let memories = LocalLearningEngine().shareableContext(query: "", in: state.learning, now: now)
             context += memories.map { AIContextEntry(id: "learning:\($0.id)", text: "\($0.key): \($0.text)") }
@@ -106,9 +151,11 @@ public struct AssistantService: Sendable {
         if consent.recentHistory {
             let local = state.conversations.map { ($0.createdAt, "conversation:\($0.id)", $0.text, Set<String>()) }
             let generated = state.generatedAnswers.compactMap { answer -> (Date, String, String, Set<String>)? in
-                var categories: Set<String> = []
+                var categories = Set(answer.contextIDs.filter {
+                    $0.hasPrefix("personal:") || $0.hasPrefix("learning:") || $0.hasPrefix("experience:")
+                })
                 if answer.contextIDs.contains(where: { $0.hasPrefix("personal:") || $0 == "derived:personal" }) { categories.insert("derived:personal") }
-                if answer.contextIDs.contains(where: { $0.hasPrefix("learning:") || $0 == "derived:learning" }) { categories.insert("derived:learning") }
+                if answer.contextIDs.contains(where: { $0.hasPrefix("learning:") || $0.hasPrefix("experience:") || $0 == "derived:learning" }) { categories.insert("derived:learning") }
                 guard (!categories.contains("derived:personal") || consent.personalMemory),
                       (!categories.contains("derived:learning") || consent.confirmedLearning) else { return nil }
                 return (answer.savedAt, "answer:\(answer.id)", "Kullanıcı: \(answer.question)\nAI: \(answer.response.text)", categories)
@@ -117,8 +164,26 @@ public struct AssistantService: Sendable {
             context += history.map { AIContextEntry(id: $0.1, text: $0.2) }
             history.forEach { historyCategories.formUnion($0.3) }
         }
+        }
+        if processingMode == .onDevice, OfflineCurrentFactPolicy.requiresFreshEvidence(prompt),
+           !LocalConversationContext.hasFreshEvidence(state: state, query: prompt, consent: consent,
+                                                       now: now, selectedContext: context) {
+            return try await localFactReply(OfflineCurrentFactPolicy.unavailableMessage, prompt: prompt, now: now)
+        }
         try Task.checkCancellation()
-        let response = try await provider.respond(to: AIRequest(prompt: prompt, context: context))
+        let request = AIRequest(prompt: prompt, context: context)
+        let response: AIResponse
+        if let onToken {
+            response = try await provider.respond(to: request) { delta in
+                try Task.checkCancellation()
+                try await store.validateAIContext(expectedEpoch: epoch)
+                try await onToken(delta)
+                try Task.checkCancellation()
+                try await store.validateAIContext(expectedEpoch: epoch)
+            }
+        } else {
+            response = try await provider.respond(to: request)
+        }
         try Task.checkCancellation()
         let answer = StoredAIAnswer(question: prompt, response: response, savedAt: now,
             cacheUntil: consent.recentHistory ? nil : AnswerFreshnessPolicy.cacheUntil(question: prompt, response: response, now: now),
@@ -126,5 +191,58 @@ public struct AssistantService: Sendable {
         try await store.recordGeneratedAnswer(answer, expectedEpoch: epoch)
         try Task.checkCancellation()
         return AssistantReply(text: response.text, generated: answer, fromCache: false, historyWriteFailed: false)
+    }
+
+    private func localFactReply(_ text: String, prompt: String, now: Date) async throws -> AssistantReply {
+        try Task.checkCancellation()
+        do {
+            try await store.record("Siz: \(prompt)\nJARVIS: \(text)", now: now)
+            return AssistantReply(text: text, generated: nil, fromCache: false, historyWriteFailed: false)
+        } catch is CancellationError { throw CancellationError() }
+        catch {
+            return AssistantReply(text: text, generated: nil, fromCache: false, historyWriteFailed: true)
+        }
+    }
+}
+
+/// Current external facts need evidence; the device clock is available offline.
+/// This application routing policy does not add or modify a model system prompt.
+public enum OfflineCurrentFactPolicy {
+    public static let unavailableMessage = "Bu güncel bilgiyi çevrimdışı doğrulayamıyorum. Güncel ve doğrulanmış bir kaynak olmadan kesin yanıt veremem."
+
+    public static func requiresFreshEvidence(_ prompt: String) -> Bool {
+        let text = prompt.lowercased(with: Locale(identifier: "tr_TR"))
+        let words = Set(text.components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty })
+        let current = ["bugün", "şimdi", "şu an", "güncel", "en son", "son dakika", "yarın", "anlık", "bu hafta"]
+            .contains { text.contains($0) }
+        let weather = text.contains("hava durumu") || text.contains("hava nasıl") ||
+            text.contains("yağmur yağacak") || text.contains("kaç derece")
+        let scientific = ["nasıl oluş", "nasıl hesap", "nasıl ölç", "neden oluş", "ne demek", "algoritma", "oluşur"]
+            .contains { text.contains($0) }
+        let programming = ["kod yaz", "kodla", "simülasyon", "örnek veri", "istemcisi", "nasıl çekilir"]
+            .contains { text.contains($0) }
+        if weather && !scientific && !programming { return true }
+        let finances = !words.isDisjoint(with: ["dolar", "euro", "altın", "borsa", "hisse", "bitcoin", "kripto", "fiyat", "fiyatı", "kur", "kuru"])
+        let priceQuestion = words.contains("kaç") || text.contains("ne kadar") || words.contains("kuru") || words.contains("fiyatı")
+        if finances && (current || priceQuestion) && !scientific && !programming { return true }
+        let liveTopic = !words.isDisjoint(with: ["haber", "haberler", "gündem", "trafik", "sonuçları", "sıcaklık"])
+        return current && liveTopic && !scientific && !programming
+    }
+
+    public static func clockReply(to prompt: String, now: Date, timeZone: TimeZone = .current) -> String? {
+        let text = prompt.trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+            .lowercased(with: Locale(identifier: "tr_TR"))
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "tr_TR")
+        formatter.timeZone = timeZone
+        if ["saat kaç", "şimdi saat kaç", "şu an saat kaç"].contains(text) {
+            formatter.dateFormat = "HH:mm"
+            return "Cihaz saatine göre \(formatter.string(from: now))."
+        }
+        if ["bugünün tarihi", "bugünün tarihi ne", "bugün ayın kaçı", "bugün hangi gün"].contains(text) {
+            formatter.dateFormat = "d MMMM yyyy, EEEE"
+            return "Cihaz tarihine göre \(formatter.string(from: now))."
+        }
+        return nil
     }
 }

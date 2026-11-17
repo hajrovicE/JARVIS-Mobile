@@ -75,17 +75,19 @@ public actor ActivityLearningJournal {
 
     public init(storage: any SnapshotStorage, now: Date = Date()) throws {
         self.storage = storage
-        var loaded = try storage.load().map {
+        let persisted = try storage.load()
+        var loaded = try persisted.map {
             try JSONDecoder().decode(ActivityJournalSnapshot.self, from: $0)
         } ?? ActivityJournalSnapshot()
         guard loaded.version == 1 else { throw ActivityJournalError.unsupportedVersion }
         Self.purge(&loaded, now: now)
-        try storage.save(JSONEncoder().encode(loaded))
+        if persisted == nil { try storage.save(JSONEncoder().encode(loaded)) }
         snapshot = loaded
     }
 
     private static func purge(_ state: inout ActivityJournalSnapshot, now: Date) {
-        state.observations.removeAll { $0.recordedAt > now }
+        // Clock corrections can make a real prior event appear to be in the future.
+        // Preserve it; insights already exclude future-dated evidence until appropriate.
     }
 
     private func commit(_ updated: ActivityJournalSnapshot) throws {

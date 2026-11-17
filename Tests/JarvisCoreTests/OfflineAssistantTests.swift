@@ -63,7 +63,7 @@ final class OfflineAssistantTests: XCTestCase, @unchecked Sendable {
         let provider = OfflineResponder()
         let assistant = AssistantService(store: store, provider: provider,
                                          providerScope: "local-test", processingMode: .onDevice)
-        _ = try await assistant.reply(to: "Öneri ver", consent: AISharingConsent(networkAllowed: false, personalMemory: true))
+        _ = try await assistant.reply(to: "Tüm kişisel hafıza kayıtlarımı eksiksiz kullanarak öneri ver", consent: AISharingConsent(networkAllowed: false, personalMemory: true))
         let requests = await provider.requests()
         XCTAssertEqual(requests.count, 1)
         XCTAssertEqual(requests[0].context.count, 12)

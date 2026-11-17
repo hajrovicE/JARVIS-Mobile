@@ -100,9 +100,25 @@ def export_options(team_id, profile_uuid, identity):
             "stripSwiftSymbols": True}
 
 
+def validate_built_app(app_path, build_number):
+    """Check the actual built plist; Xcode build settings alone do not prove it."""
+    validate_mode("build-only", "", "", build_number)
+    try:
+        info = plistlib.loads((Path(app_path) / "Info.plist").read_bytes())
+    except (OSError, ValueError, plistlib.InvalidFileException) as exc:
+        raise ReleaseError("Built app Info.plist is missing or unreadable") from exc
+    if not isinstance(info, dict) or info.get("CFBundleIdentifier") != BUNDLE_ID:
+        raise ReleaseError("Built app bundle identifier does not match the release")
+    if info.get("CFBundleVersion") != build_number:
+        raise ReleaseError("Built app version does not match requested build number")
+    marketing = info.get("CFBundleShortVersionString")
+    if not isinstance(marketing, str) or not re.fullmatch(r"[0-9]+(?:\.[0-9]+){0,2}", marketing):
+        raise ReleaseError("Built app marketing version is missing or unresolved")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["check-mode", "check-signing", "decode", "prepare", "save-keychains", "restore-keychains"])
+    parser.add_argument("command", choices=["check-mode", "check-signing", "check-app", "decode", "prepare", "save-keychains", "restore-keychains"])
     parser.add_argument("paths", nargs="*")
     args = parser.parse_args()
     if args.command == "check-mode":
@@ -110,6 +126,11 @@ def main():
                       os.getenv("GITHUB_REF", ""), os.getenv("BUILD_NUMBER", ""))
     elif args.command == "check-signing":
         validate_signing(os.environ)
+    elif args.command == "check-app":
+        if len(args.paths) != 1:
+            raise ReleaseError("check-app requires one built .app path")
+        validate_built_app(args.paths[0], os.getenv("BUILD_NUMBER", ""))
+        print("Built app version matches the requested release build number.")
     elif args.command == "decode":
         name, output = args.paths
         try:

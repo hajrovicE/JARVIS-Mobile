@@ -43,6 +43,8 @@ jobs:
           swift --version
       - name: Core tests
         run: swift test
+      - name: Prepare pinned iPhone native runtime
+        run: scripts/native/prepare_apple_runtime.sh "$RUNNER_TEMP/jarvis-apple-native" --device-only
       - name: Generate iPhone project
         run: |
           brew install xcodegen
@@ -50,8 +52,10 @@ jobs:
       - name: Build unsigned iPhone Release
         run: |
           set -o pipefail
-          xcodebuild -project ios/JarvisMobile.xcodeproj -scheme JarvisMobile -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build-release CURRENT_PROJECT_VERSION="$BUILD_NUMBER" CODE_SIGNING_ALLOWED=NO build 2>&1 | tee release-build.log
-          ditto -c -k --sequesterRsrc --keepParent build-release/Build/Products/Release-iphoneos/JarvisMobile.app JarvisMobile-Release-unsigned.zip
+          xcodebuild -project ios/JarvisMobile.xcodeproj -scheme JarvisMobile -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build-release -archivePath build-release/JarvisMobile.xcarchive CURRENT_PROJECT_VERSION="$BUILD_NUMBER" CODE_SIGNING_ALLOWED=NO archive 2>&1 | tee release-build.log
+          python3 scripts/release/readiness.py build-release/JarvisMobile.xcarchive --output release-readiness.json
+          ditto -c -k --sequesterRsrc --keepParent build-release/JarvisMobile.xcarchive/Products/Applications/JarvisMobile.app JarvisMobile-Release-unsigned.zip
+          ditto -c -k --sequesterRsrc --keepParent build-release/JarvisMobile.xcarchive JarvisMobile-unsigned.xcarchive.zip
           echo 'Unsigned Release build only. This file cannot be installed directly on an iPhone; no TestFlight upload was attempted.' >> "$GITHUB_STEP_SUMMARY"
       - name: Store unsigned Release and build log
         if: always()
@@ -61,6 +65,8 @@ jobs:
           path: |
             JarvisMobile-Release-unsigned.zip
             release-build.log
+            release-readiness.json
+            JarvisMobile-unsigned.xcarchive.zip
           retention-days: 14
   sign-and-distribute:
     needs: [preflight, build-release]
@@ -84,6 +90,7 @@ jobs:
       - name: Generate Release project
         run: |
           brew install xcodegen
+          scripts/native/prepare_apple_runtime.sh "$RUNNER_TEMP/jarvis-apple-native" --device-only
           cd ios && xcodegen generate
       - name: Sign IPA and optionally request TestFlight upload
         env: *signing-secrets
