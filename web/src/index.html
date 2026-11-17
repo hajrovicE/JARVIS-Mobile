@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <title>JARVIS</title>
+  <meta name="description" content="Telefonda, internete veri göndermeden çalışan Türkçe JARVIS asistanı.">
+  <meta name="theme-color" content="#0b0d12">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="JARVIS">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="icon" type="image/png" href="icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <h1>JARVIS</h1>
+    <span id="engine-badge" class="badge">Model yok</span>
+  </header>
+
+  <main>
+    <section id="tab-chat" class="tab active" aria-label="Sohbet">
+      <div id="messages" class="messages" aria-live="polite">
+        <div class="msg system" id="welcome">
+          Merhaba. Sorularınız bu telefonda çalışan modelle yanıtlanır; yazdıklarınız bir sunucuya gönderilmez.
+          İlk kez kullanıyorsanız <b>AI</b> sekmesinden bir model indirin.
+          Komutlar: <code>hatırla ki …</code>, <code>ne hatırlıyorsun</code>, <code>unut &lt;kimlik&gt;</code>,
+          <code>öğret: konu = bilgi</code>, <code>geçmiş</code>, <code>verilerimi dışa aktar</code>.
+        </div>
+      </div>
+      <div id="progress" class="progress" hidden>
+        <span id="progress-text">JARVIS düşünüyor…</span>
+        <button id="cancel" type="button" class="ghost">İptal</button>
+      </div>
+      <form id="composer" class="composer" autocomplete="off">
+        <textarea id="input" rows="1" placeholder="Bir şey sorun veya &quot;hatırla ki …&quot; yazın" aria-label="Mesaj"></textarea>
+        <button id="send" type="submit" aria-label="Gönder">➤</button>
+      </form>
+    </section>
+
+    <section id="tab-memory" class="tab" aria-label="Hafıza">
+      <h2>Kişisel hafıza</h2>
+      <p class="hint">Burada yaptığınız değişiklikler hemen uygulanır. Veriler yalnızca bu telefonda, bu tarayıcıda saklanır ve şifrelenmez.</p>
+      <ul id="memory-list" class="list"></ul>
+      <form id="memory-add" class="row">
+        <input id="memory-new" placeholder="Yeni bilgi (ör. kahveyi sade içerim)">
+        <button type="submit">Ekle</button>
+      </form>
+      <h2>Öğrendikleri</h2>
+      <ul id="learning-list" class="list"></ul>
+      <div class="row wrap">
+        <button id="export" type="button">Verilerimi dışa aktar</button>
+        <button id="delete-all" type="button" class="danger">Tüm verileri sil</button>
+      </div>
+    </section>
+
+    <section id="tab-history" class="tab" aria-label="Geçmiş">
+      <h2>Konuşma geçmişi</h2>
+      <p class="hint">Siz silene kadar saklanır. Modele yalnızca bağlam penceresine sığan son kısmı gönderilir.</p>
+      <ul id="history-list" class="list"></ul>
+    </section>
+
+    <section id="tab-ai" class="tab" aria-label="Yerel yapay zekâ">
+      <h2>Yerel model</h2>
+      <p id="model-status" class="status">Model yüklenmedi.</p>
+      <div id="download-box" class="progress-bar" hidden><div id="download-fill"></div><span id="download-text"></span></div>
+      <div id="model-choices" class="stack"></div>
+      <label class="file">
+        <span>Telefondaki GGUF dosyasını seç</span>
+        <input id="model-file" type="file">
+      </label>
+      <button id="model-delete" type="button" class="danger">Kayıtlı modeli sil</button>
+      <p class="hint">Model bir kez indirilir ve telefonda saklanır; sonra internet olmadan çalışır.
+        Model dosyası yalnızca Hugging Face'ten indirilir; sorularınız ve hafızanız hiçbir yere gönderilmez.</p>
+
+      <h2>Sahibin davranış kuralları</h2>
+      <textarea id="owner-instructions" rows="5" placeholder="Boş bırakırsanız modele ek talimat verilmez."></textarea>
+
+      <h2>Üretim ayarları</h2>
+      <div class="grid">
+        <label>Yanıt token bütçesi <input id="max-tokens" type="number" inputmode="numeric" min="1"></label>
+        <label>Bağlam penceresi <input id="context-tokens" type="number" inputmode="numeric" min="256"></label>
+        <label>Sıcaklık <input id="temperature" type="number" inputmode="decimal" step="0.1" min="0"></label>
+        <label>Top-p <input id="top-p" type="number" inputmode="decimal" step="0.05" min="0.01" max="1"></label>
+      </div>
+      <label class="check"><input id="thinking" type="checkbox"> Düşünme modu (daha yavaş)</label>
+      <label class="check"><input id="show-reasoning" type="checkbox"> Düşünme adımlarını göster</label>
+      <label class="check"><input id="use-gpu" type="checkbox"> GPU (WebGPU) kullan — deneysel</label>
+      <label class="check"><input id="speak" type="checkbox"> Cevapları sesli oku</label>
+      <p class="hint">Bağlam penceresi ve GPU ayarı bir sonraki soruda modeli yeniden yükler. Büyük bağlam daha fazla bellek ister; iPhone belleği yetmezse sayfa yeniden açılır, o zaman bağlamı küçültün.</p>
+
+      <h2>Durum</h2>
+      <ul class="facts">
+        <li>Çıkarım bu cihazda yapılır; bulut sağlayıcısı yoktur.</li>
+        <li>Sesli giriş için klavyedeki mikrofon tuşunu kullanın (iOS dikte özelliği).</li>
+        <li>Konuşmacı kimlik doğrulaması: ETKİN DEĞİL.</li>
+        <li>Web arama ve telefon kontrolü: bağlı değil.</li>
+        <li id="runtime-info">Çalışma modu: henüz yüklenmedi.</li>
+      </ul>
+    </section>
+  </main>
+
+  <nav class="tabs" aria-label="Sekmeler">
+    <button data-tab="chat" class="active">Sohbet</button>
+    <button data-tab="memory">Hafıza</button>
+    <button data-tab="history">Geçmiş</button>
+    <button data-tab="ai">AI</button>
+  </nav>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
