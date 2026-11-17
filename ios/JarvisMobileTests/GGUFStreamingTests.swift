@@ -1,11 +1,41 @@
 import Foundation
 import XCTest
 import JarvisCore
+import LlamaSwift
 @testable import JarvisMobile
 
 /// Actual production native streaming against real weights, never a stub answer.
 /// Simulator results are CPU checks and cannot certify iPhone Metal/thermal/audio.
 final class GGUFStreamingTests: XCTestCase, @unchecked Sendable {
+    func testNativeRepetitionPenaltyChangesActualLogits() async throws {
+        let sampler = try XCTUnwrap(llama_sampler_init_penalties(3, 2, 2, 0, 0))
+        defer { llama_sampler_free(sampler) }
+        llama_sampler_accept(sampler, 0)
+        var candidates = [llama_token_data(id: 0, logit: 8, p: 0), llama_token_data(id: 1, logit: 6, p: 0)]
+        candidates.withUnsafeMutableBufferPointer { buffer in
+            var data = llama_token_data_array(data: buffer.baseAddress, size: buffer.count, selected: -1, sorted: false)
+            llama_sampler_apply(sampler, &data)
+        }
+        XCTAssertEqual(candidates[0].logit, 4)
+        XCTAssertEqual(candidates[1].logit, 6)
+    }
+
+    func testRealRepetitionSettingsArePerTurnAndOwnerPromptIsUnchanged() async throws {
+        let file = try model()
+        let runtime = GGUFInferenceRuntime(maxNewTokens: 3, contextLength: 512,
+            ownerInstructions: "Sahibin talimatı", temperature: 0, cpuThreads: 2,
+            repetitionPenalty: 1.12, repetitionWindow: 4096)
+        let first = try await runtime.generateDetailed(prompt: "Merhaba /no_think", modelURL: file)
+        let second = try await runtime.generateDetailed(prompt: "Merhaba /no_think", modelURL: file)
+        XCTAssertEqual(first.repetitionPenalty, 1.12)
+        XCTAssertEqual(first.requestedRepetitionWindow, 4096)
+        XCTAssertEqual(first.repetitionWindow, first.effectiveContext)
+        XCTAssertEqual(first.text, second.text)
+        XCTAssertTrue(second.metrics.warmModel)
+        XCTAssertTrue(first.renderedPrompt.contains("Sahibin talimatı"))
+        await runtime.unload()
+    }
+
     private func model() throws -> URL {
         let bundle = Bundle(for: GGUFStreamingTests.self)
         if let model = bundle.url(forResource: "model", withExtension: "gguf", subdirectory: "Fixtures") { return model }

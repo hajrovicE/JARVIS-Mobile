@@ -48,3 +48,7 @@ Upload sonrası App Store Connect → TestFlight'ta işleme/kriptografi durumunu
 - Bu hazırlık Apple üyeliği, gerçek imzalama, upload veya App Review başarısı kanıtı değildir. İmzalı yol hesap sahibi gerekli adımları tamamladıktan sonra ayrıca doğrulanmalıdır.
 
 Privacy manifest'te UserDefaults için `CA92.1` (uygulamanın kendi tercihleri), FileTimestamp için `C617.1` (uygulamanın kendi container dosyaları) gerekçeleri ve tracking=false belirtilir. Manifest, App Store Connect gizlilik etiketlerini kendiliğinden doldurmaz. AI sunucusu/model sağlayıcısına açık onayla gönderilen metin/hafıza ve sağlayıcının saklama politikası, hesap sahibinin gizlilik beyanında ayrıca değerlendirilmelidir.
+
+## İmza öncesi archive ve kabul paketi
+
+Güncel `build-only` akışı imzasız `.xcarchive`, dSYMs ve makine okunabilir hazırlık raporu da üretir. [İmza öncesi hazırlık ve fiziksel iPhone kabul adımları](PRE_SIGN_READINESS.md). Mobil sohbet tamamen yereldir; eski relay modülü mobil konuşma yoluna bağlı değildir. App Store gizlilik beyanı bu güncel veri akışına göre hazırlanmalıdır.

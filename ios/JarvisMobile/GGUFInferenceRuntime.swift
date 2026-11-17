@@ -46,6 +46,9 @@ struct GGUFGeneration: Sendable {
     let threads: Int
     let temperature: Float
     let topP: Float
+    let repetitionPenalty: Float
+    let requestedRepetitionWindow: Int
+    let repetitionWindow: Int
     let gpuOffloadRequested: Bool
     let metrics: LocalRuntimeMetrics
 }
@@ -205,6 +208,8 @@ actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
         let topP: Float
         let cpuThreads: Int
         let preferFastResponse: Bool
+        let repetitionPenalty: Float
+        let repetitionWindow: Int
     }
     private var settings: Settings
     private var resident: ResidentGGUFModel?
@@ -215,19 +220,23 @@ actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
 
     init(maxNewTokens: Int = 2048, contextLength: Int32 = 8192,
          ownerInstructions: String = "", temperature: Float = 0.8, topP: Float = 1.0,
-         cpuThreads: Int = 0, preferFastResponse: Bool = false) {
+         cpuThreads: Int = 0, preferFastResponse: Bool = false,
+         repetitionPenalty: Float = 1, repetitionWindow: Int = 64) {
         settings = Settings(maxNewTokens: maxNewTokens, contextLength: contextLength,
             ownerInstructions: ownerInstructions, temperature: temperature, topP: topP,
-            cpuThreads: cpuThreads, preferFastResponse: preferFastResponse)
+            cpuThreads: cpuThreads, preferFastResponse: preferFastResponse,
+            repetitionPenalty: repetitionPenalty, repetitionWindow: repetitionWindow)
     }
 
     /// Updates affect the next turn; an active turn retains its exact snapshot.
     func configure(maxNewTokens: Int, contextLength: Int32, ownerInstructions: String,
                    temperature: Float, topP: Float, cpuThreads: Int,
-                   preferFastResponse: Bool = false) {
+                   preferFastResponse: Bool = false,
+                   repetitionPenalty: Float = 1, repetitionWindow: Int = 64) {
         settings = Settings(maxNewTokens: maxNewTokens, contextLength: contextLength,
             ownerInstructions: ownerInstructions, temperature: temperature, topP: topP,
-            cpuThreads: cpuThreads, preferFastResponse: preferFastResponse)
+            cpuThreads: cpuThreads, preferFastResponse: preferFastResponse,
+            repetitionPenalty: repetitionPenalty, repetitionWindow: repetitionWindow)
     }
 
     /// Call on backgrounding, memory warning or model changes. The active local
@@ -303,9 +312,12 @@ actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
         let maxNewTokens = settings.maxNewTokens, contextLength = settings.contextLength
         let ownerInstructions = settings.ownerInstructions, temperature = settings.temperature
         let topP = settings.topP, cpuThreads = settings.cpuThreads
+        let repetitionPenalty = settings.repetitionPenalty, repetitionWindow = settings.repetitionWindow
         guard maxNewTokens > 0, maxNewTokens < Int(Int32.max), contextLength > 0,
               temperature.isFinite, temperature >= 0, topP.isFinite, topP > 0, topP <= 1,
               cpuThreads >= 0, cpuThreads <= Int(Int32.max),
+              repetitionPenalty.isFinite, repetitionPenalty > 0,
+              repetitionWindow >= 0, repetitionWindow <= Int(Int32.max),
               !ownerInstructions.utf8.contains(0), !prompt.utf8.contains(0) else {
             throw LocalModelError.invalidSettings
         }
@@ -440,6 +452,17 @@ actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
             throw LocalModelError.runtimeUnavailable
         }
         defer { llama_sampler_free(sampler) }
+        // A turn cannot contain more tokens than its context. Keep output-only
+        // repetition state in this fresh sampler; do not penalize owner prompts.
+        // b10549 llama_sampler_sample() already accepts the sampled token once.
+        let appliedRepetitionWindow = min(repetitionWindow, effectiveContext)
+        if repetitionPenalty != 1 && appliedRepetitionWindow > 0 {
+            guard let penalties = llama_sampler_init_penalties(llama_vocab_n_tokens(vocabulary),
+                Int32(appliedRepetitionWindow), repetitionPenalty, 0, 0) else {
+                throw LocalModelError.runtimeUnavailable
+            }
+            llama_sampler_chain_add(sampler, penalties)
+        }
         if temperature == 0 {
             llama_sampler_chain_add(sampler, llama_sampler_init_greedy())
         } else {
@@ -524,7 +547,9 @@ actor GGUFInferenceRuntime: OnDeviceInferenceRuntime {
         return GGUFGeneration(text: answer, renderedPrompt: renderedPrompt,
             promptTokens: Int(nTokens), generatedTokens: generatedTokens,
             requestedMaxTokens: maxNewTokens, effectiveContext: effectiveContext,
-            threads: threads, temperature: temperature, topP: topP, gpuOffloadRequested: heldModel.gpuOffloadRequested,
+            threads: threads, temperature: temperature, topP: topP,
+            repetitionPenalty: repetitionPenalty, requestedRepetitionWindow: repetitionWindow,
+            repetitionWindow: appliedRepetitionWindow, gpuOffloadRequested: heldModel.gpuOffloadRequested,
             metrics: measured)
     }
 }

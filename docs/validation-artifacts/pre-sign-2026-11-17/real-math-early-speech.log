@@ -1,0 +1,2 @@
+SPEECH_PROBE visible_json="17 çarpı 23 işleminin sonucu:  \n17 × 23 = **391**\n\n20 eksi 7 işleminin sonucu:  \n20 − 7 = **13**" raw_tokens=51 sentences=1 fast_directive=true
+PASS real speech sentence ready before model completion: first_sentence_s=17.92592046700156 generation_s=21.893611441999383 sentences_before_completion=1

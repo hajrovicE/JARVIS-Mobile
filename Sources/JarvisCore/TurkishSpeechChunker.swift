@@ -78,6 +78,8 @@ public enum TurkishSpeechChunker {
 /// Incremental speech-only rendering. A trailing period is held until its
 /// following character establishes a boundary; partial abbreviations, URLs,
 /// decimals, thought tags and code fences cannot cause premature speech.
+/// A completed paragraph also provides a reliable phrase boundary, even when
+/// the model formats an answer as unpunctuated prose or mathematical blocks.
 /// The model's stored/displayed response is not modified by this renderer.
 public struct TurkishSpeechStream: Sendable {
     private var source = ""
@@ -179,6 +181,19 @@ public struct TurkishSpeechStream: Sendable {
         var index = 0
         while index < chars.count {
             defer { index += 1 }
+            if chars[index].isNewline {
+                var end = index + 1
+                while end < chars.count && (chars[end] == " " || chars[end] == "\t") { end += 1 }
+                if end < chars.count && chars[end].isNewline {
+                    end += 1
+                    let paragraph = normalized(String(chars[start..<index]))
+                    if !paragraph.isEmpty { result += TurkishSpeechChunker.chunks(paragraph) }
+                    start = end
+                    consumed = end
+                    index = end - 1
+                    continue
+                }
+            }
             guard ".!?".contains(chars[index]) else { continue }
             if chars[index] == "." {
                 let prefix = String(chars[start..<index])
@@ -190,7 +205,7 @@ public struct TurkishSpeechStream: Sendable {
                 if !word.isEmpty, word.count <= 2, word.allSatisfy(\.isNumber) { continue }
             }
             var end = index + 1
-            while end < chars.count && ".!?\"'”’)]}".contains(chars[end]) { end += 1 }
+            while end < chars.count && ".!?\"'”’)]}*_".contains(chars[end]) { end += 1 }
             guard end < chars.count || final else { continue }
             guard end == chars.count || chars[end].isWhitespace else { continue }
             let sentence = normalized(String(chars[start..<end]))
@@ -204,7 +219,9 @@ public struct TurkishSpeechStream: Sendable {
     }
 
     private func normalized(_ input: String) -> String {
-        input.components(separatedBy: .whitespacesAndNewlines)
+        let plain = input.replacingOccurrences(of: #"(\*\*|__)(.+?)\1"#,
+            with: "$2", options: .regularExpression)
+        return plain.components(separatedBy: .whitespacesAndNewlines)
             .filter { !$0.isEmpty }.joined(separator: " ")
     }
 }

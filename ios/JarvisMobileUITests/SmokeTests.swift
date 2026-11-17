@@ -85,6 +85,31 @@ final class SmokeTests: XCTestCase {
         // rather than presenting an editable settings field as proof of model inference.
     }
 
+    @MainActor
+    func testOwnerRepetitionSettingsPersistAcrossRelaunch() throws {
+        let app = XCUIApplication()
+        app.launch()
+        if app.buttons["onboarding.start"].waitForExistence(timeout: 3) { app.buttons["onboarding.start"].tap() }
+        XCTAssertTrue(app.tabBars.buttons["AI"].waitForExistence(timeout: 10))
+        app.tabBars.buttons["AI"].tap()
+        for (id, value) in [("model.repetitionPenalty", "2"), ("model.repetitionWindow", "96")] {
+            let field = app.textFields[id]
+            XCTAssertTrue(reveal(field, in: app))
+            field.tap()
+            field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: (field.value as? String ?? "").count) + value)
+        }
+        app.tabBars.buttons["Durum"].tap()
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.tabBars.buttons["AI"].waitForExistence(timeout: 10))
+        app.tabBars.buttons["AI"].tap()
+        for (id, value) in [("model.repetitionPenalty", "2"), ("model.repetitionWindow", "96")] {
+            let field = app.textFields[id]
+            XCTAssertTrue(reveal(field, in: app))
+            XCTAssertEqual(field.value as? String, value)
+        }
+    }
+
     /// Settings may opt into the next explicitly started conversation; they
     /// must never be treated as a microphone-start gesture themselves.
     @MainActor

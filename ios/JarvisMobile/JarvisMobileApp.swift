@@ -64,6 +64,8 @@ struct RootView: View {
   @AppStorage("jarvis.model.contextTokens") private var modelContextTokens = 8192
   @AppStorage("jarvis.model.temperature") private var modelTemperature = 0.8
   @AppStorage("jarvis.model.topP") private var modelTopP = 1.0
+  @AppStorage("jarvis.model.repetitionPenalty") private var modelRepetitionPenalty = 1.0
+  @AppStorage("jarvis.model.repetitionWindow") private var modelRepetitionWindow = 64
   @AppStorage("jarvis.model.cpuThreads") private var modelCPUThreads = 0
   @State private var busy = false
   @Environment(\.scenePhase) private var scenePhase
@@ -431,6 +433,13 @@ struct RootView: View {
           TextField("CPU iş parçacıkları (0 = otomatik)", value: $modelCPUThreads, format: .number)
             .keyboardType(.numberPad)
             .accessibilityIdentifier("model.cpuThreads")
+          TextField("Tekrar katsayısı (1 = kapalı)", value: $modelRepetitionPenalty, format: .number)
+            .keyboardType(.decimalPad)
+            .accessibilityIdentifier("model.repetitionPenalty")
+          TextField("Tekrar penceresi (token, 0 = kapalı)", value: $modelRepetitionWindow, format: .number)
+            .keyboardType(.numberPad)
+            .accessibilityIdentifier("model.repetitionWindow")
+          Text("1'den büyük tekrar katsayısı tekrarı azaltabilir; doğru alıntıları da etkileyebilir. Varsayılan 1, mevcut model davranışını korur. Pencere en fazla o turun bağlamı kadar uygulanır.")
           Text("Uygulama yapay karakter/token üst limiti koymaz. Modelin bağlam kapasitesi ve iPhone belleği aşılırsa çıkarım hata verebilir.")
         }
         Section("Çalışma biçimi") {
@@ -686,7 +695,8 @@ struct RootView: View {
             temperature: Float(modelTemperature),
             topP: Float(modelTopP),
             cpuThreads: modelCPUThreads,
-            preferFastResponse: quickMode && !budget.needsDetail)
+            preferFastResponse: quickMode && !budget.needsDetail,
+            repetitionPenalty: Float(modelRepetitionPenalty), repetitionWindow: modelRepetitionWindow)
         provider = LocalAIProvider(manager: manager, manifest: manifest,
             runtime: inferenceRuntime)
         scope = "local:" + manifest.identifier

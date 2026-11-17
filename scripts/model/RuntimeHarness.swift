@@ -17,7 +17,8 @@ import Glibc
             if CommandLine.arguments.count >= 3, CommandLine.arguments[2] == "--speech-only" {
                 try await proveEarlySpeechSentence(runtime: GGUFInferenceRuntime(),
                     model: URL(fileURLWithPath: CommandLine.arguments[1]),
-                    prompt: CommandLine.arguments.count > 3 ? CommandLine.arguments[3] : "Söylediğim iki cümleyi aynen tekrarla: Merhaba. Görüşmek üzere.")
+                    prompt: CommandLine.arguments.count > 3 ? CommandLine.arguments[3] : "Söylediğim iki cümleyi aynen tekrarla: Merhaba. Görüşmek üzere.",
+                    repetitionPenalty: CommandLine.arguments.count > 4 ? Float(CommandLine.arguments[4]) ?? .nan : 1)
             } else { try await verify() }
         }
         catch {
@@ -103,10 +104,10 @@ import Glibc
     }
 
     static func proveEarlySpeechSentence(runtime: GGUFInferenceRuntime, model: URL,
-        prompt: String = "Söylediğim iki cümleyi aynen tekrarla: Merhaba. Görüşmek üzere.") async throws {
+        prompt: String = "Söylediğim iki cümleyi aynen tekrarla: Merhaba. Görüşmek üzere.", repetitionPenalty: Float = 1) async throws {
         await runtime.configure(maxNewTokens: 96, contextLength: 1024,
             ownerInstructions: "Türkçe yanıt ver.", temperature: 0, topP: 1, cpuThreads: 2,
-            preferFastResponse: true)
+            preferFastResponse: true, repetitionPenalty: repetitionPenalty)
         let speech = SpeechTimingProbe()
         let answer = try await runtime.generateDetailed(
             prompt: prompt,
@@ -117,7 +118,7 @@ import Glibc
         let visibleJSON = String(decoding: try JSONEncoder().encode(VisibleResponseFilter.answer(from: answer.text)), as: UTF8.self)
         print("SPEECH_PROBE visible_json=\(visibleJSON) raw_tokens=\(answer.generatedTokens) sentences=\(timing.count) fast_directive=\(answer.renderedPrompt.contains("/no_think"))")
         try require(timing.count > 0 && (timing.firstSentenceSeconds ?? .infinity) < timing.completedSeconds,
-            "A real sentence was not ready for TTS before generation completed")
+            "A real sentence or completed paragraph was not ready for TTS before generation completed")
         print("PASS real speech sentence ready before model completion: first_sentence_s=\(timing.firstSentenceSeconds ?? -1) generation_s=\(answer.metrics.totalSeconds) sentences_before_completion=\(timing.count)")
     }
 

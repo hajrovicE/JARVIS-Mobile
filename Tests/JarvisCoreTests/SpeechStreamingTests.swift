@@ -3,6 +3,49 @@ import XCTest
 @testable import JarvisCore
 
 final class SpeechStreamingTests: XCTestCase, @unchecked Sendable {
+    func testCompletedMathParagraphSpeaksWhileNextResultIsStillGenerating() async {
+        var stream = TurkishSpeechStream()
+        let first = "17 çarpı 23 işleminin sonucu:  \n17 × 23 = **391**"
+        XCTAssertEqual(stream.append(first + "\n"), [])
+        XCTAssertEqual(stream.append("\n20 eksi 7"), ["17 çarpı 23 işleminin sonucu: 17 × 23 = 391"])
+        XCTAssertEqual(stream.append(" işleminin sonucu:  \n20 − 7 = **13**"), [])
+        XCTAssertEqual(stream.finish(), ["20 eksi 7 işleminin sonucu: 20 − 7 = 13"])
+        XCTAssertEqual(stream.finish(), [])
+    }
+
+    func testClosedBoldSentenceIsReadyWithoutReadingFormattingMarkers() async {
+        var stream = TurkishSpeechStream()
+        XCTAssertEqual(stream.append("**Merhaba."), [])
+        XCTAssertEqual(stream.append("** İkinci"), ["Merhaba."])
+        XCTAssertEqual(stream.finish(), ["İkinci"])
+    }
+
+    func testSingleNewlinesDoNotCutWrappedFactsOrNumbers() async {
+        var stream = TurkishSpeechStream()
+        XCTAssertEqual(stream.append("Sonuç:\n-7\nve 3.14 ölçüsü"), [])
+        XCTAssertEqual(stream.finish(), ["Sonuç: -7 ve 3.14 ölçüsü"])
+    }
+
+    func testParagraphBoundariesAcrossCRLFAndWhitespaceNeverDuplicateText() async {
+        var stream = TurkishSpeechStream()
+        var phrases: [String] = []
+        for part in ["İğde **önemli**\r\n", "\t", "\r\n", "\r\n", "__Ölçü__ 2**3", "\n\n", "Son"] {
+            phrases += stream.append(part)
+        }
+        phrases += stream.finish()
+        XCTAssertEqual(phrases, ["İğde önemli", "Ölçü 2**3", "Son"])
+    }
+
+    func testCodeAndThoughtParagraphsNeverBecomeEarlySpeech() async {
+        for input in ["<think>Özel\n\nmetin.</think>Yanıt\n\nSon", "```swift\n\nprint(1)\n\n```Yanıt\n\nSon"] {
+            var stream = TurkishSpeechStream()
+            var phrases: [String] = []
+            for character in input { phrases += stream.append(String(character)) }
+            phrases += stream.finish()
+            XCTAssertEqual(phrases, ["Yanıt", "Son"])
+        }
+    }
+
     func testSentenceStartsBeforeWholeResponseButWaitsForBoundaryLookahead() async {
         var stream = TurkishSpeechStream()
         XCTAssertEqual(stream.append("Merhaba."), [])

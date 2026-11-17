@@ -100,6 +100,9 @@ final class GGUFInferenceTests: XCTestCase {
     func testInvalidSettingsAreNotSilentlyClamped() async throws {
         let unused = URL(fileURLWithPath: "/unused-model.gguf")
         let runtimes = [
+            GGUFInferenceRuntime(repetitionPenalty: .nan),
+            GGUFInferenceRuntime(repetitionPenalty: 0),
+            GGUFInferenceRuntime(repetitionWindow: -1),
             GGUFInferenceRuntime(maxNewTokens: 0),
             GGUFInferenceRuntime(contextLength: 0),
             GGUFInferenceRuntime(temperature: .nan),
