@@ -1,0 +1,49 @@
+name: Publish small Qwen3 0.6B Q4 GGUF for phone download
+# ~400 MB model for iPhones whose browser memory cannot hold larger models.
+on:
+  workflow_dispatch:
+  push:
+    branches: ['claude/**']
+    paths: ['.github/workflows/model-release-tiny.yml']
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TAG: model-qwen3-0.6b-q4
+    steps:
+      - name: Download, verify and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Already published." >> "$GITHUB_STEP_SUMMARY"; exit 0
+          fi
+          SOURCE=""
+          for src in \
+            "unsloth/Qwen3-0.6B-GGUF Qwen3-0.6B-Q4_K_M.gguf" \
+            "lmstudio-community/Qwen3-0.6B-GGUF Qwen3-0.6B-Q4_K_M.gguf" \
+            "bartowski/Qwen_Qwen3-0.6B-GGUF Qwen_Qwen3-0.6B-Q4_K_M.gguf"; do
+            set -- $src
+            if curl -fL --retry 3 -o model.gguf "https://huggingface.co/$1/resolve/main/$2"; then
+              SOURCE="$1"; FILE="$2"; break
+            fi
+          done
+          test -n "$SOURCE"
+          OUT=Qwen3-0.6B-Q4_K_M.gguf
+          mv model.gguf "$OUT"
+          head -c 4 "$OUT" | grep -q GGUF
+          SIZE=$(stat -c %s "$OUT")
+          test "$SIZE" -lt 600000000
+          SUM="$(sha256sum "$OUT" | cut -d' ' -f1)"
+          curl -fL --retry 3 -o LICENSE-Qwen3.txt https://huggingface.co/Qwen/Qwen3-0.6B/resolve/main/LICENSE
+          printf '%s\n\n%s\n\n%s\n' \
+            "**Qwen3 0.6B Q4_K_M (~$((SIZE / 1000000)) MB)**: JARVIS web uygulaması için en hafif model. Kaynak: \`$SOURCE/$FILE\`. SHA-256: \`$SUM\`. Lisans: Apache-2.0 (Qwen)." \
+            "**iPhone:** Safari'de dosya bağlantısına dokunun → İndir. Dosyalar → İndirilenler'e kaydedilir." \
+            "**JARVIS:** AI sekmesi → Telefondaki GGUF dosyasını seç → dosyayı seçin." > notes.md
+          gh release create "$TAG" "$OUT" LICENSE-Qwen3.txt --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" --prerelease --title "Qwen3 0.6B Q4 GGUF (en hafif, telefona indirme)" --notes-file notes.md
+          echo "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$OUT" >> "$GITHUB_STEP_SUMMARY"
