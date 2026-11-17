@@ -1,0 +1,5 @@
+Source 3ff55d7; run 44045597938; real numeric-keyboard navigation failure, then fixed with Done control
+2026-11-17T08:31:41.1217250Z 	 Executed 197 tests, with 0 failures (0 unexpected) in 162.361 (163.100) seconds
+2026-11-17T08:31:41.1245600Z 	 Executed 197 tests, with 0 failures (0 unexpected) in 162.361 (163.102) seconds
+2026-11-17T08:34:07.8270020Z /Users/runner/work/JARVIS-Mobile/JARVIS-Mobile/ios/JarvisMobileUITests/SmokeTests.swift:108: error: -[JarvisMobileUITests.SmokeTests testOwnerRepetitionSettingsPersistAcrossRelaunch] : Failed to failed to scroll to visible (by AX action) Button, {{243.0, 792.0}, {77.0, 48.0}}, identifier: 'info.circle', label: 'Durum', error: Error kAXErrorCannotComplete performing AXAction kAXScrollToVisibleAction on element AX element pid: 27985, elementOrHash.elementID: 4351003344.16. (Underlying Error: Error kAXErrorCannotComplete performing AXAction kAXScrollToVisibleAction on element AX element pid: 27985, elementOrHash.elementID: 4351003344.16)
+2026-11-17T08:36:17.1348310Z ** TEST FAILED **

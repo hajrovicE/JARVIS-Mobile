@@ -31,3 +31,5 @@ Ayrıntılar: [mimari](docs/ARCHITECTURE.md), [gereksinimler](docs/PRD.md), [yol
 JARVIS'in iPhone sohbeti artık harici API yerine yerel GGUF çıkarımını hedefler. Başlangıç ağırlıklarını kullanabilir veya llama.cpp tarafından desteklenen sohbet şablonuna sahip GGUF dosyasını seçebilirsiniz. Kurulum, sınırlamalar ve eğitim süreci: [docs/JARVIS_OWN_MODEL.md](docs/JARVIS_OWN_MODEL.md). Model kurulmadığında uygulama sahte cevap üretmez.
 
 PR #20 yerel akış ve Türkçe konuşma altyapısı: [kapsam](docs/FAST_NATURAL_OFFLINE_CONVERSATION.md), [gerçek testler ve ölçümler](docs/PR20_VALIDATION.md). Simulator üzerinde gerçek GGUF çıkarımı, birim/UI testleri ve imzasız iPhone SDK derlemeleri geçti. Fiziksel iPhone Metal ve canlı ses kabulü ayrıca doğrulanmalıdır.
+
+İmza öncesi son hazırlık: [doğrulama ve archive](docs/PRE_SIGN_VALIDATION.md), [iPhone kabul adımları](docs/PRE_SIGN_READINESS.md), [yayımlanmamış beta notları](docs/BETA_RELEASE_NOTES_TR.md).

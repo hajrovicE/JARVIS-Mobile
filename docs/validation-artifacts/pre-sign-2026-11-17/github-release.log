@@ -1,0 +1,5 @@
+Source 810a6c1; Release archive 0.3.0 (8), run 44048601466; SUCCESS
+2026-11-17T08:40:44.6026520Z 	 Executed 180 tests, with 0 failures (0 unexpected) in 4.263 (4.276) seconds
+2026-11-17T08:40:44.6029510Z 	 Executed 180 tests, with 0 failures (0 unexpected) in 4.263 (4.279) seconds
+2026-11-17T08:45:10.9982230Z ** ARCHIVE SUCCEEDED **
+2026-11-17T08:45:11.6242930Z Unsigned archive, native runtime and debug symbols verified; signing was not attempted.

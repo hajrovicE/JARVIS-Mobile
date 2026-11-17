@@ -1,0 +1,9 @@
+Source bb94c46; run 44043143521; failure retained, not counted as a pass
+2026-11-17T08:12:11.1562580Z 	 Executed 197 tests, with 0 failures (0 unexpected) in 124.586 (125.490) seconds
+2026-11-17T08:12:11.1563550Z 	 Executed 197 tests, with 0 failures (0 unexpected) in 124.586 (125.491) seconds
+2026-11-17T08:14:27.2032430Z     t =    16.79s         Failed: Neither element nor any descendant has keyboard focus. Event dispatch snapshot: TextField, {{20.0, 772.3}, {362.0, 44.0}}, identifier: 'model.repetitionPenalty', placeholderValue: 'Tekrar katsayısı (1 = kapalı)', value: 1
+2026-11-17T08:14:29.3915030Z     t =    18.98s             Failed: Neither element nor any descendant has keyboard focus. Event dispatch snapshot: TextField, {{20.0, 772.3}, {362.0, 44.0}}, identifier: 'model.repetitionPenalty', placeholderValue: 'Tekrar katsayısı (1 = kapalı)', value: 1
+2026-11-17T08:14:31.6657710Z     t =    21.26s             Failed: Neither element nor any descendant has keyboard focus. Event dispatch snapshot: TextField, {{20.0, 772.3}, {362.0, 44.0}}, identifier: 'model.repetitionPenalty', placeholderValue: 'Tekrar katsayısı (1 = kapalı)', value: 1
+2026-11-17T08:14:32.4366290Z /Users/runner/work/JARVIS-Mobile/JARVIS-Mobile/ios/JarvisMobileUITests/SmokeTests.swift:99: error: -[JarvisMobileUITests.SmokeTests testOwnerRepetitionSettingsPersistAcrossRelaunch] : Failed to synthesize event: Neither element nor any descendant has keyboard focus. Event dispatch snapshot: TextField, {{20.0, 772.3}, {362.0, 44.0}}, identifier: 'model.repetitionPenalty', placeholderValue: 'Tekrar katsayısı (1 = kapalı)', value: 1
+2026-11-17T08:14:33.1386620Z Test Case '-[JarvisMobileUITests.SmokeTests testOwnerRepetitionSettingsPersistAcrossRelaunch]' failed (22.289 seconds).
+2026-11-17T08:16:18.1426390Z ** TEST FAILED **

@@ -1,0 +1,16 @@
+Source 810a6c1; run 44048851016; XCTest 197 and UI 4, zero failures/skips
+2026-11-17T08:42:16.5028410Z 	 Executed 4 tests, with 0 failures (0 unexpected) in 0.003 (0.003) seconds
+2026-11-17T08:42:16.6668960Z 	 Executed 180 tests, with 0 failures (0 unexpected) in 2.032 (2.040) seconds
+2026-11-17T08:42:16.6669780Z 	 Executed 180 tests, with 0 failures (0 unexpected) in 2.032 (2.042) seconds
+2026-11-17T08:46:13.3878610Z ** BUILD SUCCEEDED **
+2026-11-17T08:47:11.2735320Z ** BUILD SUCCEEDED **
+2026-11-17T08:53:54.3499820Z 	 Executed 4 tests, with 0 failures (0 unexpected) in 0.176 (0.207) seconds
+2026-11-17T08:55:56.3771560Z Test Case '-[JarvisMobileTests.GGUFStreamingTests testNativeRepetitionPenaltyChangesActualLogits]' passed (0.010 seconds).
+2026-11-17T08:56:19.2565520Z Test Case '-[JarvisMobileTests.GGUFStreamingTests testRealRepetitionSettingsArePerTurnAndOwnerPromptIsUnchanged]' passed (11.487 seconds).
+2026-11-17T08:56:51.3164550Z 	 Executed 197 tests, with 0 failures (0 unexpected) in 174.968 (177.260) seconds
+2026-11-17T08:56:51.3374380Z 	 Executed 197 tests, with 0 failures (0 unexpected) in 174.968 (177.262) seconds
+2026-11-17T08:59:58.0953870Z Test Case '-[JarvisMobileUITests.SmokeTests testOwnerRepetitionSettingsPersistAcrossRelaunch]' passed (64.916 seconds).
+2026-11-17T09:01:03.8009040Z 	 Executed 4 tests, with 0 failures (0 unexpected) in 235.553 (235.557) seconds
+2026-11-17T09:01:03.8027150Z 	 Executed 4 tests, with 0 failures (0 unexpected) in 235.553 (235.558) seconds
+2026-11-17T09:01:03.8031250Z 	 Executed 4 tests, with 0 failures (0 unexpected) in 235.553 (235.560) seconds
+2026-11-17T09:01:05.9987980Z ** TEST SUCCEEDED **

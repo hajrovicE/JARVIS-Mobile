@@ -1,0 +1,2 @@
+SPEECH_PROBE visible_json="Merhaba. Görüşmek üzere.  \nMerhaba. Görüşmek üzere." raw_tokens=19 sentences=3 fast_directive=true
+PASS real speech sentence ready before model completion: first_sentence_s=6.968302497996774 generation_s=9.335877467994578 sentences_before_completion=3

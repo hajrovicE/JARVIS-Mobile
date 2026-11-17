@@ -1,0 +1,17 @@
+{
+  "source_sha": "810a6c10825bb566bb9ed9b4a0acae680ac38bcf",
+  "bundle_id": "com.jarvis.mobile",
+  "build_number": "8",
+  "marketing_version": "0.3.0",
+  "unsigned_archive_verified": true,
+  "debug_symbols_present": true,
+  "installable_ipa": false,
+  "testflight_upload_attempted": false,
+  "physical_device_acceptance": "not_verified",
+  "remaining": [
+    "Apple signing credentials and provisioning",
+    "Physical iPhone Metal, live speech and thermal acceptance"
+  ],
+  "independent_dsym_uuid_match": "248b5fe3-8a59-30ae-aeae-7e2f78c2aef5",
+  "artifact_id": 14312532963
+}

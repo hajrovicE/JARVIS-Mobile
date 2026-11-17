@@ -1,3 +1,7 @@
+# İmza öncesi güncel ek doğrulama — 17 Kasım 2026
+
+[Son hazırlık ve kanıtlar](PRE_SIGN_VALIDATION.md): `810a6c1` kaynağında Linux 178, macOS 180, iOS 197 ve UI 4 test başarılı. İmzasız archive 0.3.0 (8), dSYMs ve hazırlık JSON’u doğrulandı; Apple signing ve fiziksel cihaz kabulü yapılmadı.
+
 # Güncel PR #20 doğrulaması — 17 Kasım 2026
 
 [Akış, resident GGUF, Türkçe ses ve gerçek test/performans sonuçları](PR20_VALIDATION.md). `9aea7cc` kaynağında Linux 173, macOS 175, iOS hosted 190 ve UI 3 test; Simulator ve imzasız iPhone Debug/Release derlemeleri başarılıdır. Release paketi 0.3.0 (6) olarak açılıp doğrulandı. Açık model kalite hataları, imzalama ve fiziksel iPhone kabulü ayrıca raporlanır.
