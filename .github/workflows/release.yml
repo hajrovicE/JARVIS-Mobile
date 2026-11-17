@@ -43,6 +43,8 @@ jobs:
           swift --version
       - name: Core tests
         run: swift test
+      - name: Prepare pinned iPhone native runtime
+        run: scripts/native/prepare_apple_runtime.sh "$RUNNER_TEMP/jarvis-apple-native" --device-only
       - name: Generate iPhone project
         run: |
           brew install xcodegen

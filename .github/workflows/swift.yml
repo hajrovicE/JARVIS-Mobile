@@ -13,7 +13,7 @@ concurrency:
 jobs:
   test:
     runs-on: macos-15
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - name: Toolchain versions
@@ -31,17 +31,22 @@ jobs:
           set -o pipefail
           swift test -Xswiftc -swift-version -Xswiftc 6 2>&1 | tee core-tests.log
       - name: Install XcodeGen
-        run: brew install xcodegen
+        run: brew install xcodegen cmake ninja
       - name: Stage required real GGUF fixture
         run: |
           curl --fail --location --retry 3 --output ios/JarvisMobileTests/Fixtures/model.gguf 'https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF/resolve/daeb8e2d528a760970442092f6bf1e55c3b659eb/Qwen3-1.7B-Q4_K_M.gguf'
           printf '%s\n' 'Real inference is required for this CI run.' > ios/JarvisMobileTests/Fixtures/real-inference-required.txt
+      - name: Prepare pinned real simulator native runtime
+        run: |
+          set -o pipefail
+          scripts/native/prepare_apple_runtime.sh "$RUNNER_TEMP/jarvis-apple-native" 2>&1 | tee native-apple-build.log
+          echo "SIMULATOR_ARCH=$(uname -m)" >> "$GITHUB_ENV"
       - name: Generate iPhone project
         run: cd ios && xcodegen generate
       - name: Build simulator app
         run: |
           set -o pipefail
-          xcodebuild -project ios/JarvisMobile.xcodeproj -scheme JarvisMobile -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES build 2>&1 | tee simulator-build.log
+          xcodebuild -project ios/JarvisMobile.xcodeproj -scheme JarvisMobile -sdk iphonesimulator ARCHS="$SIMULATOR_ARCH" ONLY_ACTIVE_ARCH=YES -destination 'generic/platform=iOS Simulator' -derivedDataPath build CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES build 2>&1 | tee simulator-build.log
       - name: Build iPhone device SDK (unsigned)
         run: |
           set -o pipefail
@@ -62,7 +67,7 @@ jobs:
       - name: iOS storage migration, real inference, permissions and UI tests
         run: |
           set -o pipefail
-          xcodebuild -project ios/JarvisMobile.xcodeproj -scheme JarvisMobile -sdk iphonesimulator -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -derivedDataPath build -resultBundlePath TestResults.xcresult -parallel-testing-enabled NO -test-timeouts-enabled YES -default-test-execution-time-allowance 180 -maximum-test-execution-time-allowance 180 CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES SWIFT_ACTIVE_COMPILATION_CONDITIONS='$(inherited) JARVIS_REAL_INFERENCE_REQUIRED' test 2>&1 | tee ios-tests.log
+          xcodebuild -project ios/JarvisMobile.xcodeproj -scheme JarvisMobile -sdk iphonesimulator ARCHS="$SIMULATOR_ARCH" ONLY_ACTIVE_ARCH=YES -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -derivedDataPath build -resultBundlePath TestResults.xcresult -parallel-testing-enabled NO -test-timeouts-enabled YES -default-test-execution-time-allowance 180 -maximum-test-execution-time-allowance 180 CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES SWIFT_ACTIVE_COMPILATION_CONDITIONS='$(inherited) JARVIS_REAL_INFERENCE_REQUIRED' test 2>&1 | tee ios-tests.log
       - name: Collect simulator and unsigned device apps
         run: |
           ditto -c -k --sequesterRsrc --keepParent build/Build/Products/Debug-iphonesimulator/JarvisMobile.app JarvisMobile-simulator.zip
@@ -74,6 +79,7 @@ jobs:
           name: ios-validation-${{ github.sha }}
           path: |
             core-tests.log
+            native-apple-build.log
             simulator-build.log
             iphone-build.log
             ios-tests.log

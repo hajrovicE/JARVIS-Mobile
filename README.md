@@ -5,7 +5,8 @@ Türkçe, iPhone öncelikli SwiftUI asistanı. Güncel sahip tercihi: cihaz içi
 Swift 6.0+ ile `swift test`. iOS uygulaması için macOS, Xcode 16.4+ ve XcodeGen gerekir:
 
 ```sh
-brew install xcodegen
+brew install xcodegen cmake ninja
+scripts/native/prepare_apple_runtime.sh /tmp/jarvis-apple-native
 cd ios
 xcodegen generate
 open JarvisMobile.xcodeproj
