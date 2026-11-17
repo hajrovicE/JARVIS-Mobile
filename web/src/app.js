@@ -2,6 +2,8 @@ import { Wllama } from './vendor/wllama/index.js';
 import {
   STATE_KEY, SETTINGS_KEY, MODEL_CHOICES, routeCommand, executeCommand, parseState,
   parseSettings, normalizeSettings, buildMessages, stripReasoning, isGGUF, newId,
+  routeResearch, wikipediaSearchURL, wikipediaExtractURL, parseSearchIds, parseExtracts,
+  buildResearchMessages, addWebLearning, formatSources,
 } from './core.js';
 
 const WASM = { default: new URL('./vendor/wllama/wllama.wasm', import.meta.url).href };
@@ -254,22 +256,15 @@ function renderAnswer(div, content, reasoning) {
     settings.showReasoning ? content : stripReasoning(content)));
 }
 
-async function ask(prompt) {
-  addMessage('user', prompt);
-  const bubble = addMessage('bot', '…');
-  setBusy(true);
-  abort = new AbortController();
+/// Streams one answer from the local model into `bubble`; returns the visible text.
+async function generate(messages, bubble) {
+  const engine = await ensureModel();
+  const answerStarted = Date.now();
+  let firstToken = 0;
   let content = '';
   let reasoning = '';
+  setProgress('JARVIS yanıtlıyor… (ilk kelime gelene kadar istem işleniyor)');
   try {
-    const engine = await ensureModel();
-    const answerStarted = Date.now();
-    let firstToken = 0;
-    setProgress('JARVIS yanıtlıyor… (ilk kelime gelene kadar istem işleniyor)');
-    const messages = buildMessages({
-      state, prompt, ownerInstructions: settings.ownerInstructions,
-      contextTokens: settings.contextTokens, maxTokens: settings.maxTokens,
-    });
     const stream = await engine.createChatCompletion({
       messages,
       stream: true,
@@ -290,30 +285,137 @@ async function ask(prompt) {
       renderAnswer(bubble, content, reasoning);
       bubble.scrollIntoView({ block: 'end' });
     }
-    const answer = stripReasoning(content).trim();
-    if (firstToken) {
-      $('runtime-info').dataset.last = `Son yanıt: ilk kelime ${((firstToken - answerStarted) / 1000).toFixed(1)} sn, toplam ${((Date.now() - answerStarted) / 1000).toFixed(1)} sn.`;
-      setProgress('');
-      $('last-answer-timing').textContent = $('runtime-info').dataset.last;
-    }
-    if (!answer) throw new UserError('Model boş yanıt üretti. Yeniden deneyin.');
-    const next = structuredClone(state);
-    const now = Date.now();
-    next.history.push({ id: newId(), role: 'user', text: prompt, at: now });
-    next.history.push({ id: newId(), role: 'assistant', text: answer, at: now });
-    try { commitState(next); }
-    catch (e) { showError('Yanıt üretildi ancak geçmişe kaydedilemedi: ' + e.message); }
-    renderHistory();
+  } catch (error) {
+    if (content.trim()) renderAnswer(bubble, content + '\n[iptal edildi]', reasoning);
+    throw error;
+  }
+  if (firstToken) {
+    $('last-answer-timing').textContent = `Son yanıt: ilk kelime ${((firstToken - answerStarted) / 1000).toFixed(1)} sn, toplam ${((Date.now() - answerStarted) / 1000).toFixed(1)} sn.`;
+    setProgress('');
+  }
+  const answer = stripReasoning(content).trim();
+  if (!answer) throw new UserError('Model boş yanıt üretti. Yeniden deneyin.');
+  return answer;
+}
+
+function recordExchange(question, answer) {
+  const next = structuredClone(state);
+  const now = Date.now();
+  next.history.push({ id: newId(), role: 'user', text: question, at: now });
+  next.history.push({ id: newId(), role: 'assistant', text: answer, at: now });
+  try { commitState(next); }
+  catch (e) { showError('Yanıt üretildi ancak geçmişe kaydedilemedi: ' + e.message); }
+  renderHistory();
+}
+
+function handleFailure(error, bubble) {
+  const cancelled = abort?.signal.aborted || error?.name === 'AbortError' || error?.name === 'WllamaAbortError';
+  if (bubble && (!cancelled || bubble.textContent === '…')) bubble.remove();
+  if (cancelled) addMessage('system', 'İstek iptal edildi; bu yanıt geçmişe kaydedilmedi.');
+  else showError(describeError(error));
+}
+
+async function ask(prompt) {
+  addMessage('user', prompt);
+  const bubble = addMessage('bot', '…');
+  setBusy(true);
+  abort = new AbortController();
+  try {
+    const messages = buildMessages({
+      state, prompt, ownerInstructions: settings.ownerInstructions,
+      contextTokens: settings.contextTokens, maxTokens: settings.maxTokens,
+    });
+    const answer = await generate(messages, bubble);
+    recordExchange(prompt, answer);
     if (settings.speak) speak(answer);
   } catch (error) {
-    if (abort?.signal.aborted || error?.name === 'AbortError' || error?.name === 'WllamaAbortError') {
-      if (content.trim()) renderAnswer(bubble, content + '\n[iptal edildi]', reasoning);
-      else bubble.remove();
-      addMessage('system', 'İstek iptal edildi; bu yanıt geçmişe kaydedilmedi.');
-    } else {
-      bubble.remove();
-      showError(describeError(error));
+    handleFailure(error, bubble);
+  } finally {
+    abort = null;
+    setBusy(false);
+  }
+}
+
+// ---------- owner-initiated web research ----------
+class NetworkError extends Error {}
+
+async function fetchJSON(url, signal) {
+  let response;
+  try { response = await fetch(url, { signal, credentials: 'omit', referrerPolicy: 'no-referrer' }); }
+  catch (error) {
+    if (signal.aborted) throw error;
+    throw new NetworkError('İnternete bağlanılamadı. Bağlantınızı kontrol edin.');
+  }
+  if (!response.ok) throw new NetworkError(`Wikipedia yanıt vermedi (HTTP ${response.status}).`);
+  return response.json();
+}
+
+/// Searches Turkish Wikipedia first, then English. Only the query is sent.
+async function searchWikipedia(query, signal) {
+  for (const lang of ['tr', 'en']) {
+    const ids = parseSearchIds(await fetchJSON(wikipediaSearchURL(lang, query), signal));
+    if (!ids.length) continue;
+    const sources = parseExtracts(await fetchJSON(wikipediaExtractURL(lang, ids), signal), ids, lang, Date.now());
+    if (sources.length) return sources;
+  }
+  return [];
+}
+
+function addSourcesMessage(sources, heading) {
+  const div = addMessage('bot', '');
+  div.append(document.createTextNode(heading + '\n'));
+  sources.forEach((source, i) => {
+    const a = Object.assign(document.createElement('a'), {
+      href: source.url, target: '_blank', rel: 'noopener noreferrer',
+      textContent: `[${i + 1}] ${source.title}`,
+    });
+    div.append(a, document.createTextNode(i < sources.length - 1 ? '\n' : ''));
+  });
+  const when = new Date(sources[0].retrievedAt).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' });
+  div.append(document.createTextNode(`\nAlındı: ${when} · Wikipedia (${sources[0].lang})`));
+  return div;
+}
+
+async function research(command, typed) {
+  addMessage('user', typed);
+  if (!command.query) { addMessage('bot', 'Ne araştırmamı istediğinizi yazın: "araştır: konu" veya "öğren: konu"'); return; }
+  setBusy(true);
+  abort = new AbortController();
+  let bubble = null;
+  try {
+    setProgress('Wikipedia\'da aranıyor…');
+    const sources = await searchWikipedia(command.query, abort.signal);
+    if (!sources.length) {
+      addMessage('bot', `Wikipedia'da "${command.query}" için sonuç bulunamadı. Farklı kelimelerle deneyin.`);
+      return;
     }
+    if (command.type === 'learnWeb') {
+      const source = sources[0];
+      let next = addWebLearning(state, command.query, source);
+      next = structuredClone(next);
+      next.history.push({ id: newId(), role: 'note', text: `Web'den öğrenildi: ${source.title} (${source.url})`, at: Date.now() });
+      commitState(next);
+      renderAll();
+      addSourcesMessage([source], `"${command.query}" hakkında öğrendiklerim kaydedildi ve sonraki sorularda kullanılacak:\n\n${source.text.slice(0, 600)}${source.text.length > 600 ? '…' : ''}\n\nKaynak:`);
+      return;
+    }
+    addSourcesMessage(sources, 'Bulunan kaynaklar:');
+    const stored = await getStoredModel().catch(() => null);
+    if (!stored?.blob) {
+      addMessage('bot', sources[0].text.slice(0, 1500) + (sources[0].text.length > 1500 ? '…' : '') +
+        '\n\n(Model yüklü olmadığı için kaynağın kendi metni gösterildi.)');
+      return;
+    }
+    bubble = addMessage('bot', '…');
+    const messages = buildResearchMessages({
+      question: command.query, sources, ownerInstructions: settings.ownerInstructions,
+      contextTokens: settings.contextTokens, maxTokens: settings.maxTokens,
+    });
+    const answer = await generate(messages, bubble);
+    recordExchange(typed, answer + '\n\nKaynaklar:\n' + formatSources(sources));
+    if (settings.speak) speak(answer);
+  } catch (error) {
+    handleFailure(error, bubble);
   } finally {
     abort = null;
     setBusy(false);
@@ -321,7 +423,7 @@ async function ask(prompt) {
 }
 
 function describeError(error) {
-  if (error instanceof UserError) return error.message;
+  if (error instanceof UserError || error instanceof NetworkError) return error.message;
   const text = String(error?.message || error);
   if (/kv_cache_full|context/i.test(text) || error?.type === 'kv_cache_full') {
     return 'Bağlam penceresi doldu. AI sekmesinden bağlam penceresini büyütün veya yanıt bütçesini küçültün.';
@@ -427,6 +529,12 @@ function renderMemory() {
     const meta = document.createElement('div');
     meta.className = 'meta';
     meta.textContent = `${item.id} · ${dateText(item.at)}`;
+    if (item.source) {
+      meta.append(' · kaynak: ', Object.assign(document.createElement('a'), {
+        href: item.source, target: '_blank', rel: 'noopener noreferrer',
+        textContent: decodeURIComponent(item.source.split('/wiki/')[1] || item.source).replace(/_/g, ' '),
+      }));
+    }
     const actions = document.createElement('div');
     actions.className = 'actions';
     actions.append(button('Sil', () => runCommand({ type: 'deleteLearning', id: item.id }), 'danger'));
@@ -566,6 +674,9 @@ $('composer').addEventListener('submit', (e) => {
   input.value = '';
   input.style.height = 'auto';
   // Only text the owner typed is ever routed to a command.
+  // Only text the owner typed can start a web search; model output never does.
+  const web = routeResearch(text);
+  if (web) { research(web, text); return; }
   const command = routeCommand(text);
   if (command) runCommand(command, text);
   else ask(text);

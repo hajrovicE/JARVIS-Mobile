@@ -113,3 +113,5 @@ input, #owner-instructions {
 .diag { margin: 12px 0 24px; }
 .diag summary { cursor: pointer; color: var(--accent); }
 #load-log { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px; max-height: 50vh; overflow-y: auto; }
+.msg a { color: var(--accent); }
+.msg.user a { color: #fff; }
