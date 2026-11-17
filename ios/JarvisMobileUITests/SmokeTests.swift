@@ -95,8 +95,15 @@ final class SmokeTests: XCTestCase {
         for (id, value) in [("model.repetitionPenalty", "2"), ("model.repetitionWindow", "96")] {
             let field = app.textFields[id]
             XCTAssertTrue(reveal(field, in: app))
-            field.tap()
+            // A Form can report a field as hittable while its editable value
+            // is clipped by the bottom bar. Center it before entering text.
+            let scroll = app.collectionViews.firstMatch
+            for _ in 0..<4 where field.frame.midY > app.frame.height * 0.6 {
+                scroll.swipeUp()
+            }
+            field.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
             field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: (field.value as? String ?? "").count) + value)
+            XCTAssertEqual(field.value as? String, value)
         }
         app.tabBars.buttons["Durum"].tap()
         app.terminate()
