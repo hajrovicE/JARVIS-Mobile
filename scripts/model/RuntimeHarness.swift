@@ -114,7 +114,8 @@ import Glibc
         let timing = await speech.snapshot()
         try require(answer.renderedPrompt.hasSuffix("<|im_start|>assistant\n<think>\n\n</think>\n\n"),
             "Quick Qwen mode did not use the model's non-thinking template prefix")
-        print("SPEECH_PROBE visible=\(VisibleResponseFilter.answer(from: answer.text)) raw_tokens=\(answer.generatedTokens) sentences=\(timing.count) fast_directive=\(answer.renderedPrompt.contains("/no_think"))")
+        let visibleJSON = String(decoding: try JSONEncoder().encode(VisibleResponseFilter.answer(from: answer.text)), as: UTF8.self)
+        print("SPEECH_PROBE visible_json=\(visibleJSON) raw_tokens=\(answer.generatedTokens) sentences=\(timing.count) fast_directive=\(answer.renderedPrompt.contains("/no_think"))")
         try require(timing.count > 0 && (timing.firstSentenceSeconds ?? .infinity) < timing.completedSeconds,
             "A real sentence was not ready for TTS before generation completed")
         print("PASS real speech sentence ready before model completion: first_sentence_s=\(timing.firstSentenceSeconds ?? -1) generation_s=\(answer.metrics.totalSeconds) sentences_before_completion=\(timing.count)")

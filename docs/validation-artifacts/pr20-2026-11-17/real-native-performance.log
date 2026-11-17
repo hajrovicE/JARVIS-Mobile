@@ -17,8 +17,7 @@ PASS actual llama.cpp corrupt-model rejection
 PASS real GGUF import/replacement, corrupt replacement preserves model, manifest restart; no hash pin
 PASS AssistantService + real LocalAIProvider + personal context + JSON restart: En sevdiğim şehir: Ankara.
 PASS resident identity invalidation after atomic replacement with preserved size/mtime
-SPEECH_PROBE visible=Merhaba. Görüşmek üzere.  
-Merhaba. Görüşmek üzere. raw_tokens=19 sentences=3 fast_directive=true
+SPEECH_PROBE visible_json="Merhaba. Görüşmek üzere.  \nMerhaba. Görüşmek üzere." raw_tokens=19 sentences=3 fast_directive=true
 PASS real speech sentence ready before model completion: first_sentence_s=6.4352195629981 generation_s=8.635605962001137 sentences_before_completion=3
 REAL_RUNTIME_FUNCTIONAL_CHECKS_PASSED
 REAL_RUNTIME_PROOF_PASSED
