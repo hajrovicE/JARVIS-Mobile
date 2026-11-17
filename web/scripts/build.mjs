@@ -37,5 +37,7 @@ const sw = readFileSync(join(dist, 'sw.js'), 'utf8')
   .replace('__BUILD_ID__', buildId)
   .replace('__SHELL_FILES__', JSON.stringify(shell));
 writeFileSync(join(dist, 'sw.js'), sw);
+const app = join(dist, 'app.js');
+writeFileSync(app, readFileSync(app, 'utf8').replace('__BUILD_ID__', buildId));
 writeFileSync(join(dist, '.nojekyll'), '');
 console.log(`dist ready: ${files.length + 1} files, build ${buildId}`);

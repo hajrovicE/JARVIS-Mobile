@@ -628,7 +628,20 @@ renderAll();
 renderModelStatus();
 // Ask the browser not to evict saved memory and the model under storage pressure.
 navigator.storage?.persist?.().catch(() => {});
+const BUILD_ID = '__BUILD_ID__';
+$('app-version').textContent = 'Sürüm: ' + BUILD_ID;
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  // When a new version takes over, reload once so the fixed code runs now
+  // instead of on the next launch.
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || busy) return;
+    reloaded = true;
+    location.reload();
+  });
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
+    .then((registration) => registration.update())
+    .catch(() => {});
 }
 window.jarvisReady = true;
