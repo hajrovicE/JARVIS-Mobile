@@ -44,6 +44,7 @@ RELEASE_OUTPUT="$RUNNER_TEMP/jarvis-release-output"
 mkdir -p "$RELEASE_OUTPUT"
 echo 'Validated signing configuration. Creating Release archive.'
 xcodebuild -project ios/JarvisMobile.xcodeproj -scheme JarvisMobile -configuration Release -destination 'generic/platform=iOS' -archivePath "$SIGNING_WORK/JarvisMobile.xcarchive" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$SIGNING_IDENTITY" DEVELOPMENT_TEAM="$APPLE_TEAM_ID" PROVISIONING_PROFILE_SPECIFIER="$PROFILE_UUID" archive >> "$SIGNING_WORK/private.log" 2>&1
+python3 "$SCRIPT_DIR/policy.py" check-app "$SIGNING_WORK/JarvisMobile.xcarchive/Products/Applications/JarvisMobile.app"
 xcodebuild -exportArchive -archivePath "$SIGNING_WORK/JarvisMobile.xcarchive" -exportPath "$RELEASE_OUTPUT" -exportOptionsPlist "$SIGNING_WORK/ExportOptions.plist" >> "$SIGNING_WORK/private.log" 2>&1
 if [ ! -f "$RELEASE_OUTPUT/JarvisMobile.ipa" ]; then
   echo 'IPA export did not produce the expected file.' >&2

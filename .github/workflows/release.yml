@@ -53,6 +53,7 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild -project ios/JarvisMobile.xcodeproj -scheme JarvisMobile -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build-release CURRENT_PROJECT_VERSION="$BUILD_NUMBER" CODE_SIGNING_ALLOWED=NO build 2>&1 | tee release-build.log
+          python3 scripts/release/policy.py check-app build-release/Build/Products/Release-iphoneos/JarvisMobile.app
           ditto -c -k --sequesterRsrc --keepParent build-release/Build/Products/Release-iphoneos/JarvisMobile.app JarvisMobile-Release-unsigned.zip
           echo 'Unsigned Release build only. This file cannot be installed directly on an iPhone; no TestFlight upload was attempted.' >> "$GITHUB_STEP_SUMMARY"
       - name: Store unsigned Release and build log
@@ -86,6 +87,7 @@ jobs:
       - name: Generate Release project
         run: |
           brew install xcodegen
+          scripts/native/prepare_apple_runtime.sh "$RUNNER_TEMP/jarvis-apple-native" --device-only
           cd ios && xcodegen generate
       - name: Sign IPA and optionally request TestFlight upload
         env: *signing-secrets

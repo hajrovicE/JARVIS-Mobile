@@ -2,15 +2,42 @@ import copy
 import datetime as dt
 import hashlib
 import os
+import plistlib
 from pathlib import Path
 import tempfile
 import subprocess
 import unittest
 
-from policy import ReleaseError, export_options, validate_mode, validate_profile, validate_signing
+from policy import ReleaseError, export_options, validate_built_app, validate_mode, validate_profile, validate_signing
 
 
 class ReleasePolicyTests(unittest.TestCase):
+    def test_actual_bundle_version_must_match_requested_build_number(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            info = {"CFBundleIdentifier": "com.jarvis.mobile", "CFBundleVersion": "5",
+                    "CFBundleShortVersionString": "0.3.0"}
+            file = Path(temporary, "Info.plist")
+            file.write_bytes(plistlib.dumps(info, fmt=plistlib.FMT_BINARY))
+            validate_built_app(temporary, "5")
+            for version in ["1", "$(CURRENT_PROJECT_VERSION)", 5, ""]:
+                with self.subTest(version=version):
+                    file.write_bytes(plistlib.dumps({**info, "CFBundleVersion": version}))
+                    with self.assertRaisesRegex(ReleaseError, "build number"):
+                        validate_built_app(temporary, "5")
+
+    def test_release_rejects_missing_corrupt_or_unresolved_app_metadata(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            file = Path(temporary, "Info.plist")
+            with self.assertRaises(ReleaseError):
+                validate_built_app(temporary, "5")
+            for value in [b"broken plist", plistlib.dumps([]), plistlib.dumps({
+                "CFBundleIdentifier": "other.app", "CFBundleVersion": "5"}), plistlib.dumps({
+                "CFBundleIdentifier": "com.jarvis.mobile", "CFBundleVersion": "5",
+                "CFBundleShortVersionString": "$(MARKETING_VERSION)"})]:
+                file.write_bytes(value)
+                with self.assertRaises(ReleaseError):
+                    validate_built_app(temporary, "5")
+
     def setUp(self):
         self.team = "ABCDEFGHIJ"
         self.certificate = b"synthetic-certificate-for-policy-tests"
