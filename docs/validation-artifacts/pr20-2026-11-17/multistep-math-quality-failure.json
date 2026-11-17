@@ -1,0 +1,9 @@
+{
+  "runtime_source": "c3803e571fdd8931092e020c189ac44c010cad70:ios/JarvisMobile/GGUFInferenceRuntime.swift",
+  "verification": "Production runtime source byte-matched to diagnostic harness with cmp; speech chunker unchanged. No mock answer, Docker --network none.",
+  "model": "Qwen3-1.7B-Q4_K_M.gguf, daeb8e2d528a760970442092f6bf1e55c3b659eb",
+  "prompt": "Önce 17 çarpı 23 işleminin sonucunu yaz. Sonra 20 eksi 7 işleminin sonucunu ayrı bir cümlede yaz.",
+  "exit_code": 1,
+  "assessment": "391 and 13 are arithmetically correct. Requested sentence formatting was not followed; no reliable sentence became ready before completion. Early TTS acceptance failed.",
+  "raw_output": "SPEECH_PROBE visible=17 çarpı 23 işleminin sonucu:  \n17 × 23 = **391**\n\n20 eksi 7 işleminin sonucu:  \n20 − 7 = **13** raw_tokens=51 sentences=0 fast_directive=true\nVALIDATION_FAILED: failed(\"A real sentence was not ready for TTS before generation completed\")\n"
+}

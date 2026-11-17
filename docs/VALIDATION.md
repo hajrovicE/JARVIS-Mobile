@@ -1,8 +1,8 @@
 # Güncel PR #20 doğrulaması — 17 Kasım 2026
 
-[Akış, resident GGUF, Türkçe ses ve gerçek test/performans sonuçları](PR20_VALIDATION.md). Linux ve gerçek CPU model sonuçları Apple/iPhone doğrulamasından ayrıdır.
+[Akış, resident GGUF, Türkçe ses ve gerçek test/performans sonuçları](PR20_VALIDATION.md). `9aea7cc` kaynağında Linux 173, macOS 175, iOS hosted 190 ve UI 3 test; Simulator ve imzasız iPhone Debug/Release derlemeleri başarılıdır. Release paketi 0.3.0 (6) olarak açılıp doğrulandı. Açık model kalite hataları, imzalama ve fiziksel iPhone kabulü ayrıca raporlanır.
 
-# En son devam doğrulaması — 16 Kasım 2026
+# Önceki devam doğrulaması — 16 Kasım 2026
 
 [PR #19 ek düzeltmeler ve gerçek sonuçlar](VALIDATION_FOLLOWUP_2026_11_16.md): 114 Swift ve 41 Python/Docker testi başarılı; gerçek Qwen3-1.7B çıkarımı ağ kapalı testten geçti. 0.6B modelin Türkçe kalite hataları korunuyor ve kalite hatasında komut artık başarısız döner. iOS derlemesi hesap engeli nedeniyle doğrulanmadı.
 
