@@ -78,16 +78,60 @@ async function unloadModel() {
   $('engine-badge').textContent = 'Model yüklü değil';
 }
 
+// Load-time diagnostics only: engine messages while the model loads, before any
+// prompt exists, so the log never contains the owner's questions or memory.
+const loadLog = [];
+let capturingLoadLog = false;
+const pushLog = (level, args) => {
+  if (!capturingLoadLog) return;
+  const line = args.map((a) => (a instanceof Error ? a.message : String(a))).join(' ').trim();
+  if (!line) return;
+  loadLog.push(`${new Date().toLocaleTimeString('tr-TR')} ${level}: ${line}`.slice(0, 300));
+  if (loadLog.length > 80) loadLog.shift();
+  renderLoadLog();
+};
+const engineLogger = {
+  debug: () => {},
+  log: (...a) => pushLog('bilgi', a),
+  warn: (...a) => pushLog('uyarı', a),
+  error: (...a) => { pushLog('hata', a); console.error('[wllama]', ...a); },
+};
+function renderLoadLog() {
+  const box = $('load-log');
+  if (box) box.textContent = loadLog.length ? loadLog.join('\n') : 'Henüz kayıt yok.';
+}
+
+let loadingInstance = null;
+let loadCancelled = false;
+
 async function ensureModel() {
   const record = await getStoredModel();
   if (!record?.blob) throw new UserError('Henüz model yok. AI sekmesinden bir model indirin veya dosya seçin.');
   const signature = [record.savedAt, settings.contextTokens, settings.useGPU].join('|');
   if (wllama && loadedSignature === signature) return wllama;
   await unloadModel();
-  setProgress('Model belleğe yükleniyor… (ilk seferde biraz sürer)');
+  loadLog.length = 0;
+  capturingLoadLog = true;
+  loadCancelled = false;
+  const started = Date.now();
+  const sizeText = record.blob.size >= 1e9 ? gb(record.blob.size) : mb(record.blob.size);
+  const tick = () => {
+    const seconds = Math.round((Date.now() - started) / 1000);
+    let text = `Model belleğe yükleniyor (${sizeText})… ${seconds} sn`;
+    if (seconds >= 180) {
+      text += ' — Uzun sürüyor. İptal edip AI sekmesinden bağlam penceresini küçültün veya daha küçük modeli deneyin; ayrıntı için AI → Tanılama kaydı.';
+    }
+    setProgress(text);
+  };
+  tick();
+  const timer = setInterval(tick, 1000);
+  pushLog('bilgi', [`Yükleme başladı: ${record.name}, ${sizeText}, bağlam ${settings.contextTokens}, ` +
+    `GPU ${settings.useGPU ? 'açık' : 'kapalı'}, WebGPU ${'gpu' in navigator ? 'var' : 'yok'}, ` +
+    `iş parçacığı ${globalThis.crossOriginIsolated ? 'çoklu' : 'tek'}`]);
   const attempt = async (gpu) => {
-    const instance = new Wllama(WASM, { suppressNativeLog: true, logger: quietLogger });
+    const instance = new Wllama(WASM, { suppressNativeLog: false, logger: engineLogger });
     instance.setCompat(COMPAT);
+    loadingInstance = instance;
     try {
       await instance.loadModel([record.blob], {
         n_ctx: settings.contextTokens,
@@ -95,33 +139,52 @@ async function ensureModel() {
         n_gpu_layers: gpu ? 999 : 0,
         jinja: true,
       });
+      if (loadCancelled) throw new DOMException('cancelled', 'AbortError');
       return instance;
     } catch (error) {
       try { await instance.exit(); } catch { /* ignore */ }
+      if (loadCancelled) throw new DOMException('cancelled', 'AbortError');
       throw error;
+    } finally {
+      loadingInstance = null;
     }
   };
   let instance;
   let usedGPU = settings.useGPU;
-  try { instance = await attempt(settings.useGPU); }
-  catch (error) {
-    if (!settings.useGPU) throw error;
-    usedGPU = false;
-    instance = await attempt(false);
+  try {
+    try { instance = await attempt(settings.useGPU); }
+    catch (error) {
+      if (!settings.useGPU || loadCancelled) throw error;
+      pushLog('uyarı', ['GPU ile yüklenemedi, CPU ile yeniden deneniyor: ' + (error?.message || error)]);
+      usedGPU = false;
+      instance = await attempt(false);
+    }
+  } catch (error) {
+    pushLog('hata', ['Yükleme başarısız: ' + (error?.message || error)]);
+    throw error;
+  } finally {
+    clearInterval(timer);
+    capturingLoadLog = false;
   }
+  const seconds = Math.round((Date.now() - started) / 1000);
+  loadLog.push(`Model ${seconds} sn içinde yüklendi.`);
+  renderLoadLog();
   wllama = instance;
   loadedSignature = signature;
   $('engine-badge').textContent = 'Model hazır';
   $('runtime-info').textContent = 'Çalışma modu: ' + (usedGPU ? 'GPU (WebGPU)' : 'CPU') +
     ', ' + (instance.isMultithread?.() ? 'çok iş parçacıklı' : 'tek iş parçacıklı') +
-    ', bağlam ' + settings.contextTokens + ' token.';
+    ', bağlam ' + settings.contextTokens + ` token, yükleme ${seconds} sn.`;
   return instance;
 }
 
-const quietLogger = {
-  debug: () => {}, log: () => {}, warn: () => {},
-  error: (...args) => console.error('[wllama]', ...args),
-};
+/// Stops an in-progress model load by shutting down its worker.
+function cancelLoading() {
+  if (!loadingInstance) return;
+  loadCancelled = true;
+  const instance = loadingInstance;
+  instance.exit().catch(() => {});
+}
 
 class UserError extends Error {}
 
@@ -167,7 +230,9 @@ async function ask(prompt) {
   let reasoning = '';
   try {
     const engine = await ensureModel();
-    setProgress('JARVIS yanıtlıyor…');
+    const answerStarted = Date.now();
+    let firstToken = 0;
+    setProgress('JARVIS yanıtlıyor… (ilk kelime gelene kadar istem işleniyor)');
     const messages = buildMessages({
       state, prompt, ownerInstructions: settings.ownerInstructions,
       contextTokens: settings.contextTokens, maxTokens: settings.maxTokens,
@@ -183,12 +248,21 @@ async function ask(prompt) {
     });
     for await (const chunk of stream) {
       const delta = chunk?.choices?.[0]?.delta ?? {};
+      if ((delta.content || delta.reasoning_content) && !firstToken) {
+        firstToken = Date.now();
+        setProgress('JARVIS yazıyor…');
+      }
       if (delta.content) content += delta.content;
       if (delta.reasoning_content) reasoning += delta.reasoning_content;
       renderAnswer(bubble, content, reasoning);
       bubble.scrollIntoView({ block: 'end' });
     }
     const answer = stripReasoning(content).trim();
+    if (firstToken) {
+      $('runtime-info').dataset.last = `Son yanıt: ilk kelime ${((firstToken - answerStarted) / 1000).toFixed(1)} sn, toplam ${((Date.now() - answerStarted) / 1000).toFixed(1)} sn.`;
+      setProgress('');
+      $('last-answer-timing').textContent = $('runtime-info').dataset.last;
+    }
     if (!answer) throw new UserError('Model boş yanıt üretti. Yeniden deneyin.');
     const next = structuredClone(state);
     const now = Date.now();
@@ -463,7 +537,7 @@ $('composer').addEventListener('submit', (e) => {
   if (command) runCommand(command, text);
   else ask(text);
 });
-$('cancel').addEventListener('click', () => abort?.abort());
+$('cancel').addEventListener('click', () => { cancelLoading(); abort?.abort(); });
 
 $('memory-add').addEventListener('submit', (e) => {
   e.preventDefault();

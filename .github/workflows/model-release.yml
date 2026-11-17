@@ -1,0 +1,62 @@
+name: Publish Qwen3 GGUF for phone download
+# Downloads the Apache-2.0 Qwen3 starter weights on a GitHub runner and publishes
+# them as a release asset, so the owner can download the .gguf file straight to
+# an iPhone (Safari -> Files) and pick it inside JARVIS. Nothing personal is uploaded.
+on:
+  workflow_dispatch:
+  push:
+    branches: ['claude/**']
+    paths: ['.github/workflows/model-release.yml']
+permissions:
+  contents: write
+concurrency:
+  group: model-release
+  cancel-in-progress: false
+env:
+  TAG: model-qwen3-1.7b
+  FILE: Qwen3-1.7B-Q4_K_M.gguf
+  # Pinned revision of ggml-org/Qwen3-1.7B-GGUF and its published SHA-256.
+  URL: https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF/resolve/daeb8e2/Qwen3-1.7B-Q4_K_M.gguf
+  SHA256: d2387ca2dbfee2ffabce7120d3770dadca0b293052bc2f0e138fdc940d9bc7b5
+  LICENSE_URL: https://huggingface.co/Qwen/Qwen3-1.7B/resolve/main/LICENSE
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Skip if already published
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' 2>/dev/null | grep -qx "$FILE"; then
+            echo "done=true" >> "$GITHUB_OUTPUT"
+            echo "Release $TAG already has $FILE." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Download and verify model
+        if: steps.existing.outputs.done != 'true'
+        run: |
+          set -euo pipefail
+          curl -fL --retry 5 --retry-delay 5 -o "$FILE" "$URL"
+          head -c 4 "$FILE" | grep -q GGUF
+          echo "$SHA256  $FILE" | sha256sum -c -
+          curl -fL --retry 5 -o LICENSE-Qwen3.txt "$LICENSE_URL"
+          ls -la "$FILE" LICENSE-Qwen3.txt
+      - name: Publish release asset
+        if: steps.existing.outputs.done != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cat > notes.md <<'NOTES'
+          **Qwen3 1.7B (Q4_K_M, ~1,28 GB)**, JARVIS için hazır GGUF dosyası. Kaynak: `ggml-org/Qwen3-1.7B-GGUF` (revizyon `daeb8e2`), SHA-256 `d2387ca2dbfee2ffabce7120d3770dadca0b293052bc2f0e138fdc940d9bc7b5`. Lisans: Apache-2.0 (Qwen). Bu dosya JARVIS'e özel eğitilmiş ağırlık değildir.
+
+          **iPhone'a indirme:** Aşağıdaki `Qwen3-1.7B-Q4_K_M.gguf` bağlantısına Safari'de dokunun → İndir. Dosya *Dosyalar → İndirilenler*'e kaydedilir (Wi‑Fi önerilir, ekranı açık tutun).
+
+          **JARVIS'te kullanma:** JARVIS → **AI** sekmesi → *Telefondaki GGUF dosyasını seç* → İndirilenler → dosyayı seçin. Kayıttan sonra İndirilenler'deki kopyayı silebilirsiniz.
+          NOTES
+          sed -i 's/^          //' notes.md
+          gh release create "$TAG" "$FILE" LICENSE-Qwen3.txt \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "Qwen3 1.7B GGUF (telefona indirme)" --notes-file notes.md --prerelease
+          echo "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$FILE" >> "$GITHUB_STEP_SUMMARY"

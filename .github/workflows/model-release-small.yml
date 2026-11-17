@@ -1,0 +1,41 @@
+name: Publish Qwen3 0.6B GGUF for phone download
+# Lighter starter model for phones where 1.7B does not fit in browser memory.
+on:
+  workflow_dispatch:
+  push:
+    branches: ['claude/**']
+    paths: ['.github/workflows/model-release-small.yml']
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TAG: model-qwen3-0.6b
+    steps:
+      - name: Download, verify and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Already published." >> "$GITHUB_STEP_SUMMARY"; exit 0
+          fi
+          FILE=""
+          for name in Qwen3-0.6B-Q4_K_M.gguf Qwen3-0.6B-Q8_0.gguf; do
+            if curl -fL --retry 3 -o "$name" "https://huggingface.co/ggml-org/Qwen3-0.6B-GGUF/resolve/main/$name"; then
+              FILE="$name"; break
+            fi
+          done
+          test -n "$FILE"
+          head -c 4 "$FILE" | grep -q GGUF
+          SUM="$(sha256sum "$FILE" | cut -d' ' -f1)"
+          curl -fL --retry 3 -o LICENSE-Qwen3.txt https://huggingface.co/Qwen/Qwen3-0.6B/resolve/main/LICENSE
+          printf '%s\n\n%s\n\n%s\n' \
+            "**Qwen3 0.6B ($FILE)**, JARVIS için hafif GGUF dosyası. Kaynak: ggml-org/Qwen3-0.6B-GGUF. SHA-256: \`$SUM\`. Lisans: Apache-2.0 (Qwen)." \
+            "**iPhone:** Safari'de dosya bağlantısına dokunun → İndir. Dosyalar → İndirilenler'e kaydedilir." \
+            "**JARVIS:** AI sekmesi → Telefondaki GGUF dosyasını seç → dosyayı seçin." > notes.md
+          gh release create "$TAG" "$FILE" LICENSE-Qwen3.txt --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" --prerelease --title "Qwen3 0.6B GGUF (telefona indirme)" --notes-file notes.md
+          echo "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$FILE" >> "$GITHUB_STEP_SUMMARY"
