@@ -61,8 +61,8 @@ public struct CommandRouter: Sendable {
         catch { return CommandExecution(reply: reply, historyWriteFailed: true) }
     }
     public func execute(_ input: String) async throws -> String {
-        let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalized = text.lowercased(with: Locale(identifier: "tr_TR"))
+        let text = String(input.drop(while: { $0.isWhitespace }))
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(with: Locale(identifier: "tr_TR"))
         if normalized.hasPrefix("bundan sonra ") {
             let directive = String(text.dropFirst("bundan sonra ".count))
                 .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -81,7 +81,8 @@ public struct CommandRouter: Sendable {
             guard pieces.count == 2 else { return "Kullanım: öğret: konu = öğrenilecek bilgi" }
             let topic = String(pieces[0]).trimmingCharacters(in: .whitespacesAndNewlines)
                 .lowercased(with: Locale(identifier: "tr_TR"))
-            let lesson = String(pieces[1]).trimmingCharacters(in: .whitespacesAndNewlines)
+            let rawLesson = String(pieces[1])
+            let lesson = rawLesson.first == " " ? String(rawLesson.dropFirst()) : rawLesson
             guard !topic.isEmpty && !lesson.isEmpty else {
                 return "Kullanım: öğret: konu = öğrenilecek bilgi"
             }
@@ -116,8 +117,15 @@ public struct CommandRouter: Sendable {
             return records.isEmpty ? "Onaylanmış öğrenme kaydı yok." : records.map { "\($0.key): \($0.text)" }.joined(separator: "\n")
         }
         if normalized == "geçmiş" {
-            let items = try await store.read().conversations
-            return items.isEmpty ? "Konuşma geçmişi boş." : items.map(\.text).joined(separator: "\n")
+            let state = try await store.read()
+            let local = state.conversations.map { ($0.createdAt, $0.id.uuidString, $0.text) }
+            let generated = state.generatedAnswers.map {
+                ($0.savedAt, $0.id.uuidString, "Siz: \($0.question)\nJARVIS: \($0.response.text)")
+            }
+            let items = (local + generated).sorted {
+                $0.0 == $1.0 ? $0.1 < $1.1 : $0.0 < $1.0
+            }
+            return items.isEmpty ? "Konuşma geçmişi boş." : items.map { $0.2 }.joined(separator: "\n")
         }
         return "Bu komut desteklenmiyor. Hatırla ki …, ne hatırlıyorsun, unut <kimlik> veya geçmiş komutunu kullanabilirsiniz."
     }

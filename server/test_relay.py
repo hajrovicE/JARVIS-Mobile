@@ -1,4 +1,5 @@
 import contextlib
+import http.client
 import io
 import json
 import threading
@@ -134,7 +135,22 @@ class RelayTests(unittest.TestCase):
                 self.assertEqual(request(b'{"prompt":"synthetic private prompt"}')[0], 200)
                 self.assertEqual(request(b'{"prompt":"a"}', auth=None)[0], 401)
                 self.assertEqual(request(b'broken')[0], 400)
-                self.assertEqual(request(b'x' * (MAX_BODY_BYTES + 1))[0], 413)
+                # Oversized Content-Length is rejected before reading the body. Do
+                # not send megabytes here: a safe early close can otherwise cause
+                # a client BrokenPipeError. Draining an untrusted oversized body
+                # would unnecessarily hold a server worker and consume resources.
+                connection = http.client.HTTPConnection("127.0.0.1", server.server_address[1], timeout=3)
+                try:
+                    connection.putrequest("POST", "/v1/chat")
+                    connection.putheader("Authorization", AUTH)
+                    connection.putheader("Content-Type", "application/json")
+                    connection.putheader("Content-Length", str(MAX_BODY_BYTES + 1))
+                    connection.endheaders()
+                    with connection.getresponse() as response:
+                        self.assertEqual(response.status, 413)
+                        self.assertEqual(json.load(response), {"error": "invalid_body_size"})
+                finally:
+                    connection.close()
                 self.assertEqual(request(b'{}', content_type="text/plain")[0], 415)
                 self.assertEqual(request(b'{}', path="/unknown")[0], 404)
             self.assertEqual(logs.getvalue(), "")

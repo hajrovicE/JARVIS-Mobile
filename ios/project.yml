@@ -8,7 +8,7 @@ packages:
     path: ..
   LlamaSwift:
     url: https://github.com/mattt/llama.swift
-    version: 2.10549.0
+    exactVersion: 2.10549.0
 settings:
   base:
     SWIFT_VERSION: '6.0'
@@ -40,7 +40,6 @@ targets:
         UILaunchScreen: {}
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
-        NSFaceIDUsageDescription: Hassas JARVIS işlemlerini onayınızla güvenli biçimde doğrulamak için Face ID kullanılır.
         NSMicrophoneUsageDescription: Türkçe sesli komutunuzu almak için mikrofon erişimi gerekir. İzin vermeden yazarak devam edebilirsiniz.
         NSSpeechRecognitionUsageDescription: Sesinizi cihaz üzerinde Türkçe komut metnine dönüştürmek için izin gerekir. Destek yoksa yazarak devam edebilirsiniz.
   JarvisMobileTests:
@@ -48,10 +47,15 @@ targets:
     platform: iOS
     sources:
       - ../Tests/JarvisCoreTests
-      - JarvisMobileTests
+      - path: JarvisMobileTests
+        excludes: [Fixtures]
+      - path: JarvisMobileTests/Fixtures
+        type: folder
+        buildPhase: resources
     dependencies:
       - target: JarvisMobile
       - package: JarvisCore
+      - package: LlamaSwift
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES

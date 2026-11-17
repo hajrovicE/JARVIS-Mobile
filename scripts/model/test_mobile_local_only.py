@@ -17,15 +17,17 @@ class LocalOnlyMobileTests(unittest.TestCase):
         self.assertIn("networkAllowed: false", text)
         self.assertIn("selectedModelManifest", text)
         self.assertIn("ownerInstructions: ownerInstructions", text)
-        self.assertIn("maxNewTokens: modelMaxNewTokens", text)
-        self.assertIn("contextLength: Int32(clamping: modelContextTokens)", text)
+        self.assertIn("maxNewTokens: budget.maxNewTokens", text)
+        self.assertIn("ownerMaxNewTokens: modelMaxNewTokens", text)
+        self.assertIn("ownerContextTokens: modelContextTokens", text)
+        self.assertIn("contextLength: contextTokens", text)
         self.assertIn("temperature: Float(modelTemperature)", text)
 
     def test_owner_selected_security_gates_are_off(self):
         ui = UI.read_text(encoding="utf-8")
         runtime = (ROOT / "Sources" / "JarvisCore" / "LocalAIProvider.swift").read_text(encoding="utf-8")
         permissions = (ROOT / "Sources" / "JarvisCore" / "PermissionManager.swift").read_text(encoding="utf-8")
-        self.assertIn("PlainFileStorage(url: jsonURL)", ui)
+        self.assertIn("PlainFileStorage.migratingLegacySnapshot(", ui)
         self.assertNotIn("PlatformSHA256Checker()", ui)
         self.assertNotIn("digester.sha256", runtime)
         self.assertNotIn("authenticator.authenticate(reason:", permissions)
@@ -57,7 +59,9 @@ class LocalOnlyMobileTests(unittest.TestCase):
     def test_owner_prompt_is_not_overridden_by_fixed_local_policy(self):
         runtime = RUNTIME.read_text(encoding="utf-8")
         provider = (ROOT / "Sources" / "JarvisCore" / "LocalAIProvider.swift").read_text(encoding="utf-8")
-        self.assertIn("let systemTurn = ownerInstructions.isEmpty", runtime)
+        self.assertIn("if !ownerInstructions.isEmpty", runtime)
+        self.assertIn("llama_model_chat_template(model, nil)", runtime)
+        self.assertIn("content: try cString(ownerInstructions)", runtime)
         self.assertNotIn("Gereksiz ikinci onay isteme", provider)
 
 if __name__ == "__main__":

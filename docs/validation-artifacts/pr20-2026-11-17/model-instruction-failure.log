@@ -1,0 +1,2 @@
+SPEECH_PROBE visible=Eğer size yardımcı olmak istiyorsanız, selamla, bugünkü çalışma planını öner, ve veda etmek istiyorsanız, size yardımcı olabilirim. raw_tokens=44 sentences=0 fast_directive=true
+VALIDATION_FAILED: failed("A real sentence was not ready for TTS before generation completed")

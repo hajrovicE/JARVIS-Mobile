@@ -1,0 +1,24 @@
+PASS real Turkish inference transport: <think>  </think>  Türkiye'nin başkenti Ankara'dır.
+MODEL_QUALITY_PASS capital question
+PASS exact multi-line owner prompt; prompt=74 output=14 context=1024 gpu=false
+BENCHMARK {"case":"cold","context_init_s":0.08567408799717668,"decode_tokens_per_second":6.777119238500461,"first_token_s":7.148482229000365,"model_bytes":1282439264,"model_load_count":1,"model_load_s":3.3648557329943287,"output_tokens":14,"peak_resident_memory_bytes":2154881024,"prefill_s":3.6921286990036606,"resident_memory_bytes":2155081728,"thermal_end":null,"thermal_start":null,"total_s":9.066701392999676,"warm_model":false}
+BENCHMARK {"case":"warm","context_init_s":0.1035056379987509,"decode_tokens_per_second":5.216291848194065,"first_token_s":3.4965393239981495,"model_bytes":1282439264,"model_load_count":1,"model_load_s":0.00029313899722183123,"output_tokens":14,"peak_resident_memory_bytes":2158145536,"prefill_s":3.389339323999593,"resident_memory_bytes":2158383104,"thermal_end":null,"thermal_start":null,"total_s":5.988731167999504,"warm_model":true}
+PASS real streaming before completion: callbacks=14 first_callback_s=3.497420579 callback_span_s=2.34371784
+PASS Task cancellation after first real native delta
+PASS concurrent-generation rejection and per-turn configuration snapshot
+BENCHMARK {"case":"reload","context_init_s":0.12148200899537187,"decode_tokens_per_second":4.0856216539120975,"first_token_s":7.512874830994406,"model_bytes":1282439264,"model_load_count":2,"model_load_s":6.189726100994449,"output_tokens":3,"peak_resident_memory_bytes":2158215168,"prefill_s":1.1988697639972088,"resident_memory_bytes":2096136192,"thermal_end":null,"thermal_start":null,"total_s":8.002396418996796,"warm_model":false}
+PASS unload during suspended streaming and safe cold reload
+PASS exact long owner prompt and multi-batch prefill: 1220 tokens
+PASS one-token generation, selected sampling, empty system prompt and model reload
+PASS actual context overflow is explicit
+PASS invalid settings rejected
+PASS cancelled inference
+PASS actual llama.cpp corrupt-model rejection
+PASS real GGUF import/replacement, corrupt replacement preserves model, manifest restart; no hash pin
+PASS AssistantService + real LocalAIProvider + personal context + JSON restart: En sevdiğim şehir: Ankara.
+PASS resident identity invalidation after atomic replacement with preserved size/mtime
+SPEECH_PROBE visible=Merhaba. Görüşmek üzere.  
+Merhaba. Görüşmek üzere. raw_tokens=19 sentences=3 fast_directive=true
+PASS real speech sentence ready before model completion: first_sentence_s=6.4352195629981 generation_s=8.635605962001137 sentences_before_completion=3
+REAL_RUNTIME_FUNCTIONAL_CHECKS_PASSED
+REAL_RUNTIME_PROOF_PASSED

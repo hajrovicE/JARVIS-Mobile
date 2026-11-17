@@ -11,11 +11,13 @@ public struct LocalTurnBudget: Equatable, Sendable {
                               ownerMaxNewTokens: Int,
                               ownerContextTokens: Int) -> LocalTurnBudget {
         let normalized = prompt.lowercased(with: Locale(identifier: "tr_TR"))
-        let details = ["detaylı", "ayrıntılı", "adım adım", "karşılaştır", "analiz",
+        let details = ["/think", "```", "swift", "python", "javascript", "sql", "algoritma", "kanıtla", "matematik", "debug", "hata ayıkla", "detaylı", "ayrıntılı", "adım adım", "karşılaştır", "analiz",
                        "kod yaz", "kodla", "örneklerle", "hesapla", "nedenini açıkla",
                        "plan hazırla", "incele", "araştır"].contains { normalized.contains($0) }
-        let userTokens = max(1, ownerMaxNewTokens)
-        let userContext = max(512, ownerContextTokens)
+        let userTokens = ownerMaxNewTokens
+        let userContext = ownerContextTokens
+        // Invalid settings stay invalid so the native runtime can report them.
+        // Raising a low owner cap here silently changes the requested behavior.
         guard fastConversation else {
             return LocalTurnBudget(maxNewTokens: userTokens,
                                    contextTokens: userContext, needsDetail: details)

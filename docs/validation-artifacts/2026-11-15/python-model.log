@@ -1,0 +1,13 @@
+test_iphone_chat_has_no_cloud_provider_or_api_key_route (test_mobile_local_only.LocalOnlyMobileTests.test_iphone_chat_has_no_cloud_provider_or_api_key_route) ... ok
+test_llama_inference_is_local_and_owner_command_gate_remains (test_mobile_local_only.LocalOnlyMobileTests.test_llama_inference_is_local_and_owner_command_gate_remains) ... ok
+test_owner_prompt_is_not_overridden_by_fixed_local_policy (test_mobile_local_only.LocalOnlyMobileTests.test_owner_prompt_is_not_overridden_by_fixed_local_policy) ... ok
+test_owner_selected_security_gates_are_off (test_mobile_local_only.LocalOnlyMobileTests.test_owner_selected_security_gates_are_off) ... ok
+test_training_parameters_are_owner_selectable (test_mobile_local_only.LocalOnlyMobileTests.test_training_parameters_are_owner_selectable) ... ok
+test_rejects_empty_or_broken_data (test_prepare_dataset.DatasetTests.test_rejects_empty_or_broken_data) ... ok
+test_requires_explicit_examples_and_does_not_modify_source (test_prepare_dataset.DatasetTests.test_requires_explicit_examples_and_does_not_modify_source) ... ok
+test_stable_deduplication_and_holdout (test_prepare_dataset.DatasetTests.test_stable_deduplication_and_holdout) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.010s
+
+OK

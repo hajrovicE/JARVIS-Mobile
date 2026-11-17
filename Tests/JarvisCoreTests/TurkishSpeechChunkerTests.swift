@@ -2,8 +2,8 @@ import Foundation
 import XCTest
 @testable import JarvisCore
 
-final class TurkishSpeechChunkerTests: XCTestCase {
-    func testTurkishSentenceBoundariesRemainIntact() {
+final class TurkishSpeechChunkerTests: XCTestCase, @unchecked Sendable {
+    func testTurkishSentenceBoundariesRemainIntact() async {
         let chunks = TurkishSpeechChunker.chunks(
             "Merhaba. Nasılsın? İyiyim, teşekkürler!", maxCharacters: 40)
         XCTAssertEqual(chunks.joined(separator: " "),
@@ -11,7 +11,7 @@ final class TurkishSpeechChunkerTests: XCTestCase {
         XCTAssertTrue(chunks.allSatisfy { $0.count <= 40 })
     }
 
-    func testAbbreviationsAndDecimalNumbersDoNotCauseSentenceBreaks() {
+    func testAbbreviationsAndDecimalNumbersDoNotCauseSentenceBreaks() async {
         let chunks = TurkishSpeechChunker.chunks(
             "Dr. Ali 3.14 değerini hesapladı. Gerçekten mi?",
             maxCharacters: 40)
@@ -19,12 +19,12 @@ final class TurkishSpeechChunkerTests: XCTestCase {
         XCTAssertEqual(chunks.last, "Gerçekten mi?")
     }
 
-    func testEmptyAndWhitespaceInputsProduceNoSpeech() {
+    func testEmptyAndWhitespaceInputsProduceNoSpeech() async {
         XCTAssertTrue(TurkishSpeechChunker.chunks("").isEmpty)
         XCTAssertTrue(TurkishSpeechChunker.chunks(" \n  \t ").isEmpty)
     }
 
-    func testVeryLongResponseGetsBoundedSpeechChunksWithoutDroppingCharacters() {
+    func testVeryLongResponseGetsBoundedSpeechChunksWithoutDroppingCharacters() async {
         let input = "Biri " + String(repeating: "uzuncakelime", count: 35) + " bitiyor!"
         let chunks = TurkishSpeechChunker.chunks(input, maxCharacters: 40)
         XCTAssertGreaterThan(chunks.count, 3)
@@ -33,7 +33,7 @@ final class TurkishSpeechChunkerTests: XCTestCase {
                        input.replacingOccurrences(of: " ", with: ""))
     }
 
-    func testDialogueNewlinesAreNormalizedForSpokenResponseOnly() {
+    func testDialogueNewlinesAreNormalizedForSpokenResponseOnly() async {
         let original = "Merhaba.\n\nBugün\n ne yapıyoruz? "
         let chunks = TurkishSpeechChunker.chunks(original, maxCharacters: 180)
         XCTAssertEqual(chunks, ["Merhaba. Bugün ne yapıyoruz?"])

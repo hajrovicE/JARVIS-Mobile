@@ -1,0 +1,14 @@
+test_default_build_only_needs_no_membership_or_secrets (test_policy.ReleasePolicyTests.test_default_build_only_needs_no_membership_or_secrets) ... ok
+test_development_adhoc_and_enterprise_profiles_are_rejected (test_policy.ReleasePolicyTests.test_development_adhoc_and_enterprise_profiles_are_rejected) ... ok
+test_expired_wrong_bundle_team_and_certificate_fail_closed (test_policy.ReleasePolicyTests.test_expired_wrong_bundle_team_and_certificate_fail_closed) ... ok
+test_inactive_membership_prevents_signing_before_secret_use (test_policy.ReleasePolicyTests.test_inactive_membership_prevents_signing_before_secret_use) ... ok
+test_manual_distribution_requires_main_and_valid_build_number (test_policy.ReleasePolicyTests.test_manual_distribution_requires_main_and_valid_build_number) ... ok
+test_missing_upload_material_is_not_accepted (test_policy.ReleasePolicyTests.test_missing_upload_material_is_not_accepted) ... ok
+test_signing_entrypoint_cannot_run_in_build_only_mode (test_policy.ReleasePolicyTests.test_signing_entrypoint_cannot_run_in_build_only_mode) ... ok
+test_signing_entrypoint_rejects_no_membership_without_creating_files (test_policy.ReleasePolicyTests.test_signing_entrypoint_rejects_no_membership_without_creating_files) ... ok
+test_valid_profile_and_exact_identity_are_used_for_export (test_policy.ReleasePolicyTests.test_valid_profile_and_exact_identity_are_used_for_export) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.486s
+
+OK

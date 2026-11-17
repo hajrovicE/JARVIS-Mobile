@@ -12,8 +12,11 @@ public struct AnswerCache: Codable, Equatable, Sendable {
     public var question: String
     public var answer: String
     public var createdAt: Date
-    public init(question: String, answer: String, createdAt: Date = Date()) {
+    /// Reuse metadata, not a deletion/retention policy. Optional for older snapshots.
+    public var invalidated: Bool?
+    public init(question: String, answer: String, createdAt: Date = Date(), invalidated: Bool = false) {
         self.question = question; self.answer = answer; self.createdAt = createdAt
+        self.invalidated = invalidated
     }
 }
 public struct MemorySnapshot: Codable, Equatable, Sendable {
@@ -35,6 +38,15 @@ public struct MemorySnapshot: Codable, Equatable, Sendable {
         learning = version < 2 ? LearningState() : try values.decode(LearningState.self, forKey: .learning)
         generatedAnswers = version < 3 ? [] : try values.decode([StoredAIAnswer].self, forKey: .generatedAnswers)
     }
+    /// Validate the version before decoding version-specific fields. Unsupported future
+    /// schemas must remain untouched, not become an empty current snapshot.
+    static func decodeSupported(from data: Data) throws -> MemorySnapshot {
+        struct Header: Decodable { let version: Int }
+        let header = try JSONDecoder().decode(Header.self, from: data)
+        guard (0...3).contains(header.version) else { throw MemoryError.unsupportedVersion }
+        return try JSONDecoder().decode(MemorySnapshot.self, from: data)
+    }
+
 }
 public protocol SnapshotStorage: Sendable {
     func load() throws -> Data?
@@ -51,12 +63,16 @@ public actor MemoryStore {
     public init(storage: any SnapshotStorage, now: Date = Date(), learningEngine: any LearningEngine = LocalLearningEngine()) throws {
         self.storage = storage
         self.learningEngine = learningEngine
-        var loaded = try storage.load().map { try JSONDecoder().decode(MemorySnapshot.self, from: $0) } ?? MemorySnapshot()
-        // v0 used the same payload, without retention enforcement. Upgrade before exposing data.
-        guard (0...3).contains(loaded.version) else { throw MemoryError.unsupportedVersion }
+        let persisted = try storage.load()
+        var loaded = try persisted.map { try MemorySnapshot.decodeSupported(from: $0) } ?? MemorySnapshot()
+        let requiresUpgrade = loaded.version != 3
         loaded.version = 3
         Self.purge(&loaded, now: now)
-        try storage.save(JSONEncoder().encode(loaded))
+        // Opening valid owner history must not require a gratuitous write. This also
+        // keeps readable data available for viewing/export when the disk becomes full.
+        if persisted == nil || requiresUpgrade {
+            try storage.save(JSONEncoder().encode(loaded))
+        }
         self.snapshot = loaded
     }
     /// Owner history is durable. Freshness for reuse is checked by AssistantService,
@@ -66,7 +82,14 @@ public actor MemoryStore {
     }
     private func commit(_ state: MemorySnapshot, changesContext: Bool = true) throws {
         var next = state
-        // A context change invalidates in-flight responses by epoch, not stored history.
+        // A context change invalidates reuse and in-flight responses, never history.
+        if changesContext {
+            for index in next.answers.indices { next.answers[index].invalidated = true }
+            next.generatedAnswers = next.generatedAnswers.map {
+                StoredAIAnswer(id: $0.id, question: $0.question, response: $0.response,
+                    savedAt: $0.savedAt, cacheUntil: nil, cacheScope: $0.cacheScope, contextIDs: $0.contextIDs)
+            }
+        }
         try storage.save(JSONEncoder().encode(next)); snapshot = next
         if changesContext { contextEpoch = UUID() }
     }
@@ -95,11 +118,16 @@ public actor MemoryStore {
     public func cache(question: String, answer: String, timeSensitive: Bool, now: Date = Date()) throws {
         var next = try read(now: now); next.answers.removeAll { $0.question == question }
         if !timeSensitive { next.answers.append(.init(question: question, answer: answer, createdAt: now)) }
-        try commit(next)
+        // A cache bookkeeping write is not new owner context.
+        try commit(next, changesContext: false)
     }
     public func cachedAnswer(question: String, timeSensitive: Bool, now: Date = Date()) throws -> String? {
         let state = try read(now: now)
-        return timeSensitive ? nil : state.answers.first { $0.question == question }?.answer
+        guard !timeSensitive else { return nil }
+        return state.answers.last {
+            $0.question == question && $0.invalidated != true &&
+            now.timeIntervalSince($0.createdAt) >= 0 && now.timeIntervalSince($0.createdAt) < 30 * 86400
+        }?.answer
     }
     /// Explicit plaintext export, only for a user-initiated share action.
     public func export(now: Date = Date()) throws -> Data { try JSONEncoder().encode(read(now: now)) }

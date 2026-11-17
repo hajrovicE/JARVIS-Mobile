@@ -1,3 +1,5 @@
+> Güncel sahip kararı AGENTS.md içindedir: cihaz içinde GGUF çıkarımı, kullanıcı silene kadar JSON geçmişi, ek biyometri/yetki süresi/SHA sabitlemesi yok. Aşağıdaki ilk Alpha tasarımı tarihsel bağlamdır; [güncel doğrulama](VALIDATION.md) mevcut davranışı ve gerçek test sınırlarını açıklar.
+
 # İlk sürüm gereksinimleri
 Türkçe, iPhone öncelikli, çevrimdışı kişisel asistan. Yerel komutlar: `hatırla ki …`, `ne hatırlıyorsun`, `unut <UUID>`, `geçmiş`.
 
