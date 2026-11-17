@@ -1,5 +1,7 @@
 # iPhone dağıtımı — Alpha 0.3 hazırlığı
 
+> App Store/TestFlight kullanmadan kişisel kurulum için bkz. [SIDELOAD.md](SIDELOAD.md). Bu belge yalnızca ücretli üyelikle TestFlight/App Store yolunu anlatır.
+
 Bu depo Release derlemesi, imzalı IPA dışa aktarma ve isteğe bağlı TestFlight yükleme için yapılandırma içerir. İmzalama/yükleme yolu gerçek Apple hesabı ve sertifikalarla henüz doğrulanmadı. Bu geliştirme sırasında TestFlight'a uygulama yüklenmedi. Ücretli Apple Developer üyeliği etkin değilken imzalama veya yükleme denenmez.
 
 ## Şu anda yalnızca iPhone ile yapılabilecekler

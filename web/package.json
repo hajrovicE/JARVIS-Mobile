@@ -1,0 +1,15 @@
+{
+  "name": "jarvis-web",
+  "private": true,
+  "type": "module",
+  "description": "JARVIS as an installable web app: on-device llama.cpp (WebAssembly) inference, no server.",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "build": "node scripts/build.mjs",
+    "serve": "node scripts/serve.mjs"
+  },
+  "dependencies": {
+    "@wllama/wllama": "3.13.0",
+    "@wllama/wllama-compat": "3.13.0"
+  }
+}

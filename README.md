@@ -13,6 +13,11 @@ open JarvisMobile.xcodeproj
 
 Xcode'da imzalama takımını seçip iPhone'da çalıştırın. Speech desteği cihaza bağlıdır. Üretilen proje/Info.plist kaynak denetimine alınmaz; yapılandırma `ios/project.yml` içindedir. `.github/workflows/swift.yml` macOS üzerinde Swift 6 testleri, simulator ve imzasız iPhone SDK derlemesi, iOS Keychain/şifreleme testleri ve uygulama arayüz testini çalıştırır. Sonuç logları, xcresult ve simulator uygulaması ve imzasız cihaz uygulaması Actions artifact olarak saklanır. Bunlar imzalı IPA/TestFlight dağıtımı değildir; gerçek iPhone kurulumu için Xcode ile geliştirici takımınızın imzası gerekir.
 
+## App Store'suz iPhone kurulumu
+**Bilgisayarınız yoksa:** JARVIS web uygulamasını Safari'de açıp Ana Ekrana ekleyin; model telefonda çalışır. Bkz. [docs/WEB_APP.md](docs/WEB_APP.md).
+
+Uygulamayı Apple'a yüklemeden, kendi Apple ID'nizle iPhone'a kurabilirsiniz: Actions → **iPhone sideload IPA** imzasız `JARVIS-unsigned.ipa` üretir; Sideloadly, AltStore veya SideStore ile kurulur. Adımlar ve sınırlar: [docs/SIDELOAD.md](docs/SIDELOAD.md).
+
 ## Komutlar
 `hatırla ki kahveyi severim` (veya `bunu hatırla …`), `ne hatırlıyorsun`, `unut <UUID>`, `geçmiş`, `öğrendiklerin`. Hafıza sekmesinden kayıtları düzenleyebilir, silebilir ve verileri JSON olarak dışa aktarabilirsiniz. Dışa aktarılan JSON kişisel veri içerir ve şifreli değildir.
 

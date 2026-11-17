@@ -1,0 +1,101 @@
+name: iPhone sideload IPA
+# Builds an UNSIGNED .ipa for personal installation with the owner's own Apple ID
+# (Sideloadly / AltStore / SideStore). Nothing is uploaded to Apple: no App Store,
+# TestFlight, App Review or paid Developer Program secrets are used here.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+    # Work branches build an installable IPA too, so a fix can be tried on the
+    # phone before it is merged. Docs-only pushes do not spend macOS minutes.
+    branches: ['claude/**']
+    paths:
+      - 'ios/**'
+      - 'Sources/**'
+      - 'Package.swift'
+      - '.github/workflows/sideload.yml'
+permissions:
+  contents: write
+concurrency:
+  group: sideload-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  core-tests:
+    runs-on: ubuntu-latest
+    container: swift:6.0-jammy
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Core tests (Swift 6, Linux)
+        run: swift test -Xswiftc -swift-version -Xswiftc 6
+  build-ipa:
+    needs: core-tests
+    # GitHub's macOS arm64 pool is often saturated ("job was not acquired by Runner");
+    # the same build is offered to several runner types and any one success is enough.
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-15-intel, macos-14]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode 16
+        run: |
+          XCODE="$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1 || true)"
+          if [ -n "$XCODE" ]; then sudo xcode-select -s "$XCODE"; fi
+      - name: Toolchain versions
+        run: |
+          xcodebuild -version
+          swift --version
+      - name: Generate iPhone project
+        run: |
+          brew install xcodegen
+          cd ios && xcodegen generate
+      - name: Build unsigned iPhone Release
+        run: |
+          set -o pipefail
+          xcodebuild -project ios/JarvisMobile.xcodeproj -scheme JarvisMobile \
+            -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath build-sideload CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee sideload-build.log
+      - name: Package unsigned IPA
+        run: |
+          set -euo pipefail
+          APP=build-sideload/Build/Products/Release-iphoneos/JarvisMobile.app
+          test -f "$APP/JarvisMobile"
+          test -f "$APP/Info.plist"
+          rm -rf Payload && mkdir Payload
+          cp -R "$APP" Payload/
+          zip -qry JARVIS-unsigned.ipa Payload
+          shasum -a 256 JARVIS-unsigned.ipa | tee JARVIS-unsigned.ipa.sha256
+          {
+            echo 'Unsigned IPA built. It is NOT signed and was NOT sent to Apple.'
+            echo 'Install it with Sideloadly, AltStore or SideStore using your own Apple ID; see docs/SIDELOAD.md.'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Store IPA and build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-sideload-${{ matrix.runner }}-${{ github.sha }}
+          path: |
+            JARVIS-unsigned.ipa
+            JARVIS-unsigned.ipa.sha256
+            sideload-build.log
+          retention-days: 30
+      - name: Publish IPA as a GitHub prerelease (downloadable from iPhone Safari)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="sideload-${GITHUB_RUN_NUMBER}"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already published by another runner; nothing to do."
+            exit 0
+          fi
+          gh release create "$TAG" JARVIS-unsigned.ipa JARVIS-unsigned.ipa.sha256 \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+            --title "JARVIS sideload build ${GITHUB_RUN_NUMBER}" \
+            --notes "Unsigned IPA for personal sideloading with your own Apple ID. Not uploaded to Apple. See docs/SIDELOAD.md." \
+            || gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null

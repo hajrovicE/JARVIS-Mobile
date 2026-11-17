@@ -46,10 +46,11 @@ struct RootView: View {
   @AppStorage("activeLocalModelManifest") private var activeLocalModelManifest = ""
   @AppStorage("jarvis.ownerInstructions") private var ownerInstructions = ""
   @AppStorage("jarvis.model.maxNewTokens") private var modelMaxNewTokens = 2048
-  @AppStorage("jarvis.model.contextTokens") private var modelContextTokens = 8192
+  @AppStorage("jarvis.model.contextTokens") private var modelContextTokens = 4096
   @AppStorage("jarvis.model.temperature") private var modelTemperature = 0.8
   @AppStorage("jarvis.model.topP") private var modelTopP = 1.0
   @AppStorage("jarvis.model.cpuThreads") private var modelCPUThreads = 0
+  @AppStorage("jarvis.model.showReasoning") private var modelShowReasoning = false
   @State private var busy = false
   @Environment(\.scenePhase) private var scenePhase
   var body: some View {
@@ -87,6 +88,13 @@ struct RootView: View {
       holdStartTask?.cancel()
       speech.cancel()
     }
+    .onReceive(
+      NotificationCenter.default.publisher(
+        for: UIApplication.didReceiveMemoryWarningNotification)
+    ) { _ in
+      // Weights are reloaded on the next question; an in-flight answer finishes first.
+      Task { await GGUFInferenceRuntime.unloadModel() }
+    }
     .alert(
       "İşlem tamamlanamadı",
       isPresented: Binding(get: { errorText != nil }, set: { if !$0 { errorText = nil } })
@@ -102,37 +110,12 @@ struct RootView: View {
       if case .failure = result { errorText = "Dışa aktarma tamamlanamadı." }
       document = ExportDocument(data: Data())
     }
-    .fileImporter(
-      isPresented: $importingLocalModel,
-      allowedContentTypes: [UTType(filenameExtension: "gguf") ?? .data, .data]
-    ) { result in
-      switch result {
-      case .success(let url):
-        perform {
-          let scoped = url.startAccessingSecurityScopedResource()
-          defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-          guard let size = try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber,
-                size.int64Value > 0 else { throw LocalModelError.invalidFile }
-          let manifest = try LocalModelManifest(
-            identifier: "owner-model-" + UUID().uuidString.lowercased(),
-            revision: "owner-selected", licenseIdentifier: "owner-provided",
-            byteCount: size.int64Value, sha256: "")
-          let manager = try OnDeviceModelManager(directory: localModelDirectory())
-          _ = try await manager.importModel(from: url, manifest: manifest)
-          activeLocalModelManifest = String(
-            decoding: try JSONEncoder().encode(manifest), as: UTF8.self)
-          localModelStatus = "Seçtiğin model içeriği yüklendi. Çıkarım testi bekleniyor."
-        }
-      case .failure:
-        errorText = "Model dosyası seçilemedi."
-      }
-    }
   }
   private var onboardingView: some View {
     VStack(spacing: 20) {
       Text("JARVIS'e hoş geldiniz").font(.largeTitle)
       Text(
-        "Konuşma geçmişi ve öğrenilen bilgiler siz silene kadar korunur. Güncelliği doğrulanmamış cevaplar otomatik güncel sayılmaz. Veriler uygulama tarafından ayrıca şifrelenmez."
+        "Konuşma geçmişi ve öğrenilen bilgiler siz silene kadar korunur. Güncelliği doğrulanmamış cevaplar otomatik güncel sayılmaz. Veriler uygulama tarafından ayrıca şifrelenmez. Sohbet için AI sekmesinden bir GGUF model dosyası yüklemeniz gerekir."
       )
       Text(
         "Ses isteğe bağlıdır. İlk kullanımda mikrofon ve konuşma izni istenir. Yazarak da kullanabilirsiniz. Konuşmacı kimlik doğrulaması etkin değildir."
@@ -163,6 +146,11 @@ struct RootView: View {
             .accessibilityIdentifier("chat.input").focused($chatFocused)
           Button("Gönder") { submit() }.accessibilityIdentifier("chat.send").disabled(
             store == nil || busy || input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+          if busy {
+            ProgressView("JARVIS çalışıyor… İlk yanıtta model belleğe yüklenir.")
+            Button("İsteği iptal et", role: .cancel) { runningOperation?.cancel() }
+              .accessibilityIdentifier("chat.cancel")
+          }
           Text("Sesli giriş isteğe bağlıdır. Tanıma cihazda yapılır; yazarak devam edebilirsiniz.")
           Button("Ses izinlerini ver") { Task { await speech.requestPermissions() } }
             .disabled(speech.requestingPermissions || speech.recording || speech.finishing)
@@ -314,7 +302,7 @@ struct RootView: View {
           .accessibilityIdentifier("status.speakerIdentity")
         Text("Web arama ve telefon kontrolü: bağlı değil.")
         Text("Dış işlemler yalnızca doğrudan kullanıcı komutuyla başlatılır.")
-        Text("Gerçek cihaz performans testi ve TestFlight yüklemesi henüz doğrulanmadı.")
+        Text("Gerçek cihaz performans testi henüz doğrulanmadı.")
       }.navigationTitle("Yetenek durumu")
     }.tabItem { Label("Durum", systemImage: "info.circle") }
   }
@@ -325,9 +313,20 @@ struct RootView: View {
         Section("JARVIS kendi yerel AI çekirdeği") {
           Text("Sohbet, modeli yükledikten sonra iPhone üzerinde çalışır. API anahtarı, model sağlayıcı hesabı veya bulut bağlantısı kullanılmaz.")
           Text("Başlangıç ağırlıkları: Qwen3 1.7B Q4_K_M (Apache-2.0). Bu, henüz JARVIS'e özel eğitilmiş bir ağırlık değildir.")
-          Link("GGUF başlangıç modelini indir",
-            destination: URL(string: "https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF/blob/daeb8e2/Qwen3-1.7B-Q4_K_M.gguf")!)
+          Link("GGUF başlangıç modelini indir (Safari → Dosyalar)",
+            destination: URL(string: "https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF/tree/main")!)
+          Text("Açılan sayfada Qwen3-1.7B-Q4_K_M.gguf dosyasını indirin, sonra aşağıdaki düğmeyle Dosyalar'dan seçin.")
           Button("Kendi GGUF modelimi dosyadan seç") { importingLocalModel = true }
+            .disabled(busy)
+            .accessibilityIdentifier("model.import")
+            .fileImporter(isPresented: $importingLocalModel, allowedContentTypes: [.data]) {
+              result in
+              switch result {
+              case .success(let url): importModel(from: url)
+              case .failure: errorText = "Model dosyası seçilemedi."
+              }
+            }
+          if busy { ProgressView("Model dosyası işleniyor…") }
           Text(localModelStatus)
           Text("Dosya uzantısı, SHA-256 sabitlemesi veya model kaynağı kısıtı yoktur. Çalıştırılabilir GGUF biçimi gereklidir.")
           Text("Hazır başlangıç modeli yaklaşık 1,28 GB; telefonda çalışma belleği ayrıca gerekir.")
@@ -356,7 +355,9 @@ struct RootView: View {
           TextField("CPU iş parçacıkları (0 = otomatik)", value: $modelCPUThreads, format: .number)
             .keyboardType(.numberPad)
             .accessibilityIdentifier("model.cpuThreads")
-          Text("Uygulama yapay karakter/token üst limiti koymaz. Modelin bağlam kapasitesi ve iPhone belleği aşılırsa çıkarım hata verebilir.")
+          Toggle("Modelin düşünme adımlarını göster", isOn: $modelShowReasoning)
+            .accessibilityIdentifier("model.showReasoning")
+          Text("Uygulama yapay karakter/token üst limiti koymaz. Geçmiş bağlam penceresine sığmazsa en eski kısım modele gönderilmez (kayıtlar silinmez). Büyük bağlam penceresi daha fazla bellek ister; iPhone belleği aşılırsa çıkarım hata verir.")
         }
         Section("Çalışma biçimi") {
           Text("İnternetsiz varsayılan: JARVIS yalnızca kurulu modeli kullanır. Model yoksa hata verir, uzaktaki sağlayıcıya geçmez.")
@@ -411,13 +412,13 @@ struct RootView: View {
       if let manifest = try? selectedModelManifest(),
          let modelURL = try? localModelDirectory().appendingPathComponent(manifest.identifier + ".gguf"),
          FileManager.default.fileExists(atPath: modelURL.path) {
-        localModelStatus = "Kurulu model: " + manifest.identifier + ". İlk sorguda SHA-256 doğrulanacak."
+        localModelStatus = "Kurulu model: " + manifest.identifier + ". İlk soruda belleğe yüklenir."
       } else {
         localModelStatus = "Yerel model kurulmadı. GGUF dosyasını Dosyalar'dan yükleyin."
       }
       try await refresh()
     } catch {
-      errorText = "Şifreli hafıza açılamadı. Cihazın kilidini açıp uygulamayı yeniden başlatın."
+      errorText = "Yerel hafıza açılamadı. Uygulamayı yeniden başlatın."
     }
   }
   private func refresh() async throws {
@@ -460,15 +461,30 @@ struct RootView: View {
       } catch let error as LocalModelError {
         switch error {
         case .notInstalled, .runtimeUnavailable:
-          errorText = "Yerel JARVIS modeli kurulu değil veya çıkarım motoru kullanılamıyor."
+          errorText = "Yerel JARVIS modeli kurulu değil. AI sekmesinden bir GGUF dosyası seçin."
         case .invalidFile:
           errorText = "Dosya yerel GGUF motoruyla açılamadı."
         default:
           errorText = "Yerel model kurulumu veya çalıştırılması başarısız."
         }
       } catch let error as AIProviderError {
-        connectionStatus = error.userMessage
-        errorText = error.userMessage
+        switch error {
+        case .notConfigured:
+          errorText = "Yerel JARVIS modeli kurulu değil. AI sekmesinden bir GGUF dosyası seçin."
+        case .invalidConfiguration:
+          errorText = "Model dosyası açılamadı. Geçerli bir GGUF dosyası seçin."
+        case .unavailable:
+          errorText =
+            "Model bu istekte çalıştırılamadı. Bellek yetmemiş olabilir; AI sekmesinden bağlam penceresini küçültüp yeniden deneyin."
+        case .emptyResponse:
+          errorText = "Model boş yanıt üretti. Yeniden deneyin."
+        case .cancelled:
+          reply = "İstek iptal edildi."
+        default:
+          errorText = error.userMessage
+        }
+      } catch is CancellationError {
+        reply = "İstek iptal edildi."
       } catch let error as AssistantError { errorText = error.userMessage } catch let error
         as ActionPermissionError
       {
@@ -490,6 +506,33 @@ struct RootView: View {
       learningKey = ""
       learningText = ""
       reply = "Öğrettiğiniz bilgi kaydedildi."
+    }
+  }
+
+  /// Reached only from the owner's own file picker choice.
+  private func importModel(from url: URL) {
+    perform {
+      let scoped = url.startAccessingSecurityScopedResource()
+      defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+      guard
+        let size = try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber,
+        size.int64Value > 0
+      else { throw LocalModelError.invalidFile }
+      let manifest = try LocalModelManifest(
+        identifier: "owner-model-" + UUID().uuidString.lowercased(),
+        revision: "owner-selected", licenseIdentifier: "owner-provided",
+        byteCount: size.int64Value, sha256: "")
+      let previous = try? selectedModelManifest()
+      let manager = try OnDeviceModelManager(directory: localModelDirectory())
+      _ = try await manager.importModel(from: url, manifest: manifest)
+      activeLocalModelManifest = String(
+        decoding: try JSONEncoder().encode(manifest), as: UTF8.self)
+      // The replaced weights would otherwise keep occupying gigabytes of storage.
+      if let previous {
+        await GGUFInferenceRuntime.unloadModel()
+        try? await manager.removeModel(previous)
+      }
+      localModelStatus = "Seçtiğin model yüklendi. Sohbet sekmesinden soru sorabilirsin."
     }
   }
 
@@ -532,7 +575,8 @@ struct RootView: View {
                 ownerInstructions: ownerInstructions,
                 temperature: Float(modelTemperature),
                 topP: Float(modelTopP),
-                cpuThreads: modelCPUThreads))
+                cpuThreads: modelCPUThreads,
+                showReasoning: modelShowReasoning))
         scope = "local:" + manifest.identifier
       }
       let result = try await AssistantService(

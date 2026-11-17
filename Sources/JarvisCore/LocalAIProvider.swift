@@ -45,6 +45,9 @@ public struct LocalModelManifest: Codable, Equatable, Sendable {
 public enum LocalModelError: Error, Equatable, Sendable {
     case invalidManifest, invalidSource, notInstalled, invalidFile
     case runtimeUnavailable, emptyOutput
+    /// The engine is present but this request could not be completed (for example,
+    /// the device ran out of memory or the prompt cannot fit the context window).
+    case inferenceFailed
 }
 
 /// Imports a user-provided model file into an app-private directory.
@@ -150,7 +153,13 @@ public struct LocalAIProvider: AIProvider {
         catch { throw AIProviderError.invalidConfiguration }
 
         // Context remains untrusted user data; the model never receives tool authority.
-        let context = request.context.enumerated().map { index, entry in
+        // Older conversation turns come first so that, when the runtime has to trim
+        // the prompt to its context window, saved memories outlive old small talk.
+        let isHistory: (AIContextEntry) -> Bool = {
+            $0.id.hasPrefix("conversation:") || $0.id.hasPrefix("answer:")
+        }
+        let ordered = request.context.filter(isHistory) + request.context.filter { !isHistory($0) }
+        let context = ordered.enumerated().map { index, entry in
             "Bilgi \(index + 1) [\(entry.id)]: \(entry.text)"
         }.joined(separator: "\n")
         // The owner sets all behavioral instructions in the native runtime.
@@ -161,6 +170,7 @@ public struct LocalAIProvider: AIProvider {
         let text: String
         do { text = try await runtime.generate(prompt: prompt, modelURL: file) }
         catch LocalModelError.runtimeUnavailable { throw AIProviderError.notConfigured }
+        catch LocalModelError.invalidFile { throw AIProviderError.invalidConfiguration }
         catch is CancellationError { throw AIProviderError.cancelled }
         catch { throw AIProviderError.unavailable }
         guard !Task.isCancelled else { throw AIProviderError.cancelled }

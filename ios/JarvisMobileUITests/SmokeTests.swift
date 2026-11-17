@@ -7,7 +7,7 @@ final class SmokeTests: XCTestCase {
     }
 
     @MainActor
-    func testTypedMemorySurvivesRelaunchAndDeletionRequiresApproval() throws {
+    func testTypedMemorySurvivesRelaunchAndOwnerDeletionPersists() throws {
         let app = XCUIApplication()
         app.launch()
         let onboarding = app.buttons["onboarding.start"]
@@ -27,7 +27,7 @@ final class SmokeTests: XCTestCase {
         XCTAssertTrue(app.tabBars.buttons["Sohbet"].waitForExistence(timeout: 10))
         try send("ne hatırlıyorsun", in: app)
         XCTAssertTrue(waitForLabel(reply, containing: "test tercihim sade kahve"))
-        attachScreenshot(app, name: "Şifreli hafıza — yeniden açma sonrası test kaydı")
+        attachScreenshot(app, name: "Yerel hafıza — yeniden açma sonrası test kaydı")
 
         app.tabBars.buttons["Hafıza"].tap()
         let memoryFields = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "memory.text."))
@@ -35,16 +35,13 @@ final class SmokeTests: XCTestCase {
         let delete = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "memory.delete.")).firstMatch
         XCTAssertTrue(reveal(delete, in: app))
         delete.tap()
-        let approval = app.buttons["Onayla ve biyometriyle doğrula"]
-        XCTAssertTrue(approval.waitForExistence(timeout: 5))
-        // No biometric simulation or production bypass: cancellation must preserve data.
-        app.buttons["İptal"].tap()
-        XCTAssertTrue(memoryFields.firstMatch.waitForExistence(timeout: 5))
+        // A direct owner tap is the authorization: no second confirmation is shown.
+        XCTAssertTrue(waitForAbsence(memoryFields.firstMatch))
         app.terminate()
         app.launch()
         XCTAssertTrue(app.tabBars.buttons["Sohbet"].waitForExistence(timeout: 10))
         try send("ne hatırlıyorsun", in: app)
-        XCTAssertTrue(waitForLabel(reply, containing: "test tercihim sade kahve"))
+        XCTAssertTrue(waitForLabel(reply, containing: "Kişisel hafıza boş."))
 
         app.tabBars.buttons["Durum"].tap()
         let speakerStatus = app.staticTexts["status.speakerIdentity"]

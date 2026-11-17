@@ -1,3 +1,4 @@
+import http.client
 import contextlib
 import io
 import json
@@ -134,7 +135,18 @@ class RelayTests(unittest.TestCase):
                 self.assertEqual(request(b'{"prompt":"synthetic private prompt"}')[0], 200)
                 self.assertEqual(request(b'{"prompt":"a"}', auth=None)[0], 401)
                 self.assertEqual(request(b'broken')[0], 400)
-                self.assertEqual(request(b'x' * (MAX_BODY_BYTES + 1))[0], 413)
+                # The server may refuse an oversized body before the client finishes
+                # sending it, so declare the size and read the reply without a body race.
+                oversized = http.client.HTTPConnection("127.0.0.1", server.server_address[1], timeout=3)
+                try:
+                    oversized.putrequest("POST", "/v1/chat")
+                    oversized.putheader("Content-Type", "application/json")
+                    oversized.putheader("Authorization", AUTH)
+                    oversized.putheader("Content-Length", str(MAX_BODY_BYTES + 1))
+                    oversized.endheaders()
+                    self.assertEqual(oversized.getresponse().status, 413)
+                finally:
+                    oversized.close()
                 self.assertEqual(request(b'{}', content_type="text/plain")[0], 415)
                 self.assertEqual(request(b'{}', path="/unknown")[0], 404)
             self.assertEqual(logs.getvalue(), "")
