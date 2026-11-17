@@ -448,6 +448,14 @@ struct RootView: View {
           Text("Kendi eğittiğiniz uyumlu GGUF ağırlıklarını Dosyalar'dan seçerek başlangıç modelini değiştirebilirsiniz. Eğitim işlemi telefonda otomatik yapılmaz.")
         }
       }.navigationTitle("Yerel yapay zekâ")
+        .toolbar {
+          ToolbarItemGroup(placement: .keyboard) {
+            Spacer()
+            Button("Tamam") {
+              UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            }.accessibilityIdentifier("model.keyboard.done")
+          }
+        }
     }.tabItem { Label("AI", systemImage: "cpu") }
   }
 

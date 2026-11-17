@@ -105,6 +105,9 @@ final class SmokeTests: XCTestCase {
             field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: (field.value as? String ?? "").count) + value)
             XCTAssertEqual(field.value as? String, value)
         }
+        let done = app.buttons["model.keyboard.done"]
+        XCTAssertTrue(done.waitForExistence(timeout: 5))
+        done.tap()
         app.tabBars.buttons["Durum"].tap()
         app.terminate()
         app.launch()
