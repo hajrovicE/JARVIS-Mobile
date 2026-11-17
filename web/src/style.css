@@ -110,3 +110,6 @@ input, #owner-instructions {
 #download-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--accent); opacity: 0.35; }
 #download-text { position: relative; display: block; text-align: center; font-size: 13px; line-height: 24px; }
 .facts { padding-left: 18px; color: var(--muted); font-size: 14px; }
+.diag { margin: 12px 0 24px; }
+.diag summary { cursor: pointer; color: var(--accent); }
+#load-log { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px; max-height: 50vh; overflow-y: auto; }
