@@ -7,7 +7,7 @@ Dal: `feature/fast-natural-offline-conversation-20261116`. Başlangıç: `70b8f7
 | Kontrol | Sonuç |
 | --- | --- |
 | Linux Swift 6.0.3 Core | **173 test, 0 hata**; ayrıca 4 worker ile paralel koşu başarılı |
-| macOS Core (09ef15a) | **171 test, 0 hata**; yeni hafıza regresyonları son commit için yeniden koşulacak |
+| macOS Core (180f14d Release koşusu) | **175 test, 0 hata**, yeni hafıza regresyonları dahil |
 | iOS hosted testler (09ef15a) | **186 test, 0 hata, 0 atlama**; gerçek GGUF zorunlu |
 | iOS UI (09ef15a) | **3 test, 0 hata** |
 | Simulator uygulama derlemesi (09ef15a) | **BUILD SUCCEEDED**, gerçek kaynak derlemeli CPU native slice |
@@ -50,13 +50,13 @@ GitHub Ubuntu CPU koşusu `09ef15a` ayrıca [gerçek native kontrolü geçti](ht
 
 ## Başarısız gözlemler ve düzeltmeler
 
-İlk Core koşusunda Swift 6 XCTest Sendable uyumsuzluğu, eski test argument sırası ve tarihsel soru eşleştirmesi düzeltildi. Yeni bağlam sözleşmesinde normal sorulara tüm ilgisiz hafızayı gönderme beklentisi yerine, açık owner isteğinde bütün kayıtların eksiksiz seçildiği test edildi. Gizlilik kategorisinin görev-deneyimi → yanıt → takip yanıtı boyunca kaybolması düzeltildi ve regresyon eklendi. Son Core koşusu yeşildir. Eski takip yanıtlarının kaynak zinciri de kontrol edilir: silinen kaynak veya yeni bir düzeltme eski iddiayı geri getiremez. Kişisel düzenleme tarihi isteğe bağlı `updatedAt` alanıyla kalır; eski JSON/AES kayıtlarında alanın bulunmaması geçerlidir. Kimlik, oluşturulma tarihi ve sahibin arşivi korunur; yeni metin sonraki ilgili bağlama girer.
+İlk Core koşusunda Swift 6 XCTest Sendable uyumsuzluğu, eski test argument sırası ve tarihsel soru eşleştirmesi düzeltildi. Yeni bağlam sözleşmesinde normal sorulara tüm ilgisiz hafızayı gönderme beklentisi yerine, açık owner isteğinde bütün kayıtların eksiksiz seçildiği test edildi. Gizlilik kategorisinin görev-deneyimi → yanıt → takip yanıtı boyunca kaybolması düzeltildi ve regresyon eklendi. Son Core koşusu yeşildir. Eski takip yanıtlarının kaynak zinciri de kontrol edilir: silinen kaynak veya yeni bir düzeltme eski iddiayı geri getiremez. Sonraki macOS koşusunda Python 3.15 urllib istemcisi, erken 411 reddi sırasında ayrı chunk gövdesi yazarken BrokenPipe üretti. Başarısız koşu [44019629466](https://github.com/hajrovicE/JARVIS-Mobile/actions/runs/44019629466) olarak kalır. Test ham HTTP isteğini tek gönderimde kuracak şekilde düzeltildi; hem yalnız chunked hem çelişkili chunked/Content-Length için gerçek 411 ve sağlayıcıya ulaşmama korunur. Ağ kapalı Python 3.15 Docker koşusunda relay 22 test geçti. Bu test istemcisi yarışını düzeltir; sunucu reddi gevşetilmez. Kişisel düzenleme tarihi isteğe bağlı `updatedAt` alanıyla kalır; eski JSON/AES kayıtlarında alanın bulunmaması geçerlidir. Kimlik, oluşturulma tarihi ve sahibin arşivi korunur; yeni metin sonraki ilgili bağlama girer.
 
 Model kalitesinde açık kalan gerçek örnek: üç kısa cümle istendiğinde model tek, doğal olmayan cümle üretti; bu denemenin erken-TTS beklentisi başarısız oldu. [Kayıt](validation-artifacts/pr20-2026-11-17/model-instruction-failure.log). Son iki cümleli akış kabul denemesinde model metni tekrar da üretti; çıktı başarılı performans kaydında satır sonları/boşluklar kaybolmadan JSON kaçışlarıyla korunmuştur. Uygulama çift final transkripti veya final yanıtın ikinci kez kuyruğa eklenmesini engeller, fakat modelin kendi ürettiği her anlamsal tekrarı düzelttiği iddia edilmez. Başkent ve kişisel hafıza örneklerinin doğru olması genel doğruluk/çok adımlı muhakeme garantisi değildir. Önceki 0.6B Q4/Q8 yanlış cevapları #19 kayıtlarında durur; model eğitilmedi.
 
 ## Apple CI, atlanan ve ayrı cihaz gerektiren kontroller
 
-- `09ef15a` için macOS/iOS koşusu **tamamlandı ve başarılı**. Hosted **186** ve UI **3** test çalıştı; test atlanmadı. [Ham özet kayıt](validation-artifacts/pr20-2026-11-17/github-ios-baseline-excerpt.log). Yeni hafıza regresyonları Linux üzerinde 173 testle doğrulandı; bu sonraki kaynak için son CI durumu PR #20 checks bölümünden izlenir.
+- `09ef15a` için macOS/iOS koşusu **tamamlandı ve başarılı**. Hosted **186** ve UI **3** test çalıştı; test atlanmadı. [Ham özet kayıt](validation-artifacts/pr20-2026-11-17/github-ios-baseline-excerpt.log). Yeni hafıza regresyonları Linux üzerinde 173, macOS Release koşusunda 175 testle doğrulandı; bu sonraki kaynak için son CI durumu PR #20 checks bölümünden izlenir.
 - Fiziksel iPhone Metal, canlı Türkçe STT/TTS/ilk duyulur ses, gerçek izin diyalogları, termal baskı, bellek uyarısı/sonlandırma, uzun konuşma, kilit/arka plan ve VoiceOver: **AYRICA DOĞRULANMADI**.
 - Apple signing ve TestFlight: çalıştırılmadı; `build-only` koşusunda `sign-and-distribute` **skipped**. Ücretli servis veya hesap açılmadı.
 

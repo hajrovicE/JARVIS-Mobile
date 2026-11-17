@@ -185,8 +185,17 @@ class RuntimeTests(unittest.TestCase):
                 with socket.create_connection(server.server_address, timeout=3) as connection:
                     connection.sendall(raw); response = connection.recv(4096)
                 self.assertIn(b"413", response.split(b"\r\n", 1)[0])
-            status, _, _ = self.http(server, headers={"Authorization": AUTH, "Content-Type": "application/json", "Transfer-Encoding": "chunked"})
-            self.assertEqual(status, 411)
+            # Send the complete wire request once. urllib may finish chunked
+            # encoding in another write after the server has already rejected
+            # the headers, producing a platform-dependent BrokenPipe instead
+            # of exposing the actual 411 response. Do not weaken the rejection.
+            for length in ["", "Content-Length: 2\r\n"]:
+                raw = ("POST /v1/chat HTTP/1.1\r\nHost: localhost\r\nAuthorization: " + AUTH
+                       + "\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\n"
+                       + length + "\r\n2\r\n{}\r\n0\r\n\r\n").encode()
+                with socket.create_connection(server.server_address, timeout=3) as connection:
+                    connection.sendall(raw); response = connection.recv(4096)
+                self.assertIn(b"411", response.split(b"\r\n", 1)[0])
 
     def test_production_logs_omit_input_headers_ip_and_exception_messages(self):
         output = io.StringIO(); logger = SafeEventLogger(output)
