@@ -60,7 +60,7 @@ public actor MemoryStore {
         self.snapshot = loaded
     }
     private static func purge(_ state: inout MemorySnapshot, now: Date) {
-        // Intentionally no automatic deletion.
+        // Retain conversation history for 90 days and answer data for 30 days.\n        // Personal memories and user-confirmed learning are never time-purged.\n        state.conversations.removeAll { $0.createdAt.addingTimeInterval(90 * 86400) <= now }\n        state.answers.removeAll { $0.createdAt.addingTimeInterval(30 * 86400) <= now }\n        state.generatedAnswers.removeAll { $0.savedAt.addingTimeInterval(90 * 86400) <= now }
     }
     private func commit(_ state: MemorySnapshot, changesContext: Bool = true) throws {
         var next = state
